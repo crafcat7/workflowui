@@ -1,0 +1,51 @@
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Node.js
+node_modules/
+npm-debug.log
+yarn-error.log
+yarn-debug.log
+.pnp
+.pnp.js
+
+# Frontend builds
+frontend/dist/
+frontend/build/
+frontend/test-results/
+frontend/playwright-report/
+frontend/blob-report/
+
+# Backend CMake/C++ builds
+backend/build/
+backend/build-*/
+backend/.cache/
+backend/CMakeCache.txt
+backend/CMakeFiles/
+backend/Makefile
+backend/cmake_install.cmake
+backend/compile_commands.json
+
+# Demo and temp files
+results.txt
+
+# Tauri
+frontend/src-tauri/target/
+
+# IDE and Editors
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.local
