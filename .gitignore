@@ -38,6 +38,11 @@ results.txt
 # Tauri
 frontend/src-tauri/target/
 
+# External Repositories / Dependencies
+ncnn/
+backend/third_party/*/
+!backend/third_party/CMakeLists.txt
+
 # IDE and Editors
 .idea/
 .vscode/
