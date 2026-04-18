@@ -6,6 +6,7 @@ import { InferenceNode } from './InferenceNode';
 import { BenchmarkNode } from './BenchmarkNode';
 import { SaveTextNode } from './SaveTextNode';
 import { ConditionNode } from './ConditionNode';
+import { PostprocessNode } from './PostprocessNode';
 import { OutputNode } from './OutputNode';
 import { DebugNode } from './DebugNode';
 
@@ -17,6 +18,7 @@ export const nodeTypes: NodeTypes = {
   benchmark: BenchmarkNode,
   saveText: SaveTextNode,
   condition: ConditionNode,
+  postprocess: PostprocessNode,
   output: OutputNode,
   debug: DebugNode,
 };
@@ -34,6 +36,7 @@ export const nodeTypeList: NodeTypeInfo[] = [
   { type: 'createNet', label: 'Create Net', icon: '🧠', category: 'inference' },
   { type: 'inference', label: 'Inference', icon: '⚡', category: 'inference' },
   { type: 'benchmark', label: 'Benchmark', icon: '📈', category: 'inference' },
+  { type: 'postprocess', label: 'Postprocess', icon: '🛠️', category: 'inference' },
   { type: 'saveText', label: 'Save Text', icon: '💾', category: 'output' },
   { type: 'condition', label: 'Condition', icon: '🔀', category: 'control' },
   { type: 'output', label: 'Output', icon: '📤', category: 'output' },

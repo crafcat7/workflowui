@@ -4,6 +4,7 @@
 #include "../vendor/inference_engine.h"
 #include "scheduler.h"
 #include "debug_controller.h"
+#include "handlers/node_handler.h"
 #include <functional>
 #include <unordered_map>
 #include <memory>
@@ -21,7 +22,7 @@ using PauseCallback = std::function<void(const std::string& node_id, const json&
 /**
  * Executes a workflow graph node-by-node in topological order.
  */
-class Executor {
+class Executor : public ExecutionContext {
 public:
     explicit Executor(std::shared_ptr<InferenceEngine> engine);
 
@@ -36,14 +37,14 @@ public:
     // Stop current execution
     void stop();
 
-private:
-    // Returns extra data to include in the "done" notification
-    json execute_node(const NodeDef& node, const WorkflowGraph& graph);
-    PortValue resolve_input(const std::string& node_id, const std::string& handle,
-                           const WorkflowGraph& graph);
+    // ExecutionContext implementation
+    PortValue resolve_input(const std::string& node_id, const std::string& handle, const WorkflowGraph& graph) override;
+    void set_output(const std::string& node_id, const std::string& port_name, PortValue value) override;
+    std::shared_ptr<InferenceEngine> engine() override { return engine_; }
 
-    void notify_status(const std::string& node_id, const std::string& status,
-                      const json& extra = {});
+private:
+    void notify_status(const std::string& node_id, const std::string& status, const json& extra = {});
+    void register_handlers();
 
     std::shared_ptr<InferenceEngine> engine_;
     Scheduler scheduler_;
@@ -54,6 +55,9 @@ private:
 
     // Runtime data store: node_id:port_id -> value
     std::unordered_map<std::string, PortValue> port_data_;
+
+    // Registry of node handlers
+    std::unordered_map<std::string, std::shared_ptr<NodeHandler>> handlers_;
 };
 
 } // namespace workflow

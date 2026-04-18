@@ -79,7 +79,7 @@ function PropertiesContent({ node, onUpdate }: { node: { id: string; type?: stri
 
   const handleConfigChange = (key: string, value: string) => {
     onUpdate(node.id, {
-      config: { ...data.config, [key]: value },
+      config: { ...(data.config || {}), [key]: value },
     });
   };
 
@@ -163,6 +163,30 @@ function PropertiesContent({ node, onUpdate }: { node: { id: string; type?: stri
           <div className="props-info-text" style={{ marginTop: '8px', fontSize: '11px', color: '#6080a0' }}>
             Runs inference repeatedly for the specified duration (default 10s).
           </div>
+        </ConfigSection>
+      )}
+
+      {/* Postprocess */}
+      {node.type === 'postprocess' && (
+        <ConfigSection title="POSTPROCESS OPTIONS">
+          <div className="config-field">
+            <label>Operation</label>
+            <select
+              className="config-select"
+              value={(data.config?.op as string) || 'nms'}
+              onChange={(e) => handleConfigChange('op', e.target.value)}
+            >
+              <option value="nms">Non-Maximum Suppression (NMS)</option>
+              <option value="topk">Top-K</option>
+            </select>
+          </div>
+
+          {(data.config?.op === 'nms' || !data.config?.op) && (
+            <ConfigField label="IoU Threshold" configKey="iouThreshold" config={data.config || {}} onChange={handleConfigChange} placeholder="0.45" />
+          )}
+          {data.config?.op === 'topk' && (
+            <ConfigField label="K Value" configKey="k" config={data.config || {}} onChange={handleConfigChange} placeholder="1" />
+          )}
         </ConfigSection>
       )}
 

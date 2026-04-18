@@ -67,6 +67,7 @@ int main(int argc, char* argv[]) {
     capabilities.register_operation({"read_tensor", {}, {"tensor_data"}, "Read tensor from text"});
     capabilities.register_operation({"save_file", {"data", "file_path"}, {}, "Save data to file"});
     capabilities.register_operation({"condition", {"input_data", "expression"}, {"true_branch", "false_branch"}, "Conditional branch"});
+    capabilities.register_operation({"postprocess", {"input_data", "op", "iouThreshold", "k"}, {"output_data"}, "Postprocess outputs"});
 
     // ── Executor ──
     auto executor = std::make_shared<Executor>(engine);
