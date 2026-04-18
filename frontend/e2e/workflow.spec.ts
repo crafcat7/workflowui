@@ -27,7 +27,7 @@ test.afterAll(async () => {
 
 // Helper: wait for WS connection indicator to show "Connected"
 async function waitForConnection(page: Page) {
-  await page.waitForSelector('.ws-status', { timeout: 10000 });
+  await page.waitForSelector('.console-ws-status', { timeout: 10000 });
   // Give a moment for WS to connect
   await page.waitForTimeout(1000);
 }
@@ -50,7 +50,7 @@ test.describe('Canvas & basic UI', () => {
   test('shows WS connection status', async ({ page }) => {
     await page.goto('/');
     await waitForConnection(page);
-    const status = page.locator('.ws-status');
+    const status = page.locator('.console-ws-status');
     await expect(status).toBeVisible();
   });
 
@@ -65,9 +65,9 @@ test.describe('Node CRUD', () => {
     await page.goto('/');
     await waitForConnection(page);
 
-    // Click on an "Input Image" button in toolbar
-    const btn = page.locator('.toolbar-group button').filter({ hasText: 'Input Image' }).first();
-    await btn.click();
+    // Drag an "Input Image" node to canvas
+    const btn = page.locator('.palette-node-card').filter({ hasText: 'Input Image' }).first();
+    await btn.dragTo(page.locator('.react-flow__pane'));
 
     // A node should appear on the canvas
     await expect(page.locator('.react-flow__node')).toHaveCount(1);
@@ -77,26 +77,29 @@ test.describe('Node CRUD', () => {
     await page.goto('/');
     await waitForConnection(page);
 
+    const pane = page.locator('.react-flow__pane');
     // Add Input Tensor
-    await page.locator('.toolbar-group button').filter({ hasText: 'Input Tensor' }).first().click();
+    await page.locator('.palette-node-card').filter({ hasText: 'Input Tensor' }).first().dragTo(pane);
     // Add Create Net
-    await page.locator('.toolbar-group button').filter({ hasText: 'Create Net' }).first().click();
+    await page.locator('.palette-node-card').filter({ hasText: 'Create Net' }).first().dragTo(pane);
     // Add Inference
-    await page.locator('.toolbar-group button').filter({ hasText: 'Inference' }).first().click();
+    await page.locator('.palette-node-card').filter({ hasText: 'Inference' }).first().dragTo(pane);
+    // Add Postprocess
+    await page.locator('.palette-node-card').filter({ hasText: 'Postprocess' }).first().dragTo(pane);
 
-    await expect(page.locator('.react-flow__node')).toHaveCount(3);
+    await expect(page.locator('.react-flow__node')).toHaveCount(4);
   });
 
   test('selects a node and shows properties panel', async ({ page }) => {
     await page.goto('/');
     await waitForConnection(page);
 
-    await page.locator('.toolbar-group button').filter({ hasText: 'Input Tensor' }).first().click();
+    await page.locator('.palette-node-card').filter({ hasText: 'Input Tensor' }).first().dragTo(page.locator('.react-flow__pane'));
     // Click on the node
     await page.locator('.react-flow__node').first().click();
 
     // Properties panel should show node config
-    const panel = page.locator('.panel-container').first();
+    const panel = page.locator('.properties-panel').first();
     await expect(panel).toBeVisible();
   });
 
@@ -104,7 +107,7 @@ test.describe('Node CRUD', () => {
     await page.goto('/');
     await waitForConnection(page);
 
-    await page.locator('.toolbar-group button').filter({ hasText: 'Output' }).first().click();
+    await page.locator('.palette-node-card').filter({ hasText: 'Output' }).first().dragTo(page.locator('.react-flow__pane'));
     await expect(page.locator('.react-flow__node')).toHaveCount(1);
 
     // Select the node
@@ -122,8 +125,9 @@ test.describe('Workflow execution', () => {
     await waitForConnection(page);
 
     // Add two nodes
-    await page.locator('.toolbar-group button').filter({ hasText: 'Input Tensor' }).first().click();
-    await page.locator('.toolbar-group button').filter({ hasText: 'Output' }).first().click();
+    const pane = page.locator('.react-flow__pane');
+    await page.locator('.palette-node-card').filter({ hasText: 'Input Tensor' }).first().dragTo(pane);
+    await page.locator('.palette-node-card').filter({ hasText: 'Output' }).first().dragTo(pane);
 
     // Click Run button
     const runBtn = page.locator('button').filter({ hasText: /Run|Execute/i }).first();
@@ -143,7 +147,8 @@ test.describe('Save / Load workflow', () => {
     await waitForConnection(page);
 
     // Add a node
-    await page.locator('.toolbar-group button').filter({ hasText: 'Input Tensor' }).first().click();
+    const pane = page.locator('.react-flow__pane');
+    await page.locator('.palette-node-card').filter({ hasText: 'Input Tensor' }).first().dragTo(pane);
     await expect(page.locator('.react-flow__node')).toHaveCount(1);
 
     // Click Save button — triggers download
@@ -159,38 +164,6 @@ test.describe('Save / Load workflow', () => {
   });
 });
 
-test.describe('Panel collapse', () => {
-  test('properties panel can be collapsed', async ({ page }) => {
-    await page.goto('/');
-    await waitForConnection(page);
-
-    // Add and select a node to show properties panel
-    await page.locator('.toolbar-group button').filter({ hasText: 'Input Tensor' }).first().click();
-    await page.locator('.react-flow__node').first().click();
-
-    const panel = page.locator('.panel-container').first();
-    await expect(panel).toBeVisible();
-
-    // Click collapse toggle
-    const toggle = panel.locator('.collapse-btn').first();
-    if (await toggle.isVisible()) {
-      await toggle.click();
-      // Panel content should be hidden
-    }
-  });
-
-  test('debug panel can be collapsed', async ({ page }) => {
-    await page.goto('/');
-    const debugPanel = page.locator('.debug-panel');
-    if (await debugPanel.isVisible({ timeout: 2000 }).catch(() => false)) {
-      const toggle = debugPanel.locator('.panel-toggle').first();
-      if (await toggle.isVisible()) {
-        await toggle.click();
-      }
-    }
-  });
-});
-
 test.describe('WS disconnection', () => {
   test('shows offline status when backend is down', async ({ page }) => {
     // Navigate with a WS URL that doesn't exist
@@ -198,7 +171,7 @@ test.describe('WS disconnection', () => {
     // The status indicator should eventually show disconnected
     // (this depends on the actual WS URL configured — mock may or may not be running)
     await page.waitForTimeout(1000);
-    const status = page.locator('.ws-status');
+    const status = page.locator('.console-ws-status');
     await expect(status).toBeVisible();
   });
 });

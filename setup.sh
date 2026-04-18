@@ -169,18 +169,51 @@ start_services() {
   wait
 }
 
-# ── E2E 测试 ──────────────────────────────────────────
+# ── 测试 ──────────────────────────────────────────
 run_tests() {
+  info "运行 C++ 单元测试..."
+  if [ -f "$BACKEND_DIR/build/workflow_test" ]; then
+    "$BACKEND_DIR/build/workflow_test" || err "C++ 单元测试失败"
+    ok "C++ 单元测试通过"
+  else
+    warn "未找到 C++ 测试可执行文件，请先构建后端"
+    exit 1
+  fi
+
   info "安装前端依赖..."
   (cd "$FRONTEND_DIR" && npm install --silent)
+
+  info "运行前端单元测试..."
+  (cd "$FRONTEND_DIR" && npm run test:unit) || err "前端单元测试失败"
+  ok "前端单元测试通过"
+
+  info "启动后端并运行集成测试..."
+  if [ -f "$BACKEND_DIR/build/workflow_backend" ]; then
+    "$BACKEND_DIR/build/workflow_backend" 9090 > /dev/null 2>&1 &
+    local BACKEND_PID=$!
+    sleep 1
+    (cd "$ROOT_DIR" && node test_integration.mjs 9090) || {
+      kill $BACKEND_PID 2>/dev/null
+      err "集成测试失败"
+    }
+    kill $BACKEND_PID 2>/dev/null
+    ok "集成测试通过"
+  else
+    warn "未找到后端可执行文件，请先构建后端"
+    exit 1
+  fi
 
   info "安装 Playwright 浏览器..."
   (cd "$FRONTEND_DIR" && npx playwright install chromium 2>&1 | tail -2)
 
-  info "启动 mock 后端 + 运行 E2E 测试..."
-  (cd "$FRONTEND_DIR" && npm run test:e2e)
+  info "运行前端 E2E 测试..."
+  (cd "$FRONTEND_DIR" && npm run test:e2e) || err "E2E 测试失败"
+  ok "E2E 测试通过"
 
-  ok "E2E 测试完成"
+  echo ""
+  echo -e "${GREEN}════════════════════════════════════════════════${NC}"
+  echo -e "${GREEN}  所有测试运行完成并全部通过！${NC}"
+  echo -e "${GREEN}════════════════════════════════════════════════${NC}"
 }
 
 # ── 主流程 ────────────────────────────────────────────

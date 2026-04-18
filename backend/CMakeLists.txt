@@ -57,6 +57,7 @@ set(BACKEND_SOURCES
   src/workflow/executor.cpp
   src/workflow/scheduler.cpp
   src/workflow/debug_controller.cpp
+  src/workflow/handlers/core_handlers.cpp
   src/model/node.cpp
   src/model/workflow_graph.cpp
 )
@@ -85,6 +86,50 @@ if(ENABLE_NCNN)
   target_link_libraries(workflow_backend PRIVATE ncnn)
   target_compile_definitions(workflow_backend PRIVATE ENABLE_NCNN=1)
 endif()
+
+# ── Tests ────────────────────────────────────────────
+enable_testing()
+
+include(FetchContent)
+FetchContent_Declare(
+  googletest
+  URL https://github.com/google/googletest/archive/03597a01ee50ed33e9dfd640b249b4be3799d395.zip
+)
+set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+FetchContent_MakeAvailable(googletest)
+
+# Remove main.cpp from sources so it doesn't conflict with gtest_main
+set(BACKEND_LIB_SOURCES ${BACKEND_SOURCES})
+list(REMOVE_ITEM BACKEND_LIB_SOURCES src/main.cpp)
+
+set(BACKEND_TEST_SOURCES
+  tests/main_test.cpp
+  tests/test_executor.cpp
+)
+
+add_executable(workflow_test ${BACKEND_TEST_SOURCES} ${BACKEND_LIB_SOURCES})
+
+target_include_directories(workflow_test PRIVATE
+  src
+  "${uwebsockets_SOURCE_DIR}/src"
+  "${usockets_SOURCE_DIR}/src"
+)
+
+target_link_libraries(workflow_test PRIVATE
+  gtest_main
+  nlohmann_json::nlohmann_json
+  uSockets
+  pthread
+  z
+)
+
+if(ENABLE_NCNN)
+  target_link_libraries(workflow_test PRIVATE ncnn)
+  target_compile_definitions(workflow_test PRIVATE ENABLE_NCNN=1)
+endif()
+
+include(GoogleTest)
+gtest_discover_tests(workflow_test)
 
 # ── Install ──────────────────────────────────────────
 install(TARGETS workflow_backend DESTINATION bin)

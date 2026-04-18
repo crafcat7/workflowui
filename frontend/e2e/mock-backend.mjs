@@ -47,8 +47,20 @@ function handleRpc(ws, msg) {
           { id: 'init_net', inputs: ['model_path', 'config'], outputs: ['net_handle'], description: 'Initialize neural network' },
           { id: 'execute', inputs: ['net_handle', 'input_data'], outputs: ['output_data'], description: 'Run inference' },
           { id: 'benchmark', inputs: ['net_handle', 'input_data', 'duration_sec'], outputs: ['runs', 'avg_ms'], description: 'Benchmark inference' },
+          { id: 'postprocess', inputs: ['input_data', 'op', 'iouThreshold', 'k'], outputs: ['output_data'], description: 'Postprocess outputs' },
         ],
       },
+    }));
+    return;
+  }
+
+  if (method === 'vendor.getConfigSchema') {
+    ws.send(JSON.stringify({
+      jsonrpc: '2.0', id,
+      result: {
+        vendor: 'stub',
+        fields: []
+      }
     }));
     return;
   }

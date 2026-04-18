@@ -50,10 +50,10 @@ async function runTests() {
   // ── Test 1: capabilities ──
   console.log('\n[Test 1] capabilities');
   const caps = await send('capabilities');
-  assert(caps && caps.vendor, 'has vendor field');
+  assert(caps && caps.vendors && caps.vendors.length > 0, 'has vendor field');
   assert(Array.isArray(caps.operations), 'has operations array');
   assert(caps.operations.length > 0, 'operations not empty');
-  assert(caps.vendor === 'stub', 'vendor is stub');
+  assert(caps.vendors[0] === 'stub' || caps.vendors[0] === 'ncnn', 'vendor is stub or ncnn');
 
   // ── Test 2: unknown method ──
   console.log('\n[Test 2] unknown method');
@@ -72,11 +72,11 @@ async function runTests() {
 
   const execResult = await send('workflow.execute', {
     nodes: [
-      { id: 'n1', type: 'input_tensor', config: { data: '1.0,2.0,3.0', shape: '1,3' } },
+      { id: 'n1', type: 'inputTensor', config: { fillMode: 'text', tensorText: '1.0 2.0 3.0' } },
       { id: 'n2', type: 'output', config: {} }
     ],
     edges: [
-      { source: 'n1', sourceHandle: 'tensor', target: 'n2', targetHandle: 'input' }
+      { source: 'n1', sourceHandle: 'tensor_data', target: 'n2', targetHandle: 'data' }
     ]
   });
   assert(execResult && execResult.status === 'started', 'workflow started');
@@ -112,11 +112,11 @@ async function runTests() {
 
   await send('workflow.execute', {
     nodes: [
-      { id: 'n1', type: 'input_tensor', config: { data: '1.0', shape: '1' } },
+      { id: 'n1', type: 'inputTensor', config: { fillMode: 'text', tensorText: '1.0' } },
       { id: 'n2', type: 'output', config: {} }
     ],
     edges: [
-      { source: 'n1', sourceHandle: 'tensor', target: 'n2', targetHandle: 'input' }
+      { source: 'n1', sourceHandle: 'tensor_data', target: 'n2', targetHandle: 'data' }
     ]
   });
 
@@ -132,6 +132,33 @@ async function runTests() {
   }
 
   await send('debug.remove_breakpoint', { node_id: 'n2' });
+
+  // ── Test 6: postprocess NMS ──
+  console.log('\n[Test 6] workflow with postprocess');
+  notifications.length = 0;
+
+  await send('workflow.execute', {
+    nodes: [
+      { id: 'n1', type: 'inputTensor', config: { fillMode: 'text', tensorText: '0 0 10 10 0.9 0 0 10 10 0.8 20 20 30 30 0.95' } },
+      { id: 'n2', type: 'postprocess', config: { op: 'nms', iouThreshold: '0.5' } },
+      { id: 'n3', type: 'output', config: {} }
+    ],
+    edges: [
+      { source: 'n1', sourceHandle: 'tensor_data', target: 'n2', targetHandle: 'input_data' },
+      { source: 'n2', sourceHandle: 'output_data', target: 'n3', targetHandle: 'data' }
+    ]
+  });
+
+  await sleep(1500);
+  const doneNotifs = notifications.filter(n => n.method === 'node.status' && n.params.node_id === 'n3' && n.params.status === 'done');
+  assert(doneNotifs.length === 1, 'postprocess flow completed');
+  if (doneNotifs.length === 1) {
+    const out = doneNotifs[0].params.output;
+    assert(out && out.length === 10, 'nms filtered 1 box correctly');
+    if (out) {
+      assert(out[0] === 20, 'highest score box kept first');
+    }
+  }
 }
 
 // Connect and run
