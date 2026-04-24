@@ -41,6 +41,14 @@ static float iou(const float* a, const float* b) {
 class PostprocessHandler : public NodeHandler {
 public:
     std::string type() const override { return "postprocess"; }
+    std::string label() const override { return "Postprocess"; }
+    std::string category() const override { return "inference"; }
+    std::vector<HandlerPortDef> port_defs() const override {
+        return {
+            {"input_data",  "target", "tensor"},
+            {"output_data", "source", "tensor"},
+        };
+    }
     json execute(const NodeDef& node, const WorkflowGraph& graph, ExecutionContext& ctx) override {
         auto data_val = ctx.resolve_input(node.id, "input_data", graph);
         if (std::holds_alternative<std::monostate>(data_val)) throw std::runtime_error("Missing input_data");
@@ -111,6 +119,11 @@ public:
 class InputImageHandler : public NodeHandler {
 public:
     std::string type() const override { return "inputImage"; }
+    std::string label() const override { return "Input Image"; }
+    std::string category() const override { return "input"; }
+    std::vector<HandlerPortDef> port_defs() const override {
+        return {{"image_data", "source", "image"}};
+    }
     json execute(const NodeDef& node, const WorkflowGraph& graph, ExecutionContext& ctx) override {
         std::string path = get_config(node, "filePath");
         auto resolved = resolve_path(path);
@@ -128,6 +141,11 @@ public:
 class InputTensorHandler : public NodeHandler {
 public:
     std::string type() const override { return "inputTensor"; }
+    std::string label() const override { return "Input Tensor"; }
+    std::string category() const override { return "input"; }
+    std::vector<HandlerPortDef> port_defs() const override {
+        return {{"tensor_data", "source", "tensor"}};
+    }
     json execute(const NodeDef& node, const WorkflowGraph& graph, ExecutionContext& ctx) override {
         TensorData tensor;
         std::string mode = get_config(node, "fillMode");
@@ -172,6 +190,11 @@ public:
 class CreateNetHandler : public NodeHandler {
 public:
     std::string type() const override { return "createNet"; }
+    std::string label() const override { return "Create Net"; }
+    std::string category() const override { return "inference"; }
+    std::vector<HandlerPortDef> port_defs() const override {
+        return {{"net_handle", "source", "net"}};
+    }
     json execute(const NodeDef& node, const WorkflowGraph& graph, ExecutionContext& ctx) override {
         NetConfig nc;
         {
@@ -213,6 +236,15 @@ public:
 class InferenceHandler : public NodeHandler {
 public:
     std::string type() const override { return "inference"; }
+    std::string label() const override { return "Inference"; }
+    std::string category() const override { return "inference"; }
+    std::vector<HandlerPortDef> port_defs() const override {
+        return {
+            {"net_handle",  "target", "net"},
+            {"input_data",  "target", "tensor"},
+            {"output_data", "source", "tensor"},
+        };
+    }
     json execute(const NodeDef& node, const WorkflowGraph& graph, ExecutionContext& ctx) override {
         auto handle_val = ctx.resolve_input(node.id, "net_handle", graph);
         auto input_val = ctx.resolve_input(node.id, "input_data", graph);
@@ -235,6 +267,15 @@ public:
 class BenchmarkHandler : public NodeHandler {
 public:
     std::string type() const override { return "benchmark"; }
+    std::string label() const override { return "Benchmark"; }
+    std::string category() const override { return "inference"; }
+    std::vector<HandlerPortDef> port_defs() const override {
+        return {
+            {"net_handle",       "target", "net"},
+            {"input_data",       "target", "tensor"},
+            {"benchmark_result", "source", "generic"},
+        };
+    }
     json execute(const NodeDef& node, const WorkflowGraph& graph, ExecutionContext& ctx) override {
         auto handle_val = ctx.resolve_input(node.id, "net_handle", graph);
         auto input_val = ctx.resolve_input(node.id, "input_data", graph);
@@ -274,6 +315,11 @@ public:
 class SaveTextHandler : public NodeHandler {
 public:
     std::string type() const override { return "saveText"; }
+    std::string label() const override { return "Save Text"; }
+    std::string category() const override { return "output"; }
+    std::vector<HandlerPortDef> port_defs() const override {
+        return {{"data", "target", "generic"}};
+    }
     json execute(const NodeDef& node, const WorkflowGraph& graph, ExecutionContext& ctx) override {
         auto data_val = ctx.resolve_input(node.id, "data", graph);
 
@@ -296,6 +342,11 @@ public:
 class SaveImageHandler : public NodeHandler {
 public:
     std::string type() const override { return "saveImage"; }
+    std::string label() const override { return "Save Image"; }
+    std::string category() const override { return "output"; }
+    std::vector<HandlerPortDef> port_defs() const override {
+        return {{"image_data", "target", "image"}};
+    }
     json execute(const NodeDef& node, const WorkflowGraph& graph, ExecutionContext& ctx) override {
         auto data_val = ctx.resolve_input(node.id, "image_data", graph);
 
@@ -315,6 +366,15 @@ public:
 class ConditionHandler : public NodeHandler {
 public:
     std::string type() const override { return "condition"; }
+    std::string label() const override { return "Condition"; }
+    std::string category() const override { return "control"; }
+    std::vector<HandlerPortDef> port_defs() const override {
+        return {
+            {"input_data",   "target", "tensor"},
+            {"true_branch",  "source", "branch"},
+            {"false_branch", "source", "branch"},
+        };
+    }
     json execute(const NodeDef& node, const WorkflowGraph& graph, ExecutionContext& ctx) override {
         auto data_val = ctx.resolve_input(node.id, "input_data", graph);
 
@@ -344,6 +404,11 @@ public:
 class OutputHandler : public NodeHandler {
 public:
     std::string type() const override { return "output"; }
+    std::string label() const override { return "Output"; }
+    std::string category() const override { return "output"; }
+    std::vector<HandlerPortDef> port_defs() const override {
+        return {{"data", "target", "generic"}};
+    }
     json execute(const NodeDef& node, const WorkflowGraph& graph, ExecutionContext& ctx) override {
         auto data_val = ctx.resolve_input(node.id, "data", graph);
 
@@ -360,6 +425,14 @@ public:
 class DebugHandler : public NodeHandler {
 public:
     std::string type() const override { return "debug"; }
+    std::string label() const override { return "Inspect"; }
+    std::string category() const override { return "debug"; }
+    std::vector<HandlerPortDef> port_defs() const override {
+        return {
+            {"data_in",  "target", "generic"},
+            {"data_out", "source", "generic"},
+        };
+    }
     json execute(const NodeDef& node, const WorkflowGraph& graph, ExecutionContext& ctx) override {
         auto data_val = ctx.resolve_input(node.id, "data_in", graph);
         ctx.set_output(node.id, "data_out", data_val);

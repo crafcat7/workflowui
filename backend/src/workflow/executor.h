@@ -35,6 +35,13 @@ public:
 
     DebugController& debug_controller() { return debug_; }
 
+    // Returns backend node catalog as JSON for the `nodes.list` RPC.
+    // Each entry: {type, label, category, ports:[{id,direction,dataType}]}.
+    // This is the authoritative description of what this backend build
+    // can execute, and is intended to be cross-checked against the
+    // frontend manifest (`frontend/src/nodes/manifest.ts`).
+    json describe_nodes() const;
+
     // Execute the full workflow. Blocks until complete or stopped.
     void execute(const WorkflowGraph& graph);
 

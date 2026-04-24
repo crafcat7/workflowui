@@ -8,10 +8,23 @@
 #include <unordered_map>
 #include <memory>
 #include <string>
+#include <vector>
 
 namespace workflow {
 
 using json = nlohmann::json;
+
+/**
+ * Port direction and data type, mirrored from the frontend manifest
+ * (see `frontend/src/nodes/manifest.ts` / `portSchema.ts`). Values are
+ * exchanged as strings in the `nodes.list` RPC so frontend and backend
+ * can be cross-checked without a shared code generator.
+ */
+struct HandlerPortDef {
+    std::string id;
+    std::string direction;   // "source" or "target"
+    std::string data_type;   // "image" | "tensor" | "net" | "branch" | "generic"
+};
 
 /**
  * Context provided to each node handler during execution.
@@ -36,14 +49,33 @@ public:
 };
 
 /**
- * Interface for node-specific execution logic.
+ * Interface for node-specific execution logic *and* self-describing
+ * metadata. Every handler must report its type/label/category/ports
+ * so the backend can expose the full node catalog via `nodes.list`
+ * without a second registry to keep in sync.
  */
 class NodeHandler {
 public:
     virtual ~NodeHandler() = default;
 
-    // Return the node type string (e.g. "inputImage", "inference")
+    // --- Identity & metadata ---------------------------------------------
+
+    // Unique type id, e.g. "inputImage". Must match the frontend manifest.
     virtual std::string type() const = 0;
+
+    // Human-readable label shown in UI, e.g. "Input Image".
+    virtual std::string label() const = 0;
+
+    // Category for UI grouping. One of:
+    //   "input" | "inference" | "output" | "control" | "debug"
+    virtual std::string category() const = 0;
+
+    // Ports exposed by this node type. Empty vector is legal (e.g. a
+    // pure source that writes through a single port might still list it;
+    // handlers that take no typed inputs should return an empty vector).
+    virtual std::vector<HandlerPortDef> port_defs() const = 0;
+
+    // --- Execution -------------------------------------------------------
 
     // Execute the node's logic. Returns a JSON object with extra data to send to frontend.
     virtual json execute(const NodeDef& node, const WorkflowGraph& graph, ExecutionContext& ctx) = 0;

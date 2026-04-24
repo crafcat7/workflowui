@@ -7,6 +7,8 @@
 #include <atomic>
 #include <chrono>
 #include <thread>
+#include <algorithm>
+#include <unordered_set>
 
 using namespace workflow;
 using workflow::testing::MockEngine;
@@ -325,4 +327,47 @@ TEST(ExecutorTest, ReleasesNetHandlesBetweenRuns) {
         EXPECT_EQ(engine->live_handles.size(), 2u);
     }
     EXPECT_EQ(engine->live_handles.size(), 1u);
+}
+
+// Verifies that every registered handler reports non-empty identity
+// metadata (type/label/category) through `describe_nodes()` and that
+// the catalog is stable, sorted, and port-complete. This is the
+// backend mirror of the frontend manifest cross-check.
+TEST(ExecutorTest, DescribeNodesCoversAllHandlers) {
+    auto engine = std::make_shared<MockEngine>();
+    Executor executor(engine);
+
+    auto catalog = executor.describe_nodes();
+    ASSERT_TRUE(catalog.is_array());
+    EXPECT_GE(catalog.size(), 11u); // 11 core handlers at time of writing
+
+    // Catalog must be sorted by type for deterministic consumption.
+    std::vector<std::string> types;
+    for (const auto& e : catalog) types.push_back(e.at("type").get<std::string>());
+    EXPECT_TRUE(std::is_sorted(types.begin(), types.end()));
+
+    // Every entry has non-empty metadata and a well-formed ports array.
+    static const std::unordered_set<std::string> valid_categories{
+        "input", "inference", "output", "control", "debug"};
+    for (const auto& e : catalog) {
+        EXPECT_FALSE(e.at("type").get<std::string>().empty());
+        EXPECT_FALSE(e.at("label").get<std::string>().empty());
+        EXPECT_TRUE(valid_categories.count(e.at("category").get<std::string>()))
+            << "unknown category for type " << e.at("type");
+        ASSERT_TRUE(e.at("ports").is_array());
+        for (const auto& p : e.at("ports")) {
+            const auto dir = p.at("direction").get<std::string>();
+            EXPECT_TRUE(dir == "source" || dir == "target");
+            EXPECT_FALSE(p.at("id").get<std::string>().empty());
+            EXPECT_FALSE(p.at("dataType").get<std::string>().empty());
+        }
+    }
+
+    // Spot-check a node with known ports (inference) to catch drift.
+    auto it = std::find_if(catalog.begin(), catalog.end(),
+        [](const json& e) { return e.at("type") == "inference"; });
+    ASSERT_NE(it, catalog.end());
+    EXPECT_EQ(it->at("label"), "Inference");
+    EXPECT_EQ(it->at("category"), "inference");
+    EXPECT_EQ(it->at("ports").size(), 3u);
 }

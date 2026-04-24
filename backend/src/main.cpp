@@ -179,6 +179,13 @@ int main(int argc, char* argv[]) {
         return result;
     });
 
+    // Catalog of every node type this backend can execute, with ports.
+    // Frontends can call this at startup to cross-check their manifest
+    // against the server they're talking to and warn on drift.
+    rpc.register_method("nodes.list", [&](const json&) -> json {
+        return {{"nodes", executor->describe_nodes()}};
+    });
+
     rpc.register_method("workflow.execute", [&](const json& params) -> json {
         WorkflowGraph graph;
 

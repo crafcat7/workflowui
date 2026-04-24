@@ -92,6 +92,37 @@ void Executor::register_handlers() {
     handlers::register_core_handlers(handlers_);
 }
 
+json Executor::describe_nodes() const {
+    // The list order follows whatever hash-map iteration produces, which
+    // is good enough for a diagnostic RPC; frontends sort by `type` if
+    // they need stability. Kept sorted here so snapshot tests are
+    // deterministic.
+    std::vector<std::string> types;
+    types.reserve(handlers_.size());
+    for (const auto& [t, _] : handlers_) types.push_back(t);
+    std::sort(types.begin(), types.end());
+
+    json out = json::array();
+    for (const auto& t : types) {
+        const auto& h = handlers_.at(t);
+        json entry;
+        entry["type"]     = h->type();
+        entry["label"]    = h->label();
+        entry["category"] = h->category();
+        json ports = json::array();
+        for (const auto& p : h->port_defs()) {
+            ports.push_back({
+                {"id", p.id},
+                {"direction", p.direction},
+                {"dataType", p.data_type},
+            });
+        }
+        entry["ports"] = std::move(ports);
+        out.push_back(std::move(entry));
+    }
+    return out;
+}
+
 void Executor::execute(const WorkflowGraph& graph) {
     debug_.reset();
     // Release nets created by the previous run before we drop the port
