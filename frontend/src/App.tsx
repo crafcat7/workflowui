@@ -207,7 +207,6 @@ function AppInner() {
           ...e,
           type: 'smoothstep',
           animated: isRunning,
-          className: `edge-type-${dataType}`,
           style: isRunning
             ? { stroke: baseStroke, strokeWidth: 2.5 }
             : { stroke: baseStroke, strokeWidth: 1.5, opacity: 0.75 },

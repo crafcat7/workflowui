@@ -19,7 +19,7 @@ export type NodeStatus = 'idle' | 'running' | 'done' | 'error' | 'paused';
  * JSON so that pressing Ctrl+Z after a run undoes the last *edit* rather than
  * the last status tick.
  */
-export const RUNTIME_DATA_KEYS = ['status', 'elapsedMs', 'output', 'runsCount', 'avgMs'] as const;
+const RUNTIME_DATA_KEYS = ['status', 'elapsedMs', 'output', 'runsCount', 'avgMs'] as const;
 
 export interface WorkflowNodeData {
   label: string;
@@ -61,7 +61,6 @@ interface WorkflowState {
   updateNodeData: (id: string, data: Partial<WorkflowNodeData>) => void;
   updateNodeStatus: (id: string, status: NodeStatus) => void;
   setRunning: (running: boolean) => void;
-  clearAll: () => void;
   exportWorkflow: () => string;
   importWorkflow: (json: string) => void;
 }
@@ -138,8 +137,6 @@ export const useWorkflowStore = create<WorkflowState>()(
       },
 
       setRunning: (running) => set({ isRunning: running }),
-
-      clearAll: () => set({ nodes: [], edges: [], selectedNodeId: null, isRunning: false }),
 
       exportWorkflow: () => {
         const { nodes, edges } = get();
@@ -253,13 +250,11 @@ export function pauseHistory() {
 }
 
 /**
- * Resume undo recording and commit a single snapshot capturing the result of
- * whatever mutation happened while paused.
+ * Resume undo recording. Any subsequent state change will trigger a fresh
+ * snapshot via zundo's normal equality-guarded subscription, so the
+ * partialized set is consistent with what the user sees.
  */
 export function resumeHistory() {
   const t = useWorkflowStore.temporal.getState();
   t.resume();
-  // Zundo does not take an implicit snapshot on resume; nudge it by calling
-  // the internal handleSet with current state.
-  // Safe because partialize + equality guard against duplicate entries.
 }
