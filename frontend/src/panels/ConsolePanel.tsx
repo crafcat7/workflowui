@@ -18,63 +18,95 @@ interface Props {
   actions: WorkflowActions;
 }
 
+// How many pixels from the bottom still counts as "the user is
+// following the tail". Anything larger means they have intentionally
+// scrolled up to read something; we then freeze autoscroll so we
+// don't yank the scrollbar out from under them on the next log.
+const AUTOSCROLL_STICK_PX = 32;
+
 export function ConsolePanel({ actions }: Props) {
   const isRunning = useWorkflowStore((s) => s.isRunning);
   const logs = useDebugStore((s) => s.logs);
   const pausedAtNodeId = useDebugStore((s) => s.pausedAtNodeId);
   const breakpoints = useDebugStore((s) => s.breakpoints);
 
-  const logEndRef = useRef<HTMLDivElement>(null);
+  const logAreaRef = useRef<HTMLDivElement>(null);
   const [wsConnected, setWsConnected] = useState(wsClient.connected);
   const [collapsed, setCollapsed] = useState(false);
+  // Whether to keep snapping to the tail on new logs. Flipped false
+  // when the user scrolls up by more than AUTOSCROLL_STICK_PX, and
+  // back to true when they scroll back down into the stick zone.
+  const [autoscroll, setAutoscroll] = useState(true);
 
   useEffect(() => wsClient.onConnection(setWsConnected), []);
+
+  // Autoscroll effect: jump to bottom whenever logs grow, BUT only
+  // if the user is still anchored to the bottom. `behavior: 'auto'`
+  // (instant) replaces the old smooth scroll, which visibly lagged
+  // behind the log stream during bursts and produced a laggy feel.
   useEffect(() => {
-    logEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [logs.length]);
+    if (!autoscroll) return;
+    const el = logAreaRef.current;
+    if (!el) return;
+    el.scrollTop = el.scrollHeight;
+  }, [logs.length, autoscroll]);
+
+  const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    const el = e.currentTarget;
+    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    const anchored = distanceFromBottom <= AUTOSCROLL_STICK_PX;
+    // Only flip state when the observable condition changes to avoid
+    // causing a re-render on every wheel event.
+    setAutoscroll((prev) => (prev === anchored ? prev : anchored));
+  };
 
   const armedBpCount = breakpoints.filter((b) => b.enabled).length;
 
   return (
     <div className={`console-panel ${collapsed ? 'collapsed' : ''}`}>
-      <div className="console-toolbar">
+      <div className="console-toolbar" role="toolbar" aria-label="Workflow execution controls">
         <div className="console-toolbar-left">
           <button
             className="console-btn run"
             onClick={() => void actions.run()}
             disabled={isRunning && !pausedAtNodeId}
+            aria-label={pausedAtNodeId ? 'Resume workflow' : 'Run workflow'}
             title="Run workflow (R) / Resume if paused"
           >
-            <span className="btn-icon">▶</span> {pausedAtNodeId ? 'RESUME' : 'RUN'}
+            <span className="btn-icon" aria-hidden="true">▶</span> {pausedAtNodeId ? 'RESUME' : 'RUN'}
           </button>
           <button
             className="console-btn continue"
             onClick={actions.continueExec}
             disabled={!pausedAtNodeId}
+            aria-label="Continue until next breakpoint"
             title="Continue execution (until next breakpoint)"
           >
-            <span className="btn-icon">⏵</span> CONTINUE
+            <span className="btn-icon" aria-hidden="true">⏵</span> CONTINUE
           </button>
           <button
             className="console-btn step"
             onClick={actions.stepOver}
             disabled={!pausedAtNodeId}
+            aria-label="Step over to next node"
             title="Step over (run next node then pause)"
           >
-            <span className="btn-icon">⤼</span> STEP
+            <span className="btn-icon" aria-hidden="true">⤼</span> STEP
           </button>
           <button
             className="console-btn stop"
             onClick={actions.stop}
             disabled={!isRunning}
+            aria-label="Stop workflow"
             title="Stop workflow"
           >
-            <span className="btn-icon">■</span> STOP
+            <span className="btn-icon" aria-hidden="true">■</span> STOP
           </button>
-          <div className="console-separator" />
+          <div className="console-separator" aria-hidden="true" />
           <button
             className="console-btn file-op"
             onClick={actions.save}
+            aria-label="Save workflow"
             title="Save workflow (Cmd/Ctrl+S)"
           >
             SAVE
@@ -82,6 +114,7 @@ export function ConsolePanel({ actions }: Props) {
           <button
             className="console-btn file-op"
             onClick={actions.load}
+            aria-label="Load workflow"
             title="Load workflow (Cmd/Ctrl+O)"
           >
             LOAD
@@ -89,24 +122,48 @@ export function ConsolePanel({ actions }: Props) {
         </div>
         <div className="console-toolbar-right">
           {pausedAtNodeId && (
-            <span className="console-paused-badge">PAUSED @ {pausedAtNodeId}</span>
+            <span className="console-paused-badge" role="status">
+              PAUSED @ {pausedAtNodeId}
+            </span>
           )}
           {armedBpCount > 0 && (
             <span className="console-bp-count" title="Armed breakpoints">
               {armedBpCount} BP
             </span>
           )}
-          <div className="console-ws-status" title={wsConnected ? 'Connected' : 'Disconnected'}>
-            <span className={`ws-dot ${wsConnected ? 'connected' : 'disconnected'}`} />
+          <div
+            className="console-ws-status"
+            role="status"
+            aria-label={wsConnected ? 'Backend connected' : 'Backend disconnected'}
+            title={wsConnected ? 'Connected' : 'Disconnected'}
+          >
+            <span className={`ws-dot ${wsConnected ? 'connected' : 'disconnected'}`} aria-hidden="true" />
             {wsConnected ? 'ONLINE' : 'OFFLINE'}
           </div>
-          <button className="console-toggle" onClick={() => setCollapsed(!collapsed)}>
-            {collapsed ? '▲' : '▼'}
+          <button
+            className="console-toggle"
+            onClick={() => setCollapsed(!collapsed)}
+            aria-label={collapsed ? 'Expand console log area' : 'Collapse console log area'}
+            aria-expanded={!collapsed}
+          >
+            <span aria-hidden="true">{collapsed ? '▲' : '▼'}</span>
           </button>
         </div>
       </div>
       {!collapsed && (
-        <div className="console-log-area">
+        <div
+          ref={logAreaRef}
+          className="console-log-area"
+          onScroll={handleScroll}
+          // role=log + polite lets screen readers announce new lines
+          // without interrupting. aria-atomic=false means each new
+          // addition announces alone rather than re-reading the
+          // whole log on every append.
+          role="log"
+          aria-live="polite"
+          aria-atomic="false"
+          aria-label="Execution log"
+        >
           {logs.length === 0 ? (
             <div className="console-empty">Ready. Press RUN to execute workflow.</div>
           ) : (
@@ -118,8 +175,24 @@ export function ConsolePanel({ actions }: Props) {
               </div>
             ))
           )}
-          <div ref={logEndRef} />
         </div>
+      )}
+      {!collapsed && !autoscroll && logs.length > 0 && (
+        // Surfaced when the user has scrolled up. Clicking snaps
+        // back to tail AND re-arms autoscroll. Mirrors the classic
+        // chat-app "Jump to latest" affordance.
+        <button
+          type="button"
+          className="console-autoscroll-resume"
+          onClick={() => {
+            const el = logAreaRef.current;
+            if (el) el.scrollTop = el.scrollHeight;
+            setAutoscroll(true);
+          }}
+          aria-label="Resume autoscroll and jump to latest log"
+        >
+          ↓ JUMP TO LATEST
+        </button>
       )}
     </div>
   );
