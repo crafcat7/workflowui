@@ -53,6 +53,7 @@ set(BACKEND_SOURCES
   src/main.cpp
   src/server/ws_server.cpp
   src/server/rpc_handler.cpp
+  src/server/security_config.cpp
   src/capability/registry.cpp
   src/workflow/executor.cpp
   src/workflow/scheduler.cpp
@@ -105,6 +106,7 @@ list(REMOVE_ITEM BACKEND_LIB_SOURCES src/main.cpp)
 set(BACKEND_TEST_SOURCES
   tests/main_test.cpp
   tests/test_executor.cpp
+  tests/test_security_config.cpp
 )
 
 add_executable(workflow_test ${BACKEND_TEST_SOURCES} ${BACKEND_LIB_SOURCES})

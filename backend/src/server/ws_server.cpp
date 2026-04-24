@@ -1,4 +1,5 @@
 #include "ws_server.h"
+#include "security_config.h"
 #include <App.h>
 #include <Loop.h>
 #include <iostream>
@@ -23,6 +24,24 @@ void WsServer::run() {
     app.ws<PerSocketData>("/*", {
         .compression = uWS::DISABLED,
         .maxPayloadLength = 16 * 1024 * 1024,
+        // Inspect the HTTP upgrade before accepting the WebSocket. This is
+        // the only place where uWS exposes the Origin header to us; once
+        // .open fires the handshake is already complete. When no allow-list
+        // is configured the security layer short-circuits to "allow" so
+        // this stays a no-op for tests and CLI-only setups.
+        .upgrade = [](auto* res, auto* req, auto* context) {
+            std::string_view origin = req->getHeader("origin");
+            if (!SecurityConfig::instance().is_origin_allowed(origin)) {
+                std::cerr << "[WS] Rejected upgrade from origin '" << origin << "'\n";
+                res->writeStatus("403 Forbidden")->end("origin not allowed");
+                return;
+            }
+            std::string_view wsKey = req->getHeader("sec-websocket-key");
+            std::string_view wsProto = req->getHeader("sec-websocket-protocol");
+            std::string_view wsExt = req->getHeader("sec-websocket-extensions");
+            res->template upgrade<PerSocketData>(
+                PerSocketData{}, wsKey, wsProto, wsExt, context);
+        },
         .open = [](auto* ws) {
             std::cout << "[WS] Client connected\n";
             ws->subscribe(BROADCAST_TOPIC);

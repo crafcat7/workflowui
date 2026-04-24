@@ -1,4 +1,5 @@
 #include "core_handlers.h"
+#include "server/security_config.h"
 #include <fstream>
 #include <sstream>
 #include <numeric>
@@ -14,6 +15,13 @@ namespace handlers {
 static std::string get_config(const NodeDef& node, const std::string& key) {
     auto it = node.config.find(key);
     return (it != node.config.end()) ? it->second : "";
+}
+
+// Resolve a user-supplied path through the process-wide sandbox. When no
+// sandbox is configured the path is returned unchanged (legacy behavior),
+// so tests and CLI-only setups keep working.
+static std::filesystem::path resolve_path(const std::string& user_path) {
+    return SecurityConfig::instance().resolve_shared_path(user_path);
 }
 
 static float iou(const float* a, const float* b) {
@@ -107,7 +115,8 @@ public:
     std::string type() const override { return "inputImage"; }
     json execute(const NodeDef& node, const WorkflowGraph& graph, ExecutionContext& ctx) override {
         std::string path = get_config(node, "filePath");
-        std::ifstream f(path, std::ios::binary);
+        auto resolved = resolve_path(path);
+        std::ifstream f(resolved, std::ios::binary);
         if (!f) throw std::runtime_error("Cannot open image: " + path);
         std::vector<uint8_t> data((std::istreambuf_iterator<char>(f)),
                                    std::istreambuf_iterator<char>());
@@ -167,8 +176,14 @@ public:
     std::string type() const override { return "createNet"; }
     json execute(const NodeDef& node, const WorkflowGraph& graph, ExecutionContext& ctx) override {
         NetConfig nc;
-        nc.model_path = get_config(node, "modelPath");
-        nc.param_path = get_config(node, "paramPath");
+        {
+            auto mp = get_config(node, "modelPath");
+            auto pp = get_config(node, "paramPath");
+            // Only route non-empty paths through the sandbox; createNet with
+            // emptyWeights=true or a stub engine may legitimately omit them.
+            nc.model_path = mp.empty() ? mp : resolve_path(mp).string();
+            nc.param_path = pp.empty() ? pp : resolve_path(pp).string();
+        }
         auto in_name = get_config(node, "inputName");
         if (!in_name.empty()) nc.input_name = in_name;
         auto out_name = get_config(node, "outputName");
@@ -264,8 +279,9 @@ public:
 
         std::string path = get_config(node, "filePath");
         if (path.empty()) path = "output.txt";
+        auto resolved = resolve_path(path);
 
-        std::ofstream f(path);
+        std::ofstream f(resolved);
         if (!f.is_open()) throw std::runtime_error("Failed to open file for writing: " + path);
 
         if (auto* t = std::get_if<TensorData>(&data_val)) {
@@ -285,9 +301,10 @@ public:
 
         std::string path = get_config(node, "filePath");
         if (path.empty()) path = "output.png";
+        auto resolved = resolve_path(path);
 
         if (auto* img = std::get_if<ImageData>(&data_val)) {
-            std::ofstream f(path, std::ios::binary);
+            std::ofstream f(resolved, std::ios::binary);
             if (!f.is_open()) throw std::runtime_error("Failed to open image file for writing: " + path);
             f.write(reinterpret_cast<const char*>(img->pixels.data()), img->pixels.size());
         }

@@ -1,5 +1,6 @@
 #include "server/ws_server.h"
 #include "server/rpc_handler.h"
+#include "server/security_config.h"
 #include "capability/registry.h"
 #include "workflow/executor.h"
 #include "model/workflow_graph.h"
@@ -11,7 +12,9 @@
 
 #include <iostream>
 #include <memory>
+#include <string>
 #include <thread>
+#include <vector>
 #include <nlohmann/json.hpp>
 
 using namespace workflow;
@@ -42,10 +45,71 @@ public:
 };
 
 int main(int argc, char* argv[]) {
+    // ── CLI parsing ──
+    // Accepts a legacy positional port (`./backend 9091`) for back-compat
+    // plus long flags for the security knobs. Kept deliberately minimal;
+    // anything more elaborate deserves a real parser.
     int port = 9090;
-    if (argc > 1) {
-        port = std::atoi(argv[1]);
+    std::string shared_dir;
+    std::vector<std::string> allow_origins;
+    bool origin_flag_seen = false;
+
+    auto print_help = []() {
+        std::cout <<
+            "Usage: workflow_backend [PORT] [options]\n"
+            "  --port <n>             Listen port (default 9090)\n"
+            "  --shared-dir <path>    Sandbox filesystem access to this directory\n"
+            "  --allow-origin <url>   Add allowed WS Origin (repeatable).\n"
+            "                         Defaults to localhost + tauri://localhost.\n"
+            "  -h, --help             Show this help and exit\n";
+    };
+
+    for (int i = 1; i < argc; ++i) {
+        std::string arg = argv[i];
+        if (arg == "--port") {
+            if (i + 1 >= argc) { std::cerr << "--port requires a value\n"; return 1; }
+            port = std::atoi(argv[++i]);
+        } else if (arg == "--shared-dir") {
+            if (i + 1 >= argc) { std::cerr << "--shared-dir requires a value\n"; return 1; }
+            shared_dir = argv[++i];
+        } else if (arg == "--allow-origin") {
+            if (i + 1 >= argc) { std::cerr << "--allow-origin requires a value\n"; return 1; }
+            allow_origins.emplace_back(argv[++i]);
+            origin_flag_seen = true;
+        } else if (arg == "-h" || arg == "--help") {
+            print_help();
+            return 0;
+        } else if (!arg.empty() && arg[0] != '-') {
+            // Legacy positional port.
+            port = std::atoi(arg.c_str());
+        } else {
+            std::cerr << "Unknown option: " << arg << "\n";
+            print_help();
+            return 1;
+        }
     }
+
+    // ── Security config ──
+    auto& sec = SecurityConfig::instance();
+    if (!shared_dir.empty()) {
+        sec.set_shared_dir(shared_dir);
+        std::cout << "[Backend] Sandbox shared dir: " << *sec.shared_dir() << "\n";
+    }
+    if (origin_flag_seen) {
+        for (const auto& o : allow_origins) sec.add_allowed_origin(o);
+    } else {
+        // Sensible defaults: Vite dev server, Tauri shell, Tauri default port.
+        for (const char* o : {
+            "http://localhost:5173",
+            "http://127.0.0.1:5173",
+            "http://localhost:1420",
+            "http://127.0.0.1:1420",
+            "tauri://localhost",
+        }) sec.add_allowed_origin(o);
+    }
+    std::cout << "[Backend] Allowed origins: "
+              << (sec.has_origin_allowlist() ? "configured" : "ANY") << "\n";
+
 
     // ── Initialize engine ──
     std::shared_ptr<InferenceEngine> engine;
