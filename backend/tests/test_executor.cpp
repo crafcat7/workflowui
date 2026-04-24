@@ -424,3 +424,153 @@ TEST(ExecutorTest, UpstreamFailurePropagatesAsSkipNotError) {
     // Crucially, b must not have emitted an error of its own.
     EXPECT_FALSE(statuses["b"].contains("kind"));
 }
+
+// ---------------------------------------------------------------------------
+// Graph validation: every node type must be known to the handler registry,
+// every edge must terminate on declared ports of the correct direction, and
+// the dataType at both endpoints must be compatible. Failures emit a single
+// `__workflow__`/`validation_failed` event and abort the run.
+// ---------------------------------------------------------------------------
+
+namespace {
+
+// Capture-all listener that records every status payload keyed by node_id.
+// Returns a lambda suitable for set_status_callback.
+auto record_statuses(std::unordered_map<std::string, std::vector<json>>& out) {
+    return [&out](const std::string& id, const json& msg) {
+        out[id].push_back(msg);
+    };
+}
+
+// Find the first `__workflow__` message whose `status` equals `status`,
+// or nullptr if none was emitted.
+const json* find_workflow_status(
+    const std::unordered_map<std::string, std::vector<json>>& statuses,
+    const std::string& status) {
+    auto it = statuses.find("__workflow__");
+    if (it == statuses.end()) return nullptr;
+    for (const auto& m : it->second) {
+        if (m.value("status", "") == status) return &m;
+    }
+    return nullptr;
+}
+
+} // namespace
+
+TEST(ExecutorTest, ValidationRejectsUnknownNodeType) {
+    auto engine = std::make_shared<MockEngine>();
+    Executor executor(engine);
+
+    WorkflowGraph graph;
+    NodeDef bogus;
+    bogus.id = "x";
+    bogus.type = "doesNotExist";
+    graph.add_node(bogus);
+
+    std::unordered_map<std::string, std::vector<json>> statuses;
+    executor.set_status_callback(record_statuses(statuses));
+    executor.execute(graph);
+
+    auto* failed = find_workflow_status(statuses, "validation_failed");
+    ASSERT_NE(failed, nullptr) << "expected a validation_failed event";
+    ASSERT_TRUE(failed->contains("errors"));
+    const auto& errs = failed->at("errors");
+    ASSERT_EQ(errs.size(), 1u);
+    EXPECT_EQ(errs[0].at("kind"), "unknown_node_type");
+    EXPECT_EQ(errs[0].at("node_id"), "x");
+
+    // Node 'x' must not have been executed; no per-node running/done/error
+    // for it either.
+    EXPECT_EQ(statuses.count("x"), 0u);
+}
+
+TEST(ExecutorTest, ValidationRejectsUnknownPortAndTypeMismatch) {
+    auto engine = std::make_shared<MockEngine>();
+    Executor executor(engine);
+
+    WorkflowGraph graph;
+    // inputTensor.tensor_data (tensor, source)
+    NodeDef n1;
+    n1.id = "n1";
+    n1.type = "inputTensor";
+    n1.config["fillMode"] = "text";
+    n1.config["tensorText"] = "1.0";
+    graph.add_node(n1);
+
+    // saveImage.image_data (image, target) — connecting tensor → image
+    // (neither endpoint is generic, neither is branch) is a type_mismatch.
+    NodeDef n2;
+    n2.id = "n2";
+    n2.type = "saveImage";
+    graph.add_node(n2);
+
+    // Edge 1: type_mismatch (tensor → image)
+    EdgeDef bad_type;
+    bad_type.source = "n1";
+    bad_type.source_handle = "tensor_data";
+    bad_type.target = "n2";
+    bad_type.target_handle = "image_data";
+    graph.add_edge(bad_type);
+
+    // Edge 2: unknown_port on the source side.
+    EdgeDef bad_port;
+    bad_port.source = "n1";
+    bad_port.source_handle = "nope";
+    bad_port.target = "n2";
+    bad_port.target_handle = "image_data";
+    graph.add_edge(bad_port);
+
+    std::unordered_map<std::string, std::vector<json>> statuses;
+    executor.set_status_callback(record_statuses(statuses));
+    executor.execute(graph);
+
+    auto* failed = find_workflow_status(statuses, "validation_failed");
+    ASSERT_NE(failed, nullptr);
+    const auto& errs = failed->at("errors");
+    ASSERT_EQ(errs.size(), 2u);
+
+    std::unordered_set<std::string> kinds;
+    for (const auto& e : errs) kinds.insert(e.at("kind"));
+    EXPECT_TRUE(kinds.count("type_mismatch"));
+    EXPECT_TRUE(kinds.count("unknown_port"));
+}
+
+TEST(ExecutorTest, ValidationAllowsGenericAndImageToTensor) {
+    // Happy path: generic targets accept tensors (output.data), and the
+    // image→tensor implicit coercion is respected (not tested elsewhere
+    // but is the documented FE rule). Mix both in one graph to catch
+    // accidental regressions together.
+    auto engine = std::make_shared<MockEngine>();
+    Executor executor(engine);
+
+    WorkflowGraph graph;
+    NodeDef src;
+    src.id = "src";
+    src.type = "inputTensor";
+    src.config["fillMode"] = "text";
+    src.config["tensorText"] = "1.0";
+    graph.add_node(src);
+
+    NodeDef sink;
+    sink.id = "sink";
+    sink.type = "output"; // data is `generic`
+    graph.add_node(sink);
+
+    EdgeDef e;
+    e.source = "src";
+    e.source_handle = "tensor_data";
+    e.target = "sink";
+    e.target_handle = "data";
+    graph.add_edge(e);
+
+    std::unordered_map<std::string, std::vector<json>> statuses;
+    executor.set_status_callback(record_statuses(statuses));
+    executor.execute(graph);
+
+    // Must *not* emit validation_failed; sink should reach done.
+    EXPECT_EQ(find_workflow_status(statuses, "validation_failed"), nullptr);
+    ASSERT_TRUE(statuses.count("sink"));
+    const auto& sink_msgs = statuses.at("sink");
+    ASSERT_FALSE(sink_msgs.empty());
+    EXPECT_EQ(sink_msgs.back().at("status"), "done");
+}

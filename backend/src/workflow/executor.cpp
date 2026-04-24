@@ -136,6 +136,21 @@ void Executor::execute(const WorkflowGraph& graph) {
     dead_ports_.clear();
     failed_nodes_.clear();
 
+    // Fail fast on structurally broken graphs. Without this, unknown node
+    // types surface as "Unknown node type" per-node errors (still correct,
+    // but one per node), and mismatched/unknown ports only manifest as
+    // silent "Missing input" downstream. `validate_graph` emits a single
+    // `__workflow__`/`validation_failed` event with every problem attached
+    // and skips the run entirely.
+    if (!validate_graph(graph)) {
+        if (status_cb_) {
+            json complete;
+            complete["status"] = "complete";
+            status_cb_("__workflow__", complete);
+        }
+        return;
+    }
+
     auto order = scheduler_.schedule(graph);
 
     for (auto& node_id : order) {
@@ -300,6 +315,130 @@ void Executor::record_failure(const std::string& node_id, const WorkflowGraph& g
     err["error"] = message;
     err["kind"] = kind;
     notify_status(node_id, "error", err);
+}
+
+bool Executor::validate_graph(const WorkflowGraph& graph) {
+    // Build a per-node lookup: node_id -> {source_ports, target_ports} as
+    // {handle_id -> data_type}. This lets us check each edge endpoint in
+    // O(1) without walking port_defs() per edge.
+    struct NodePorts {
+        std::unordered_map<std::string, std::string> sources; // handle -> dataType
+        std::unordered_map<std::string, std::string> targets;
+    };
+    std::unordered_map<std::string, NodePorts> by_node;
+    json errors = json::array();
+
+    auto add_error = [&](const char* kind, const std::string& message,
+                         const std::string& node_id, const std::string& edge_id = "") {
+        json e;
+        e["kind"] = kind;
+        e["message"] = message;
+        if (!node_id.empty()) e["node_id"] = node_id;
+        if (!edge_id.empty()) e["edge"] = edge_id;
+        errors.push_back(std::move(e));
+    };
+
+    // Pass 1: nodes — every type must map to a handler; index its port_defs.
+    for (const auto& node : graph.nodes()) {
+        auto it = handlers_.find(node.type);
+        if (it == handlers_.end()) {
+            add_error("unknown_node_type",
+                      "Unknown node type '" + node.type + "'",
+                      node.id);
+            continue;
+        }
+        NodePorts& np = by_node[node.id];
+        for (const auto& p : it->second->port_defs()) {
+            if (p.direction == "source") {
+                np.sources[p.id] = p.data_type;
+            } else if (p.direction == "target") {
+                np.targets[p.id] = p.data_type;
+            }
+            // Any other direction is a backend bug, not a graph error;
+            // silently ignore so malformed handler metadata doesn't
+            // break otherwise-valid graphs.
+        }
+    }
+
+    // Pass 2: edges — endpoints must exist and agree on data type.
+    // `generic` on either side is intentionally permissive: e.g. Debug
+    // Display accepts anything, Condition branches are typed as
+    // `branch` but also route generic data upstream of Condition.
+    for (const auto& e : graph.edges()) {
+        const std::string edge_label =
+            e.source + ":" + e.source_handle + " -> " + e.target + ":" + e.target_handle;
+
+        auto src_it = by_node.find(e.source);
+        auto tgt_it = by_node.find(e.target);
+
+        if (src_it == by_node.end()) {
+            add_error("dangling_edge",
+                      "Edge references missing source node '" + e.source + "'",
+                      "", edge_label);
+            continue;
+        }
+        if (tgt_it == by_node.end()) {
+            add_error("dangling_edge",
+                      "Edge references missing target node '" + e.target + "'",
+                      "", edge_label);
+            continue;
+        }
+
+        auto sp = src_it->second.sources.find(e.source_handle);
+        auto tp = tgt_it->second.targets.find(e.target_handle);
+
+        if (sp == src_it->second.sources.end()) {
+            add_error("unknown_port",
+                      "Node '" + e.source + "' has no source port '" + e.source_handle + "'",
+                      e.source, edge_label);
+            continue;
+        }
+        if (tp == tgt_it->second.targets.end()) {
+            add_error("unknown_port",
+                      "Node '" + e.target + "' has no target port '" + e.target_handle + "'",
+                      e.target, edge_label);
+            continue;
+        }
+
+        const std::string& st = sp->second;
+        const std::string& tt = tp->second;
+        // Compatibility rules mirror `frontend/src/nodes/portSchema.ts`:
+        //   - identical dataTypes always compatible
+        //   - 'branch' SOURCE may feed any non-branch target (Condition
+        //     routes the original payload through, so the branch port
+        //     is really 'payload + prune semantics', not pure signal)
+        //   - 'branch' TARGET only accepts another 'branch' source
+        //   - 'generic' bridges anything
+        //   - implicit coercion: image source -> tensor target
+        //   - otherwise mismatched types are rejected
+        bool compatible = (st == tt);
+        if (!compatible) {
+            if (tt == "branch") {
+                // Only branch sources may plug into a branch target.
+                compatible = (st == "branch");
+            } else {
+                compatible = (st == "branch") ||
+                             (st == "generic" || tt == "generic") ||
+                             (st == "image" && tt == "tensor");
+            }
+        }
+        if (!compatible) {
+            add_error("type_mismatch",
+                      "Port type mismatch on " + edge_label +
+                          ": source is '" + st + "', target is '" + tt + "'",
+                      e.target, edge_label);
+        }
+    }
+
+    if (errors.empty()) return true;
+
+    if (status_cb_) {
+        json msg;
+        msg["status"] = "validation_failed";
+        msg["errors"] = std::move(errors);
+        status_cb_("__workflow__", msg);
+    }
+    return false;
 }
 
 } // namespace workflow

@@ -30,12 +30,17 @@ describe('areTypesCompatible', () => {
     expect(areTypesCompatible('tensor', 'image').ok).toBe(false);
   });
 
-  it('keeps branch isolated from data types', () => {
+  it('treats branch asymmetrically: source feeds anything, target only takes branch', () => {
+    // Condition's branch sources carry the input payload through (see
+    // ConditionHandler), so wiring true_branch/false_branch into any
+    // non-branch target is the canonical usage.
     expect(areTypesCompatible('branch', 'branch').ok).toBe(true);
-    expect(areTypesCompatible('branch', 'tensor').ok).toBe(false);
+    expect(areTypesCompatible('branch', 'tensor').ok).toBe(true);
+    expect(areTypesCompatible('branch', 'generic').ok).toBe(true);
+    // But a branch TARGET (should any node grow one) only accepts
+    // another branch source — non-branch data must not silently
+    // drift into a control-flow channel.
     expect(areTypesCompatible('tensor', 'branch').ok).toBe(false);
-    // generic must not connect with branch (branch is control-flow)
-    expect(areTypesCompatible('branch', 'generic').ok).toBe(false);
     expect(areTypesCompatible('generic', 'branch').ok).toBe(false);
   });
 
@@ -99,11 +104,22 @@ describe('validateConnection', () => {
     expect(r.ok).toBe(false);
   });
 
-  it('rejects branch plugged into a non-branch target', () => {
+  it('allows a branch source to feed a non-branch target', () => {
+    // Condition's true_branch/false_branch source ports route the
+    // input payload through to the taken branch, so wiring them into
+    // a generic target like Output.data is the canonical usage.
+    // Mirrored by backend/src/workflow/executor.cpp validate_graph.
     const r = validateConnection(
       { source: 'cond1', target: 'out1', sourceHandle: 'true_branch', targetHandle: 'data' },
       nodes,
     );
+    expect(r.ok).toBe(true);
+  });
+
+  it('rejects a non-branch source plugged into a branch target', () => {
+    // If a hypothetical node exposed a 'branch' target, only another
+    // branch source may feed it.
+    const r = areTypesCompatible('tensor', 'branch');
     expect(r.ok).toBe(false);
   });
 

@@ -69,6 +69,15 @@ private:
     // also marked dead, propagating the skip forward).
     bool should_skip(const std::string& node_id, const WorkflowGraph& graph) const;
 
+    // Cross-check the graph against handler metadata before scheduling:
+    // every node must have a known type, every edge must reference an
+    // existing node and a declared port of the correct direction, and
+    // the dataType at both endpoints must be compatible. On failure the
+    // run is aborted and a single `__workflow__`/`validation_failed`
+    // status with an `errors[]` array is emitted. Returns true iff the
+    // graph is valid and execution may proceed.
+    bool validate_graph(const WorkflowGraph& graph);
+
     std::shared_ptr<InferenceEngine> engine_;
     Scheduler scheduler_;
     DebugController debug_;

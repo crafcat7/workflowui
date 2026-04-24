@@ -15,7 +15,8 @@
  *     image   →  tensor           (implicit preprocessing coercion)
  *     tensor  ≡  tensor           (strict equality)
  *     net     ≡  net
- *     branch  ≡  branch           (control-flow, isolated)
+ *     branch  →  any              (Condition routes payload through;
+ *                                   branch targets still only take branch)
  *
  * Adding a new node type: register its handles here and the canvas
  * validator will pick them up automatically; no App.tsx changes needed.
@@ -65,15 +66,21 @@ export function areTypesCompatible(
   }
   if (sourceType === targetType) return { ok: true };
 
-  // Branch is a control-flow channel; it must connect only to branch.
-  // Checked BEFORE the generic wildcard so a 'generic' target cannot
-  // silently accept a branch source.
-  if (sourceType === 'branch' || targetType === 'branch') {
+  // 'branch' targets may only receive other branches. Checked before the
+  // generic wildcard so a 'generic' target cannot silently accept a
+  // non-branch source when both sides claim to be strict.
+  if (targetType === 'branch') {
     return {
       ok: false,
-      reason: `'branch' ports can only connect to other 'branch' ports (got ${sourceType} → ${targetType})`,
+      reason: `'branch' target can only accept a 'branch' source (got ${sourceType} → ${targetType})`,
     };
   }
+
+  // 'branch' sources carry the Condition node's payload through to the
+  // taken branch (see ConditionHandler::execute). They may feed any
+  // non-branch target — this matches the backend port-type validator
+  // in `backend/src/workflow/executor.cpp`.
+  if (sourceType === 'branch') return { ok: true };
 
   // Wildcard: generic bridges to / from any non-branch type.
   if (sourceType === 'generic' || targetType === 'generic') return { ok: true };
