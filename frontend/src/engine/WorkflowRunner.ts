@@ -26,6 +26,20 @@ interface NodeStatusUpdate {
   avg_ms?: number;
   /** Set by backend R1 contract; events from a superseded run carry the prior id and must be dropped. */
   run_id?: string;
+  /** For status=='validation_failed' on synthetic node_id='__workflow__': the list of graph problems detected before scheduling. */
+  errors?: ValidationError[];
+}
+
+/**
+ * One entry of the `errors[]` array the backend attaches to the
+ * `__workflow__` / `validation_failed` push. `node_id` / `edge` are
+ * populated when the problem is local enough to point at.
+ */
+interface ValidationError {
+  kind: string;                 // unknown_node_type | dangling_edge | unknown_port | type_mismatch
+  message: string;
+  node_id?: string;
+  edge?: string;                // "source:handle -> target:handle"
 }
 
 interface DebugPausedEvent {
@@ -82,6 +96,56 @@ function isFreshEvent(evRunId: string | undefined): boolean {
   if (!evRunId) return true;              // legacy/untagged: always accept
   if (currentRunId == null) return true;  // no active filter yet
   return evRunId === currentRunId;
+}
+
+/**
+ * React to a `__workflow__` / `validation_failed` push. Backend S1
+ * guarantees this fires at most once per `workflow.execute`, before
+ * `workflow.complete`, and precedes any real node events.
+ *
+ * Three surfaces are used so users notice regardless of which panel
+ * they have open:
+ *   - Canvas: every error with a `node_id` paints that node red via
+ *     the normal error pipeline (status + data.error). No real
+ *     execution happened, so this is the *only* signal the canvas
+ *     will receive for those nodes.
+ *   - Console (bottom panel): one `error`-level log per error, with
+ *     `kind` prefix so the user can tell type mismatches from
+ *     missing ports.
+ *   - Toast: one summary for the batch, not one per error — a graph
+ *     with a dozen problems would otherwise bury the UI in toasts.
+ */
+function handleValidationFailed(errors: ValidationError[]) {
+  const store = useWorkflowStore.getState();
+  const debug = useDebugStore.getState();
+
+  for (const err of errors) {
+    // Paint the offending node red on the canvas. Only touch nodes
+    // we actually have — an `unknown_node_type` error may reference
+    // an id the frontend already removed, or a `dangling_edge`
+    // error's node id may be empty.
+    if (err.node_id && store.nodesById.has(err.node_id)) {
+      store.updateNodeStatus(err.node_id, 'error');
+      store.updateNodeData(err.node_id, { error: err.message });
+    }
+
+    // Include the edge when present so users can match edge-scoped
+    // errors (type_mismatch on an edge) to the wire they drew.
+    const location = err.edge ? ` (edge ${err.edge})` : err.node_id ? ` (${err.node_id})` : '';
+    debug.addLog({
+      nodeId: err.node_id ?? 'system',
+      message: `[${err.kind}]${location} ${err.message}`,
+      level: 'error',
+    });
+  }
+
+  const count = errors.length;
+  showToast(
+    count === 1
+      ? `Validation failed: ${errors[0]?.message ?? 'unknown error'}`
+      : `Validation failed: ${count} errors (see console)`,
+    'error',
+  );
 }
 
 /**
@@ -145,6 +209,18 @@ export function initWorkflowRunner() {
         // superseded — otherwise a late 'done' from the previous run
         // overwrites the fresh run's 'running' badge.
         if (!isFreshEvent(update.run_id)) break;
+
+        // Graph-level validation failures arrive as a synthetic
+        // `__workflow__` status (S1). They are *not* regular node
+        // updates: there is no node with id `__workflow__` to mark,
+        // and each error in `errors[]` may point at a real node or
+        // edge that the user needs surfaced. Handle them separately
+        // and fall through without touching the store's node map.
+        if (update.node_id === '__workflow__' && update.status === 'validation_failed') {
+          handleValidationFailed(update.errors ?? []);
+          break;
+        }
+
         const store = useWorkflowStore.getState();
         store.updateNodeStatus(update.node_id, coerceStatus(update.status));
 

@@ -46,6 +46,7 @@ future agents must preserve.
 - On failure emits a single `__workflow__` / `validation_failed` push with an `errors[]` array, then `workflow.complete`. No per-node errors.
 - Error kinds: `unknown_node_type | dangling_edge | unknown_port | type_mismatch`.
 - Type compatibility lattice: identical ≡, `generic` wildcard, `image→tensor` implicit coercion, branch-source-asymmetric (branch source → any non-branch target; branch target ← branch source only). Mirrored in `frontend/src/nodes/portSchema.ts`.
+- FE surfacing (`WorkflowRunner.handleValidationFailed`): three signals so the user can't miss it no matter which panel is open — (a) canvas paints each `errors[].node_id` red via `updateNodeStatus('error')` + `data.error = message`, guarded by `nodesById.has` so unknown ids are skipped; (b) one `error`-level log per entry in `ConsolePanel`, prefixed with `[kind]` and either `(node_id)` or `(edge a:x -> b:y)`; (c) one summary toast — single error shows the message, multiple shows `"N errors (see console)"`. The branch short-circuits before the regular node-status pipeline, so `__workflow__` never reaches `updateNodeStatus` as a real node id.
 
 ## Reconnect reconciliation (W1)
 - Events are NOT buffered server-side. A dropped socket means every push emitted during the outage is gone — without correction a node that finished while offline stays pinned on `running`.

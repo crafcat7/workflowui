@@ -27,6 +27,7 @@ vi.mock('../store/toastStore', () => ({ showToast: vi.fn() }));
 // Import AFTER mocks so the runner picks them up.
 import { initWorkflowRunner, setActiveRunId, _getActiveRunIdForTest, reconcileFromSnapshot } from './WorkflowRunner';
 import { useDebugStore } from '../store/debugStore';
+import { showToast } from '../store/toastStore';
 
 function emit(method: string, params: unknown) {
   if (!capturedHandler) throw new Error('runner not initialised');
@@ -137,5 +138,87 @@ describe('WorkflowRunner reconcileFromSnapshot', () => {
     await expect(reconcileFromSnapshot()).resolves.toBeUndefined();
     // State untouched.
     expect(useWorkflowStore.getState().nodes[0].data.status).toBe('idle');
+  });
+});
+
+describe('WorkflowRunner validation_failed', () => {
+  beforeEach(() => {
+    capturedHandler = null;
+    callMock.mockReset();
+    vi.mocked(showToast).mockReset();
+    seedNode('n1');
+    // Clear log buffer so assertions see only this test's entries.
+    useDebugStore.setState({ logs: [] });
+    initWorkflowRunner();
+    setActiveRunId(null);
+  });
+
+  it('paints offending node red, logs each error, and toasts a single summary', () => {
+    // Two errors: one scoped to n1 (should paint the canvas red and
+    // populate data.error), one scoped to an edge (no node paint,
+    // but still must land in the console log).
+    emit('node.status', {
+      node_id: '__workflow__',
+      status: 'validation_failed',
+      errors: [
+        { kind: 'type_mismatch', message: 'port int != string', node_id: 'n1' },
+        { kind: 'dangling_edge', message: 'edge points at removed node', edge: 'n1:out -> ghost:in' },
+      ],
+    });
+
+    const node = useWorkflowStore.getState().nodes[0];
+    expect(node.data.status).toBe('error');
+    expect(node.data.error).toBe('port int != string');
+
+    const logs = useDebugStore.getState().logs;
+    expect(logs).toHaveLength(2);
+    expect(logs[0].level).toBe('error');
+    expect(logs[0].message).toContain('[type_mismatch]');
+    expect(logs[0].message).toContain('(n1)');
+    expect(logs[1].message).toContain('[dangling_edge]');
+    expect(logs[1].message).toContain('edge n1:out -> ghost:in');
+
+    // One summary toast for the batch — not two.
+    expect(showToast).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(showToast).mock.calls[0][0]).toContain('2 errors');
+    expect(vi.mocked(showToast).mock.calls[0][1]).toBe('error');
+  });
+
+  it('uses the single error message in the toast when there is exactly one error', () => {
+    // A concrete message is more useful than "1 errors"; the
+    // console has the detail, but the toast should carry signal too.
+    emit('node.status', {
+      node_id: '__workflow__',
+      status: 'validation_failed',
+      errors: [{ kind: 'unknown_node_type', message: 'no handler for type=bogus', node_id: 'ghost' }],
+    });
+
+    expect(showToast).toHaveBeenCalledWith(
+      expect.stringContaining('no handler for type=bogus'),
+      'error',
+    );
+    // Node id 'ghost' isn't in the store (unknown_node_type) — must
+    // not throw, must not create a phantom entry.
+    expect(useWorkflowStore.getState().nodes).toHaveLength(1);
+    expect(useWorkflowStore.getState().nodes[0].id).toBe('n1');
+  });
+
+  it('does not touch regular node pipeline — __workflow__ is not a real node id', () => {
+    // Regression: if the validation branch ever falls through to the
+    // default path, coerceStatus('validation_failed') → 'idle' would
+    // silently try to update a non-existent node. We want a clean
+    // short-circuit instead.
+    emit('node.status', {
+      node_id: '__workflow__',
+      status: 'validation_failed',
+      errors: [],
+    });
+
+    // n1 stays idle, no phantom __workflow__ node created.
+    expect(useWorkflowStore.getState().nodes).toHaveLength(1);
+    expect(useWorkflowStore.getState().nodes[0].data.status).toBe('idle');
+    // Empty errors still produces a summary toast so the user sees
+    // *something* went wrong (backend emitted the event for a reason).
+    expect(showToast).toHaveBeenCalledTimes(1);
   });
 });
