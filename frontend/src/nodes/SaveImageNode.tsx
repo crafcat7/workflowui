@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // SPDX-FileCopyrightText: 2026 WorkflowUI contributors
-import { Position, type NodeProps } from '@xyflow/react';
+import { Position, type Node, type NodeProps } from '@xyflow/react';
 import { LabeledHandle } from '../components/LabeledHandle';
 import type { WorkflowNodeData } from '../store/workflowStore';
 
@@ -9,8 +9,7 @@ import type { WorkflowNodeData } from '../store/workflowStore';
  * target handle `image_data` (typed as `image`, with implicit tensor
  * coercion handled by the port schema), config key `filePath`.
  */
-export function SaveImageNode({ data }: NodeProps) {
-  const d = data as unknown as WorkflowNodeData;
+export function SaveImageNode({ data: d }: NodeProps<Node<WorkflowNodeData>>) {
   return (
     <div className="workflow-node">
       <div className="node-header"><span className="icon">🖼️</span> Save Image</div>

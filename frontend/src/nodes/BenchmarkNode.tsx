@@ -1,9 +1,8 @@
-import { Position, type NodeProps } from '@xyflow/react';
+import { Position, type Node, type NodeProps } from '@xyflow/react';
 import { LabeledHandle } from '../components/LabeledHandle';
 import type { WorkflowNodeData } from '../store/workflowStore';
 
-export function BenchmarkNode({ data }: NodeProps) {
-  const d = data as unknown as WorkflowNodeData;
+export function BenchmarkNode({ data: d }: NodeProps<Node<WorkflowNodeData>>) {
   const runs = d.runsCount as number | undefined;
   const avgMs = d.avgMs as number | undefined;
   return (

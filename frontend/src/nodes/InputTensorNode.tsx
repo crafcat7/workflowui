@@ -1,9 +1,8 @@
-import { Position, type NodeProps } from '@xyflow/react';
+import { Position, type Node, type NodeProps } from '@xyflow/react';
 import { LabeledHandle } from '../components/LabeledHandle';
 import { useWorkflowStore, type WorkflowNodeData } from '../store/workflowStore';
 
-export function InputTensorNode({ id, data }: NodeProps) {
-  const d = data as unknown as WorkflowNodeData;
+export function InputTensorNode({ id, data: d }: NodeProps<Node<WorkflowNodeData>>) {
   const isAuto = d.config?.fillMode === 'auto';
   
   const handleTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {

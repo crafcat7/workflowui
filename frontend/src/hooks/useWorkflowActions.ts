@@ -165,7 +165,7 @@ export function useWorkflowActions(triggerLoad?: () => void): WorkflowActions {
     // React Flow tracks selection via node.selected; set them all selected.
     const { nodes, setNodes } = useWorkflowStore.getState();
     if (nodes.length === 0) return;
-    setNodes(nodes.map((n) => ({ ...n, selected: true })) as typeof nodes);
+    setNodes(nodes.map((n) => ({ ...n, selected: true })));
   }, []);
 
   const toggleBreakpointOnSelected = useCallback(() => {

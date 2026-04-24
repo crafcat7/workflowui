@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // SPDX-FileCopyrightText: 2026 WorkflowUI contributors
-import { Position, type NodeProps, useEdges } from '@xyflow/react';
+import { Position, type Node, type NodeProps, useEdges } from '@xyflow/react';
 import { LabeledHandle } from '../components/LabeledHandle';
 import type { WorkflowNodeData } from '../store/workflowStore';
 
@@ -10,8 +10,7 @@ import type { WorkflowNodeData } from '../store/workflowStore';
  * values on a run. Pausing is now a separate, explicit concept handled by
  * right-clicking any node and choosing "Add breakpoint".
  */
-export function DebugNode({ id, data }: NodeProps) {
-  const d = data as unknown as WorkflowNodeData;
+export function DebugNode({ id, data: d }: NodeProps<Node<WorkflowNodeData>>) {
   const edges = useEdges();
 
   const hasInput = edges.some((e) => e.target === id);

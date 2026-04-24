@@ -1,9 +1,8 @@
-import { Position, type NodeProps } from '@xyflow/react';
+import { Position, type Node, type NodeProps } from '@xyflow/react';
 import { LabeledHandle } from '../components/LabeledHandle';
 import type { WorkflowNodeData } from '../store/workflowStore';
 
-export function CreateNetNode({ data }: NodeProps) {
-  const d = data as unknown as WorkflowNodeData;
+export function CreateNetNode({ data: d }: NodeProps<Node<WorkflowNodeData>>) {
   const emptyWeights = d.config?.emptyWeights === 'true' || d.config?.emptyWeights === true;
   const vendor = (d.config?.vendor as string) || '';
   return (

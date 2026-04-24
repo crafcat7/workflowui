@@ -285,15 +285,7 @@ function AppInner() {
             </ControlButton>
           </Controls>
           <MiniMap
-            nodeColor={(node) => {
-              const type = node.type ?? '';
-              if (['inputImage', 'inputTensor'].includes(type)) return '#2a9d8f';
-              if (['createNet', 'inference', 'benchmark'].includes(type)) return '#9b59b6';
-              if (['saveText', 'saveImage', 'output'].includes(type)) return '#2ecc71';
-              if (type === 'condition') return '#6080c0';
-              if (type === 'debug') return '#e0c080';
-              return '#444';
-            }}
+            nodeColor={(node) => nodeCategory(node.type).miniMapColor}
             maskColor="rgba(13, 21, 38, 0.8)"
             style={{ background: '#0d1526', borderRadius: 6, border: '1px solid #2a2a4a' }}
           />
@@ -342,12 +334,35 @@ function App() {
 }
 
 function getCategoryClass(type: string): string {
-  if (['inputImage', 'inputTensor'].includes(type)) return 'node-input';
-  if (['createNet', 'inference', 'benchmark'].includes(type)) return 'node-inference';
-  if (['saveText', 'saveImage', 'output'].includes(type)) return 'node-output';
-  if (type === 'condition') return 'node-control';
-  if (type === 'debug') return 'node-debug';
-  return '';
+  return nodeCategory(type).cssClass;
+}
+
+/**
+ * Single source of truth for node categorization: MiniMap swatch color
+ * and canvas CSS class. Unknown / missing types fall back to the default.
+ */
+interface NodeCategory {
+  miniMapColor: string;
+  cssClass: string;
+}
+
+const NODE_CATEGORIES: Record<string, NodeCategory> = {
+  inputImage:  { miniMapColor: '#2a9d8f', cssClass: 'node-input' },
+  inputTensor: { miniMapColor: '#2a9d8f', cssClass: 'node-input' },
+  createNet:   { miniMapColor: '#9b59b6', cssClass: 'node-inference' },
+  inference:   { miniMapColor: '#9b59b6', cssClass: 'node-inference' },
+  benchmark:   { miniMapColor: '#9b59b6', cssClass: 'node-inference' },
+  saveText:    { miniMapColor: '#2ecc71', cssClass: 'node-output' },
+  saveImage:   { miniMapColor: '#2ecc71', cssClass: 'node-output' },
+  output:      { miniMapColor: '#2ecc71', cssClass: 'node-output' },
+  condition:   { miniMapColor: '#6080c0', cssClass: 'node-control' },
+  debug:       { miniMapColor: '#e0c080', cssClass: 'node-debug' },
+};
+
+const DEFAULT_NODE_CATEGORY: NodeCategory = { miniMapColor: '#444', cssClass: '' };
+
+function nodeCategory(type: string | undefined): NodeCategory {
+  return (type && NODE_CATEGORIES[type]) || DEFAULT_NODE_CATEGORY;
 }
 
 export default App;

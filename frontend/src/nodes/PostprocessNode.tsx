@@ -1,9 +1,8 @@
-import { Position, type NodeProps } from '@xyflow/react';
+import { Position, type Node, type NodeProps } from '@xyflow/react';
 import { LabeledHandle } from '../components/LabeledHandle';
 import type { WorkflowNodeData } from '../store/workflowStore';
 
-export function PostprocessNode({ data }: NodeProps) {
-  const d = data as unknown as WorkflowNodeData;
+export function PostprocessNode({ data: d }: NodeProps<Node<WorkflowNodeData>>) {
   const op = (d.config?.op as string) || 'nms';
   const paramText = op === 'nms' 
     ? `IoU: ${d.config?.iouThreshold || '0.45'}` 

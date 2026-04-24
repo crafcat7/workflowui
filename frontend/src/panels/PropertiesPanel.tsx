@@ -260,23 +260,10 @@ function FieldRenderer({
       );
 
     case 'filepath':
-      // filepath rendered as text today; future: add a "browse" button when
-      // the desktop shell (Tauri) exposes a file dialog.
-      return (
-        <div className="config-field">
-          <label>{field.label}</label>
-          <input
-            type="text"
-            value={value}
-            placeholder={field.placeholder}
-            onChange={(e) => onChange(field.key, e.target.value)}
-          />
-          {help}
-        </div>
-      );
-
     case 'text':
     default:
+      // `filepath` is rendered as plain text today; future: add a "browse"
+      // button when the desktop shell (Tauri) exposes a file dialog.
       return (
         <div className="config-field">
           <label>{field.label}</label>
