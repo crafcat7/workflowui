@@ -15,6 +15,7 @@
 
 import { useState, useEffect } from 'react';
 import { useWorkflowStore, type WorkflowNodeData } from '../store/workflowStore';
+import { useDebugStore } from '../store/debugStore';
 import { wsClient } from '../transport/WsClient';
 import {
   NODE_SCHEMAS,
@@ -142,8 +143,88 @@ function PropertiesContent({
           </ConfigSection>
         </>
       )}
+
+      <DebugInputsPanel nodeId={node.id} />
     </>
   );
+}
+
+// ---------------------------------------------------------------------------
+// Debug inputs inspector (visible only while paused on this node)
+// ---------------------------------------------------------------------------
+
+interface PortSummary {
+  type: string;
+  value?: unknown;
+  length?: number;
+  preview?: number[];
+  width?: number;
+  height?: number;
+  channels?: number;
+  bytes?: number;
+}
+
+interface InputEntry {
+  handle: string;
+  source: string;
+  value: PortSummary;
+}
+
+function DebugInputsPanel({ nodeId }: { nodeId: string }) {
+  const pausedAt = useDebugStore((s) => s.pausedAtNodeId);
+  const inspect = useDebugStore((s) => s.inspectData);
+  if (pausedAt !== nodeId || !inspect) return null;
+  const inputs = (inspect.inputs as InputEntry[] | undefined) ?? [];
+  return (
+    <>
+      <div className="props-divider" />
+      <ConfigSection title="DEBUG INPUTS">
+        {inputs.length === 0 ? (
+          <div className="props-empty" style={{ fontSize: 11 }}>
+            No inbound data at this breakpoint.
+          </div>
+        ) : (
+          inputs.map((inp) => (
+            <div className="config-field" key={inp.handle}>
+              <label>
+                {inp.handle} <span style={{ opacity: 0.6 }}>← {inp.source}</span>
+              </label>
+              <PortSummaryView value={inp.value} />
+            </div>
+          ))
+        )}
+      </ConfigSection>
+    </>
+  );
+}
+
+function PortSummaryView({ value }: { value: PortSummary }) {
+  switch (value.type) {
+    case 'empty':
+      return <div className="config-help">empty</div>;
+    case 'string':
+      return <div className="config-help">string: {String(value.value ?? '')}</div>;
+    case 'float':
+      return <div className="config-help">float: {String(value.value ?? '')}</div>;
+    case 'handle':
+      return <div className="config-help">handle #{String(value.value ?? '')}</div>;
+    case 'tensor':
+      return (
+        <div className="config-help">
+          tensor[{value.length ?? 0}] {value.preview && value.preview.length > 0 ? (
+            <>≈ [{value.preview.map((v) => v.toFixed(3)).join(', ')}{(value.length ?? 0) > (value.preview?.length ?? 0) ? ', …' : ''}]</>
+          ) : null}
+        </div>
+      );
+    case 'image':
+      return (
+        <div className="config-help">
+          image {value.width}×{value.height}×{value.channels} ({value.bytes} B)
+        </div>
+      );
+    default:
+      return <div className="config-help">{value.type}</div>;
+  }
 }
 
 // ---------------------------------------------------------------------------

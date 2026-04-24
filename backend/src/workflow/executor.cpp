@@ -2,11 +2,62 @@
 // SPDX-FileCopyrightText: 2026 WorkflowUI contributors
 #include "executor.h"
 #include "handlers/core_handlers.h"
+#include <algorithm>
 #include <stdexcept>
 
 namespace workflow {
 
 namespace {
+
+// Upper bound on how many floats we inline in a tensor preview sent over
+// the pause payload; long feature maps would otherwise flood the ws.
+constexpr size_t kPortPreviewValues = 16;
+
+// Render a PortValue as a compact JSON summary for the debug inspector:
+// always a {type, ...} object where the extra fields depend on the
+// variant so the frontend can render meaningful info without shipping
+// the entire tensor/image payload.
+json summarize_port_value(const PortValue& v) {
+    json out;
+    if (std::holds_alternative<std::monostate>(v)) {
+        out["type"] = "empty";
+        return out;
+    }
+    if (auto* s = std::get_if<std::string>(&v)) {
+        out["type"] = "string";
+        out["value"] = *s;
+        return out;
+    }
+    if (auto* f = std::get_if<float>(&v)) {
+        out["type"] = "float";
+        out["value"] = *f;
+        return out;
+    }
+    if (auto* t = std::get_if<TensorData>(&v)) {
+        out["type"] = "tensor";
+        out["length"] = t->size();
+        const size_t n = std::min<size_t>(t->size(), kPortPreviewValues);
+        json preview = json::array();
+        for (size_t i = 0; i < n; ++i) preview.push_back((*t)[i]);
+        out["preview"] = std::move(preview);
+        return out;
+    }
+    if (auto* img = std::get_if<ImageData>(&v)) {
+        out["type"] = "image";
+        out["width"] = img->width;
+        out["height"] = img->height;
+        out["channels"] = img->channels;
+        out["bytes"] = img->pixels.size();
+        return out;
+    }
+    if (auto* h = std::get_if<int64_t>(&v)) {
+        out["type"] = "handle";
+        out["value"] = *h;
+        return out;
+    }
+    out["type"] = "unknown";
+    return out;
+}
 
 // Destroy every net handle currently held in `port_data_` and erase those
 // entries. `int64_t` variant slot is reserved for `NetHandle` per
@@ -82,6 +133,22 @@ void Executor::execute(const WorkflowGraph& graph) {
             json data;
             data["node_id"] = node_id;
             data["type"] = node->type;
+            // Snapshot inbound port values so the frontend can show the
+            // user what this node is about to consume. We group by target
+            // handle and skip duplicates when multiple edges feed the
+            // same handle (only the first wins, matching resolve_input).
+            json inputs = json::array();
+            std::unordered_set<std::string> seen;
+            for (auto* edge : graph.inputs_for(node_id)) {
+                if (!seen.insert(edge->target_handle).second) continue;
+                PortValue v = resolve_input(node_id, edge->target_handle, graph);
+                json entry;
+                entry["handle"] = edge->target_handle;
+                entry["source"] = edge->source + ":" + edge->source_handle;
+                entry["value"] = summarize_port_value(v);
+                inputs.push_back(std::move(entry));
+            }
+            data["inputs"] = std::move(inputs);
             if (pause_cb_) pause_cb_(node_id, data);
 
             debug_.wait_for_resume();

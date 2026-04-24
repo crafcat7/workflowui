@@ -252,8 +252,10 @@ TEST(ExecutorTest, BreakpointPausesAndResumes) {
 
     std::atomic<int> pause_count{0};
     std::string paused_node;
-    executor.set_pause_callback([&](const std::string& id, const json&) {
+    json paused_payload;
+    executor.set_pause_callback([&](const std::string& id, const json& data) {
         paused_node = id;
+        paused_payload = data;
         pause_count.fetch_add(1);
     });
 
@@ -273,6 +275,21 @@ TEST(ExecutorTest, BreakpointPausesAndResumes) {
     ASSERT_EQ(pause_count.load(), 1);
     EXPECT_EQ(paused_node, "dst");
     EXPECT_FALSE(completed.load());
+
+    // The pause payload must carry a summary of every inbound port so
+    // the frontend inspector can render it. The upstream `inputTensor`
+    // with text `"1 2 3"` should surface as a 3-element tensor on the
+    // `data` handle.
+    ASSERT_TRUE(paused_payload.contains("inputs"));
+    ASSERT_TRUE(paused_payload["inputs"].is_array());
+    ASSERT_EQ(paused_payload["inputs"].size(), 1u);
+    const auto& entry = paused_payload["inputs"][0];
+    EXPECT_EQ(entry["handle"], "data");
+    EXPECT_EQ(entry["source"], "src:tensor_data");
+    EXPECT_EQ(entry["value"]["type"], "tensor");
+    EXPECT_EQ(entry["value"]["length"], 3);
+    ASSERT_TRUE(entry["value"]["preview"].is_array());
+    EXPECT_EQ(entry["value"]["preview"].size(), 3u);
 
     executor.debug_controller().resume();
     runner.join();
