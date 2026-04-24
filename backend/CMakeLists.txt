@@ -117,6 +117,7 @@ set(BACKEND_TEST_SOURCES
   tests/test_executor.cpp
   tests/test_security_config.cpp
   tests/test_condition.cpp
+  tests/test_rpc_handler.cpp
 )
 
 add_executable(workflow_test ${BACKEND_TEST_SOURCES} ${BACKEND_LIB_SOURCES})
