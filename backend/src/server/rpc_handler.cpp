@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 // SPDX-FileCopyrightText: 2026 WorkflowUI contributors
 #include "rpc_handler.h"
+#include "rpc_errors.h"
 #include <iostream>
 
 namespace workflow {
@@ -52,6 +53,12 @@ std::string RpcHandler::handle_message(const std::string& raw_message) {
     } else {
         try {
             response["result"] = it->second(params);
+        } catch (const InvalidParams& e) {
+            // JSON-RPC 2.0 §5.1: -32602 is reserved for malformed params.
+            // Distinguishing this from generic server errors lets clients
+            // treat the condition as a caller bug (non-retryable) rather
+            // than a server fault.
+            response["error"] = {{"code", -32602}, {"message", e.message()}};
         } catch (const std::exception& e) {
             response["error"] = {{"code", -32000}, {"message", e.what()}};
         }

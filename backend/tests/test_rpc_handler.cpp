@@ -2,10 +2,12 @@
 // SPDX-FileCopyrightText: 2026 WorkflowUI contributors
 #include <gtest/gtest.h>
 #include "server/rpc_handler.h"
+#include "server/rpc_errors.h"
 
 #include <stdexcept>
 
 using workflow::RpcHandler;
+using workflow::InvalidParams;
 using workflow::json;
 
 namespace {
@@ -115,4 +117,20 @@ TEST(RpcHandlerTest, NullIdIsPreservedInResponse) {
     ASSERT_TRUE(resp.contains("id"));
     EXPECT_TRUE(resp["id"].is_null());
     EXPECT_EQ(resp["result"], 1);
+}
+
+TEST(RpcHandlerTest, InvalidParamsBecomesMinus32602) {
+    // `InvalidParams` thrown from a handler should map to JSON-RPC's
+    // reserved -32602 code so clients can tell caller bugs (malformed
+    // payload) from server-side faults (-32000). The message must be
+    // propagated verbatim.
+    RpcHandler rpc;
+    rpc.register_method("strict", [](const json&) -> json {
+        throw InvalidParams("params.name must be a non-empty string");
+    });
+    auto resp = response_of(rpc, R"({"jsonrpc":"2.0","id":9,"method":"strict"})");
+    ASSERT_TRUE(resp.contains("error"));
+    EXPECT_EQ(resp["error"]["code"], -32602);
+    EXPECT_EQ(resp["error"]["message"], "params.name must be a non-empty string");
+    EXPECT_FALSE(resp.contains("result"));
 }

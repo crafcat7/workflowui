@@ -2,6 +2,7 @@
 // SPDX-FileCopyrightText: 2026 WorkflowUI contributors
 #include "server/ws_server.h"
 #include "server/rpc_handler.h"
+#include "server/rpc_errors.h"
 #include "server/security_config.h"
 #include "workflow/executor.h"
 #include "model/workflow_graph.h"
@@ -187,13 +188,39 @@ int main(int argc, char* argv[]) {
     });
 
     rpc.register_method("workflow.execute", [&](const json& params) -> json {
+        // Defense-in-depth: reject malformed payloads at the RPC boundary so
+        // the executor only sees well-formed graphs. Without this, a missing
+        // `nodes`/`edges` array surfaces as a generic -32000 std::exception
+        // and clients can't distinguish caller bugs from server bugs.
+        if (!params.is_object()) {
+            throw InvalidParams("params must be an object");
+        }
+        if (!params.contains("nodes") || !params["nodes"].is_array()) {
+            throw InvalidParams("params.nodes must be an array");
+        }
+        if (!params.contains("edges") || !params["edges"].is_array()) {
+            throw InvalidParams("params.edges must be an array");
+        }
+
         WorkflowGraph graph;
 
         for (auto& jn : params["nodes"]) {
+            if (!jn.is_object()) {
+                throw InvalidParams("params.nodes[*] must be an object");
+            }
+            if (!jn.contains("id") || !jn["id"].is_string() || jn["id"].get<std::string>().empty()) {
+                throw InvalidParams("params.nodes[*].id must be a non-empty string");
+            }
+            if (!jn.contains("type") || !jn["type"].is_string() || jn["type"].get<std::string>().empty()) {
+                throw InvalidParams("params.nodes[*].type must be a non-empty string");
+            }
             NodeDef node;
             node.id = jn["id"];
             node.type = jn["type"];
             if (jn.contains("config")) {
+                if (!jn["config"].is_object()) {
+                    throw InvalidParams("params.nodes[*].config must be an object");
+                }
                 for (auto& [k, v] : jn["config"].items()) {
                     node.config[k] = v.is_string() ? v.get<std::string>() : v.dump();
                 }
@@ -202,6 +229,15 @@ int main(int argc, char* argv[]) {
         }
 
         for (auto& je : params["edges"]) {
+            if (!je.is_object()) {
+                throw InvalidParams("params.edges[*] must be an object");
+            }
+            if (!je.contains("source") || !je["source"].is_string()) {
+                throw InvalidParams("params.edges[*].source must be a string");
+            }
+            if (!je.contains("target") || !je["target"].is_string()) {
+                throw InvalidParams("params.edges[*].target must be a string");
+            }
             EdgeDef edge;
             edge.source = je["source"];
             edge.source_handle = je.value("sourceHandle", "");
@@ -215,7 +251,10 @@ int main(int argc, char* argv[]) {
         // this execution, and later debug.add_breakpoint/remove_breakpoint
         // RPCs layer on top while paused.
         std::vector<std::string> breakpoints;
-        if (params.contains("breakpoints") && params["breakpoints"].is_array()) {
+        if (params.contains("breakpoints")) {
+            if (!params["breakpoints"].is_array()) {
+                throw InvalidParams("params.breakpoints must be an array if present");
+            }
             for (auto& bp : params["breakpoints"]) {
                 if (bp.is_string()) breakpoints.push_back(bp.get<std::string>());
             }
@@ -243,11 +282,19 @@ int main(int argc, char* argv[]) {
     });
 
     rpc.register_method("debug.add_breakpoint", [&](const json& params) -> json {
+        if (!params.is_object() || !params.contains("node_id") ||
+            !params["node_id"].is_string() || params["node_id"].get<std::string>().empty()) {
+            throw InvalidParams("params.node_id must be a non-empty string");
+        }
         executor->debug_controller().add_breakpoint(params["node_id"]);
         return {{"ok", true}};
     });
 
     rpc.register_method("debug.remove_breakpoint", [&](const json& params) -> json {
+        if (!params.is_object() || !params.contains("node_id") ||
+            !params["node_id"].is_string() || params["node_id"].get<std::string>().empty()) {
+            throw InvalidParams("params.node_id must be a non-empty string");
+        }
         executor->debug_controller().remove_breakpoint(params["node_id"]);
         return {{"ok", true}};
     });
