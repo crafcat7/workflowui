@@ -302,6 +302,13 @@
   gap: 8px;
 }
 
+.config-help {
+  margin-top: 3px;
+  font-size: 10px;
+  color: #7a8a8c;
+  line-height: 1.4;
+}
+
 /* ── Vendor badge ── */
 .vendor-badge {
   display: flex;

@@ -1,9 +1,32 @@
+// SPDX-License-Identifier: MIT
+// SPDX-FileCopyrightText: 2026 WorkflowUI contributors
+/**
+ * PropertiesPanel - shows editable config for the currently selected node.
+ *
+ * Rendering is driven by the NODE_SCHEMAS registry (see
+ * `nodes/configSchemas.ts`); the giant `node.type === 'X' && ...` chain has
+ * been replaced with a generic SchemaRenderer that interprets each node
+ * type's declared sections. Node types that declare `vendorSchema: true`
+ * (currently only `createNet`) still fetch their field list from the
+ * backend via `vendor.getConfigSchema`. Unknown node types fall back to a
+ * raw key/value editor so they remain usable even without a registered
+ * schema.
+ */
+
 import { useState, useEffect } from 'react';
 import { useWorkflowStore, type WorkflowNodeData } from '../store/workflowStore';
 import { wsClient } from '../transport/WsClient';
+import {
+  NODE_SCHEMAS,
+  type ConfigField,
+  type ConfigSection as ConfigSectionDef,
+} from '../nodes/configSchemas';
 
-/* ── Vendor config schema types (mirrors backend ConfigFieldSchema) ── */
-interface ConfigFieldDef {
+// ---------------------------------------------------------------------------
+// Vendor schema (backend-provided fields for createNet)
+// ---------------------------------------------------------------------------
+
+interface VendorFieldDef {
   key: string;
   label: string;
   type: 'string' | 'int' | 'float' | 'bool' | 'select';
@@ -15,10 +38,9 @@ interface ConfigFieldDef {
 
 interface VendorSchema {
   vendor: string;
-  fields: ConfigFieldDef[];
+  fields: VendorFieldDef[];
 }
 
-/* ── Cached schema so we only fetch once per session ── */
 let cachedSchema: VendorSchema | null = null;
 let schemaPromise: Promise<VendorSchema> | null = null;
 
@@ -32,7 +54,6 @@ function fetchVendorSchema(): Promise<VendorSchema> {
       return s;
     })
     .catch(() => {
-      // Fallback when backend is offline — show nothing special
       const fallback: VendorSchema = { vendor: 'unknown', fields: [] };
       cachedSchema = fallback;
       return fallback;
@@ -40,10 +61,8 @@ function fetchVendorSchema(): Promise<VendorSchema> {
   return schemaPromise;
 }
 
-/* ── Hook: use vendor schema ── */
 function useVendorSchema() {
   const [schema, setSchema] = useState<VendorSchema | null>(cachedSchema);
-
   useEffect(() => {
     if (cachedSchema) {
       setSchema(cachedSchema);
@@ -51,11 +70,13 @@ function useVendorSchema() {
     }
     fetchVendorSchema().then(setSchema);
   }, []);
-
   return schema;
 }
 
-/* ── Main Panel ── */
+// ---------------------------------------------------------------------------
+// Root panel
+// ---------------------------------------------------------------------------
+
 export function PropertiesPanel() {
   const { nodes, selectedNodeId, updateNodeData } = useWorkflowStore();
   const selectedNode = nodes.find((n) => n.id === selectedNodeId);
@@ -74,123 +95,45 @@ export function PropertiesPanel() {
   );
 }
 
-function PropertiesContent({ node, onUpdate }: { node: { id: string; type?: string; data: Record<string, unknown> }; onUpdate: (id: string, data: Partial<WorkflowNodeData>) => void }) {
+type NodeLike = { id: string; type?: string; data: Record<string, unknown> };
+
+function PropertiesContent({
+  node,
+  onUpdate,
+}: {
+  node: NodeLike;
+  onUpdate: (id: string, data: Partial<WorkflowNodeData>) => void;
+}) {
   const data = node.data as unknown as WorkflowNodeData;
+  const schema = node.type ? NODE_SCHEMAS[node.type] : undefined;
+  const config = data.config ?? {};
 
   const handleConfigChange = (key: string, value: string) => {
-    onUpdate(node.id, {
-      config: { ...(data.config || {}), [key]: value },
-    });
+    onUpdate(node.id, { config: { ...config, [key]: value } });
   };
 
   return (
     <>
-      {/* Node identity */}
-      <div className="props-node-header">
-        <div className="props-node-label">{data.label}</div>
-        <div className="props-node-id">{node.id}</div>
-      </div>
-
-      {/* Status */}
-      <div className="props-status-row">
-        <span className="props-status-label">STATUS</span>
-        <span className={`props-status-badge ${data.status}`}>{data.status.toUpperCase()}</span>
-      </div>
-      {data.elapsedMs !== undefined && (
-        <div className="props-elapsed">
-          Elapsed: {data.elapsedMs.toFixed(1)}ms
-        </div>
-      )}
-
+      <NodeIdentity data={data} id={node.id} />
+      <NodeStatusRow data={data} />
       <div className="props-divider" />
 
-      {/* Input Image */}
-      {node.type === 'inputImage' && (
-        <ConfigSection title="IMAGE SOURCE">
-          <ConfigField label="File Path" configKey="filePath" config={data.config} onChange={handleConfigChange} placeholder="/path/to/image.jpg" />
-        </ConfigSection>
+      {schema?.vendorSchema ? (
+        <VendorConfigPanel config={config} onChange={handleConfigChange} />
+      ) : schema?.sections ? (
+        schema.sections.map((section) => (
+          <SchemaSection
+            key={section.title}
+            section={section}
+            config={config}
+            onChange={handleConfigChange}
+          />
+        ))
+      ) : (
+        <GenericConfigEditor config={config} onChange={handleConfigChange} />
       )}
 
-      {/* Input Tensor */}
-      {node.type === 'inputTensor' && (
-        <ConfigSection title="TENSOR DATA">
-          <div className="config-field">
-            <label>Mode</label>
-            <select
-              className="config-select"
-              value={(data.config.fillMode as string) || 'manual'}
-              onChange={(e) => handleConfigChange('fillMode', e.target.value)}
-            >
-              <option value="manual">Manual Text</option>
-              <option value="auto">Auto Fill (Fixed Value)</option>
-            </select>
-          </div>
-
-          {(data.config.fillMode === 'auto') ? (
-            <>
-              <ConfigField label="Shape (e.g. 3, 224, 224)" configKey="shape" config={data.config} onChange={handleConfigChange} placeholder="3, 224, 224" />
-              <ConfigField label="Fill Value (e.g. 0.0)" configKey="fillValue" config={data.config} onChange={handleConfigChange} placeholder="0.0" />
-            </>
-          ) : (
-            <ConfigField label="Tensor Text" configKey="tensorText" config={data.config} onChange={handleConfigChange} placeholder="comma-separated values" />
-          )}
-        </ConfigSection>
-      )}
-
-      {/* CreateNet - Dynamic vendor config */}
-      {node.type === 'createNet' && (
-        <VendorConfigPanel config={data.config} onChange={handleConfigChange} />
-      )}
-
-      {/* SaveText */}
-      {node.type === 'saveText' && (
-        <ConfigSection title="OUTPUT FILE">
-          <ConfigField label="File Path" configKey="filePath" config={data.config} onChange={handleConfigChange} placeholder="output.txt" />
-        </ConfigSection>
-      )}
-
-      {/* Condition */}
-      {node.type === 'condition' && (
-        <ConfigSection title="CONDITION">
-          <ConfigField label="Expression (threshold)" configKey="expression" config={data.config} onChange={handleConfigChange} placeholder="> 0.5" />
-        </ConfigSection>
-      )}
-
-      {/* Benchmark */}
-      {node.type === 'benchmark' && (
-        <ConfigSection title="BENCHMARK OPTIONS">
-          <ConfigField label="Duration (sec)" configKey="duration" config={data.config} onChange={handleConfigChange} placeholder="10" />
-          <div className="props-info-text" style={{ marginTop: '8px', fontSize: '11px', color: '#6080a0' }}>
-            Runs inference repeatedly for the specified duration (default 10s).
-          </div>
-        </ConfigSection>
-      )}
-
-      {/* Postprocess */}
-      {node.type === 'postprocess' && (
-        <ConfigSection title="POSTPROCESS OPTIONS">
-          <div className="config-field">
-            <label>Operation</label>
-            <select
-              className="config-select"
-              value={(data.config?.op as string) || 'nms'}
-              onChange={(e) => handleConfigChange('op', e.target.value)}
-            >
-              <option value="nms">Non-Maximum Suppression (NMS)</option>
-              <option value="topk">Top-K</option>
-            </select>
-          </div>
-
-          {(data.config?.op === 'nms' || !data.config?.op) && (
-            <ConfigField label="IoU Threshold" configKey="iouThreshold" config={data.config || {}} onChange={handleConfigChange} placeholder="0.45" />
-          )}
-          {data.config?.op === 'topk' && (
-            <ConfigField label="K Value" configKey="k" config={data.config || {}} onChange={handleConfigChange} placeholder="1" />
-          )}
-        </ConfigSection>
-      )}
-
-      {/* Output Node - bar chart preview */}
+      {/* Output preview for terminal output node (preserves prior behaviour) */}
       {node.type === 'output' && data.output !== undefined && (
         <>
           <div className="props-divider" />
@@ -203,18 +146,240 @@ function PropertiesContent({ node, onUpdate }: { node: { id: string; type?: stri
   );
 }
 
-/* ── Dynamic vendor config for CreateNet ── */
-function VendorConfigPanel({ config, onChange }: { config: Record<string, unknown>; onChange: (key: string, value: string) => void }) {
+// ---------------------------------------------------------------------------
+// Schema-driven rendering
+// ---------------------------------------------------------------------------
+
+function SchemaSection({
+  section,
+  config,
+  onChange,
+}: {
+  section: ConfigSectionDef;
+  config: Record<string, unknown>;
+  onChange: (key: string, value: string) => void;
+}) {
+  const visibleFields = section.fields.filter((f) => !f.showIf || f.showIf(config));
+  if (visibleFields.length === 0) return null;
+
+  return (
+    <ConfigSection title={section.title}>
+      {section.layout === 'row-3' ? (
+        <div className="config-row-3">
+          {visibleFields.map((f) => (
+            <FieldRenderer key={f.key} field={f} config={config} onChange={onChange} />
+          ))}
+        </div>
+      ) : (
+        visibleFields.map((f) => (
+          <FieldRenderer key={f.key} field={f} config={config} onChange={onChange} />
+        ))
+      )}
+    </ConfigSection>
+  );
+}
+
+function FieldRenderer({
+  field,
+  config,
+  onChange,
+}: {
+  field: ConfigField;
+  config: Record<string, unknown>;
+  onChange: (key: string, value: string) => void;
+}) {
+  const raw = config[field.key];
+  const value = raw === undefined || raw === null ? field.defaultValue ?? '' : String(raw);
+
+  const help = field.help ? <div className="config-help">{field.help}</div> : null;
+
+  switch (field.kind) {
+    case 'select':
+      return (
+        <div className="config-field">
+          <label>{field.label}</label>
+          <select
+            className="config-select"
+            value={value}
+            onChange={(e) => onChange(field.key, e.target.value)}
+          >
+            {field.options?.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+          {help}
+        </div>
+      );
+
+    case 'checkbox':
+      return (
+        <div className="config-field">
+          <label className="config-checkbox">
+            <input
+              type="checkbox"
+              checked={value === 'true'}
+              onChange={(e) => onChange(field.key, e.target.checked ? 'true' : 'false')}
+            />
+            <span>{field.label}</span>
+          </label>
+          {help}
+        </div>
+      );
+
+    case 'textarea':
+      return (
+        <div className="config-field">
+          <label>{field.label}</label>
+          <textarea
+            value={value}
+            placeholder={field.placeholder}
+            onChange={(e) => onChange(field.key, e.target.value)}
+            rows={3}
+          />
+          {help}
+        </div>
+      );
+
+    case 'number':
+      return (
+        <div className="config-field">
+          <label>{field.label}</label>
+          <input
+            type="number"
+            value={value}
+            placeholder={field.placeholder}
+            step={field.step}
+            min={field.min}
+            max={field.max}
+            onChange={(e) => onChange(field.key, e.target.value)}
+          />
+          {help}
+        </div>
+      );
+
+    case 'filepath':
+      // filepath rendered as text today; future: add a "browse" button when
+      // the desktop shell (Tauri) exposes a file dialog.
+      return (
+        <div className="config-field">
+          <label>{field.label}</label>
+          <input
+            type="text"
+            value={value}
+            placeholder={field.placeholder}
+            onChange={(e) => onChange(field.key, e.target.value)}
+          />
+          {help}
+        </div>
+      );
+
+    case 'text':
+    default:
+      return (
+        <div className="config-field">
+          <label>{field.label}</label>
+          <input
+            type="text"
+            value={value}
+            placeholder={field.placeholder}
+            onChange={(e) => onChange(field.key, e.target.value)}
+          />
+          {help}
+        </div>
+      );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Generic fallback for unknown node types
+// ---------------------------------------------------------------------------
+
+function GenericConfigEditor({
+  config,
+  onChange,
+}: {
+  config: Record<string, unknown>;
+  onChange: (key: string, value: string) => void;
+}) {
+  const entries = Object.entries(config);
+  if (entries.length === 0) {
+    return (
+      <div className="props-empty" style={{ fontSize: 11 }}>
+        No configuration registered for this node type. Extend NODE_SCHEMAS to
+        customize this editor.
+      </div>
+    );
+  }
+  return (
+    <ConfigSection title="CONFIG">
+      {entries.map(([k, v]) => (
+        <div className="config-field" key={k}>
+          <label>{k}</label>
+          <input
+            type="text"
+            value={typeof v === 'string' ? v : JSON.stringify(v)}
+            onChange={(e) => onChange(k, e.target.value)}
+          />
+        </div>
+      ))}
+    </ConfigSection>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Identity + status header blocks
+// ---------------------------------------------------------------------------
+
+function NodeIdentity({ data, id }: { data: WorkflowNodeData; id: string }) {
+  return (
+    <div className="props-node-header">
+      <div className="props-node-label">{data.label}</div>
+      <div className="props-node-id">{id}</div>
+    </div>
+  );
+}
+
+function NodeStatusRow({ data }: { data: WorkflowNodeData }) {
+  return (
+    <>
+      <div className="props-status-row">
+        <span className="props-status-label">STATUS</span>
+        <span className={`props-status-badge ${data.status}`}>{data.status.toUpperCase()}</span>
+      </div>
+      {data.elapsedMs !== undefined && (
+        <div className="props-elapsed">Elapsed: {data.elapsedMs.toFixed(1)}ms</div>
+      )}
+      {data.avgMs !== undefined && data.runsCount !== undefined && (
+        <div className="props-elapsed">
+          Avg: {data.avgMs.toFixed(1)}ms over {data.runsCount} runs
+        </div>
+      )}
+    </>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Vendor (createNet) dynamic panel
+// ---------------------------------------------------------------------------
+
+function VendorConfigPanel({
+  config,
+  onChange,
+}: {
+  config: Record<string, unknown>;
+  onChange: (key: string, value: string) => void;
+}) {
   const schema = useVendorSchema();
 
   if (!schema || schema.fields.length === 0) {
-    // Fallback: show hardcoded NCNN fields when schema unavailable
     return <FallbackNcnnConfig config={config} onChange={onChange} />;
   }
 
-  // Group fields by group name, preserving order
-  const groups: { name: string; fields: ConfigFieldDef[] }[] = [];
-  const groupMap = new Map<string, ConfigFieldDef[]>();
+  // Group by field.group, preserving order of first appearance
+  const groups: { name: string; fields: VendorFieldDef[] }[] = [];
+  const groupMap = new Map<string, VendorFieldDef[]>();
   for (const f of schema.fields) {
     let arr = groupMap.get(f.group);
     if (!arr) {
@@ -233,16 +398,15 @@ function VendorConfigPanel({ config, onChange }: { config: Record<string, unknow
       </div>
       {groups.map((g) => (
         <ConfigSection key={g.name} title={g.name}>
-          {/* If all fields in group are dimension-like (W/H/C), render in a row */}
           {g.name === 'INPUT DIMENSIONS' ? (
             <div className="config-row-3">
               {g.fields.map((f) => (
-                <DynamicField key={f.key} field={f} config={config} onChange={onChange} />
+                <VendorField key={f.key} field={f} config={config} onChange={onChange} />
               ))}
             </div>
           ) : (
             g.fields.map((f) => (
-              <DynamicField key={f.key} field={f} config={config} onChange={onChange} />
+              <VendorField key={f.key} field={f} config={config} onChange={onChange} />
             ))
           )}
         </ConfigSection>
@@ -251,8 +415,15 @@ function VendorConfigPanel({ config, onChange }: { config: Record<string, unknow
   );
 }
 
-/* ── Renders a single field based on its schema type ── */
-function DynamicField({ field, config, onChange }: { field: ConfigFieldDef; config: Record<string, unknown>; onChange: (key: string, value: string) => void }) {
+function VendorField({
+  field,
+  config,
+  onChange,
+}: {
+  field: VendorFieldDef;
+  config: Record<string, unknown>;
+  onChange: (key: string, value: string) => void;
+}) {
   const value = config[field.key];
 
   if (field.type === 'bool') {
@@ -280,14 +451,15 @@ function DynamicField({ field, config, onChange }: { field: ConfigFieldDef; conf
           className="config-select"
         >
           {field.options.map((opt) => (
-            <option key={opt} value={opt}>{opt}</option>
+            <option key={opt} value={opt}>
+              {opt}
+            </option>
           ))}
         </select>
       </div>
     );
   }
 
-  // string, int, float — all render as text input
   return (
     <div className="config-field">
       <label>{field.label}</label>
@@ -302,13 +474,18 @@ function DynamicField({ field, config, onChange }: { field: ConfigFieldDef; conf
   );
 }
 
-/* ── Fallback when vendor schema is not available ── */
-function FallbackNcnnConfig({ config, onChange }: { config: Record<string, unknown>; onChange: (key: string, value: string) => void }) {
+function FallbackNcnnConfig({
+  config,
+  onChange,
+}: {
+  config: Record<string, unknown>;
+  onChange: (key: string, value: string) => void;
+}) {
   return (
     <>
       <ConfigSection title="MODEL">
-        <ConfigField label="Param Path (.param)" configKey="paramPath" config={config} onChange={onChange} placeholder="model.param" />
-        <ConfigField label="Model Path (.bin)" configKey="modelPath" config={config} onChange={onChange} placeholder="model.bin" />
+        <PlainField label="Param Path (.param)" cfgKey="paramPath" config={config} onChange={onChange} placeholder="model.param" />
+        <PlainField label="Model Path (.bin)" cfgKey="modelPath" config={config} onChange={onChange} placeholder="model.bin" />
         <div className="config-field">
           <label className="config-checkbox">
             <input
@@ -321,22 +498,26 @@ function FallbackNcnnConfig({ config, onChange }: { config: Record<string, unkno
         </div>
       </ConfigSection>
       <ConfigSection title="I/O NAMES">
-        <ConfigField label="Input Name" configKey="inputName" config={config} onChange={onChange} placeholder="data" />
-        <ConfigField label="Output Name" configKey="outputName" config={config} onChange={onChange} placeholder="output" />
+        <PlainField label="Input Name" cfgKey="inputName" config={config} onChange={onChange} placeholder="data" />
+        <PlainField label="Output Name" cfgKey="outputName" config={config} onChange={onChange} placeholder="output" />
       </ConfigSection>
       <ConfigSection title="INPUT DIMENSIONS">
         <div className="config-row-3">
-          <ConfigField label="W" configKey="inputW" config={config} onChange={onChange} placeholder="224" />
-          <ConfigField label="H" configKey="inputH" config={config} onChange={onChange} placeholder="224" />
-          <ConfigField label="C" configKey="inputC" config={config} onChange={onChange} placeholder="3" />
+          <PlainField label="W" cfgKey="inputW" config={config} onChange={onChange} placeholder="224" />
+          <PlainField label="H" cfgKey="inputH" config={config} onChange={onChange} placeholder="224" />
+          <PlainField label="C" cfgKey="inputC" config={config} onChange={onChange} placeholder="3" />
         </div>
       </ConfigSection>
       <ConfigSection title="RUNTIME">
-        <ConfigField label="Threads" configKey="numThreads" config={config} onChange={onChange} placeholder="2" />
+        <PlainField label="Threads" cfgKey="numThreads" config={config} onChange={onChange} placeholder="2" />
       </ConfigSection>
     </>
   );
 }
+
+// ---------------------------------------------------------------------------
+// Small presentational helpers reused across renderers
+// ---------------------------------------------------------------------------
 
 function ConfigSection({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -347,15 +528,15 @@ function ConfigSection({ title, children }: { title: string; children: React.Rea
   );
 }
 
-function ConfigField({
+function PlainField({
   label,
-  configKey,
+  cfgKey,
   config,
   onChange,
   placeholder,
 }: {
   label: string;
-  configKey: string;
+  cfgKey: string;
   config: Record<string, unknown>;
   onChange: (key: string, value: string) => void;
   placeholder?: string;
@@ -365,26 +546,34 @@ function ConfigField({
       <label>{label}</label>
       <input
         type="text"
-        value={(config[configKey] as string) || ''}
-        onChange={(e) => onChange(configKey, e.target.value)}
+        value={(config[cfgKey] as string) || ''}
+        onChange={(e) => onChange(cfgKey, e.target.value)}
         placeholder={placeholder}
       />
     </div>
   );
 }
 
-/** SVG bar chart for output distribution */
+// ---------------------------------------------------------------------------
+// Output distribution chart
+// ---------------------------------------------------------------------------
+
 function OutputBarChart({ output }: { output: unknown }) {
   if (!Array.isArray(output) || output.length === 0) {
     return <div className="props-empty">No numeric data</div>;
   }
-
   const values = output as number[];
+  const numeric = values.every((v) => typeof v === 'number' && Number.isFinite(v));
+  if (!numeric) {
+    return (
+      <pre className="node-output-pre">{JSON.stringify(values.slice(0, 50), null, 2)}</pre>
+    );
+  }
+
   const maxVal = Math.max(...values);
   const minVal = Math.min(...values);
   const range = maxVal - minVal || 1;
 
-  // For large arrays, downsample to ~100 bars
   const maxBars = 100;
   const step = Math.max(1, Math.floor(values.length / maxBars));
   const sampled: { idx: number; val: number }[] = [];
@@ -396,7 +585,6 @@ function OutputBarChart({ output }: { output: unknown }) {
   const chartHeight = 80;
   const barWidth = Math.max(1, chartWidth / sampled.length - 0.5);
 
-  // Find top-5 values
   const indexed = values.map((v, i) => ({ v, i }));
   indexed.sort((a, b) => b.v - a.v);
   const top5 = indexed.slice(0, 5);
@@ -421,7 +609,9 @@ function OutputBarChart({ output }: { output: unknown }) {
       </svg>
       <div className="output-chart-info">
         <div className="chart-stat">Total: {values.length} values</div>
-        <div className="chart-stat">Range: [{minVal.toFixed(4)}, {maxVal.toFixed(4)}]</div>
+        <div className="chart-stat">
+          Range: [{minVal.toFixed(4)}, {maxVal.toFixed(4)}]
+        </div>
       </div>
       <div className="output-top-k">
         <div className="top-k-title">TOP 5</div>
