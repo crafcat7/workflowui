@@ -36,13 +36,34 @@ Client → Server (requests):
 | Method | Purpose |
 |---|---|
 | `vendor.getConfigSchema` | Returns config fields supported by a vendor |
-| `workflow.execute` | Starts workflow execution on a background thread |
+| `nodes.list` | Returns the handler catalog (type, label, category, ports) as the single source of truth for what this backend can execute |
+| `workflow.execute` | Starts workflow execution on a background thread; reply `{ status: "started", run_id }` |
+| `workflow.cancel` | Stops the currently-running workflow at the next node boundary; reply `{ cancelled: true, run_id }` naming the interrupted run |
 | `debug.add_breakpoint` | Adds a breakpoint on a node |
 | `debug.remove_breakpoint` | Removes a breakpoint |
 
-Client → Server (notifications): `workflow.stop`, `debug.continue`, `debug.step_over`.
+Client → Server (notifications): `workflow.stop` (legacy alias of `workflow.cancel`; no reply), `debug.continue`, `debug.step_over`.
 
-Server → Client (push): `node.status`, `workflow.complete`, `debug.paused`.
+Server → Client (push): `node.status`, `workflow.complete`, `debug.paused`. Every push carries the `run_id` of the run that produced it so clients can discard events from a superseded/cancelled run.
+
+#### Run IDs and cancellation
+
+Each call to `workflow.execute` launches a single background run and returns a `run_id` of the form `run-<seq>-<ms>` (`<seq>` is a process-local counter, `<ms>` is steady-clock milliseconds since process start). The backend stamps the same `run_id` onto every `node.status` / `debug.paused` / `workflow.complete` event it emits for that run.
+
+Starting a second run with a previous one still active implicitly cancels the first (the worker is stopped at the next node boundary and joined before the new run launches). Clients should treat any event whose `run_id` does not match the most recently returned id as stale and drop it — `frontend/src/engine/WorkflowRunner.ts` does exactly this via `setActiveRunId`. Events missing `run_id` entirely (older backends, tests) are accepted verbatim so the filter is strictly additive.
+
+`workflow.cancel` and `workflow.stop` both interrupt between nodes, not mid-handler: a node running a long inference will finish first, then the cancel takes effect. `workflow.cancel` is a request that returns the interrupted `run_id`; `workflow.stop` is a fire-and-forget notification kept for backward compatibility.
+
+#### JSON-RPC error codes
+
+| Code | Meaning | When |
+|---|---|---|
+| `-32700` | Parse error | Malformed JSON |
+| `-32601` | Method not found | Unknown RPC method |
+| `-32602` | Invalid params | Shape-level validation at the RPC boundary (missing fields, wrong types, empty arrays, ...) — a caller bug |
+| `-32000` | Server error | Any other handler exception — a server-side fault |
+
+Graph-level validation (unknown node types, dangling edges, port/type mismatches) happens *after* `workflow.execute` has been accepted and is reported via a single `__workflow__` / `validation_failed` push event with an `errors[]` array, then a `workflow.complete`. This is deliberate: `-32602` is reserved for problems a client can diagnose without seeing the handler catalog.
 
 ## Quick Start
 
