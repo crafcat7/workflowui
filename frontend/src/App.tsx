@@ -36,7 +36,7 @@ import { ToastContainer } from './components/ToastContainer';
 import { ReconnectBanner } from './components/ReconnectBanner';
 import { NodeContextMenu, type NodeContextMenuState } from './components/NodeContextMenu';
 import { showToast } from './store/toastStore';
-import { getLayoutedElements } from './utils/layout';
+import { getLayoutedElements, domNodeHeightMeasurer } from './utils/layout';
 import './App.css';
 
 function AppInner() {
@@ -241,7 +241,12 @@ function AppInner() {
   }, [nodes, selectedId, breakpoints]);
 
   const onLayout = useCallback(() => {
-    const layouted = getLayoutedElements(nodes, edges);
+    // Measure each node's live rendered height so dagre can avoid
+    // overlapping tall cards (inference, postprocess) with their
+    // vertical neighbors. Falls back to the static 350px default
+    // when a node isn't mounted yet (shouldn't normally happen on
+    // user-triggered layout, but keeps the contract total).
+    const layouted = getLayoutedElements(nodes, edges, 'LR', domNodeHeightMeasurer());
     setNodes(layouted.nodes as Node<WorkflowNodeData>[]);
     setEdges(() => layouted.edges);
   }, [nodes, edges, setNodes, setEdges]);
