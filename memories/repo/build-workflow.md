@@ -21,16 +21,23 @@ Stack: React 19 + `@xyflow/react` 12 + Zustand 5 + zundo 2 + Vite 8 + TS 6.
     is not passed a default set (localhost:5173/1420 + `tauri://localhost`) is
     installed. Clients without an Origin header always pass.
 
-### ENABLE_NCNN flag — DO NOT enable without the vendor source
-`backend/CMakeLists.txt` declares `option(ENABLE_NCNN "Enable NCNN vendor backend" OFF)` and, when ON,
-adds `src/vendor/ncnn/ncnn_engine.cpp`. **That file is not in the repository** and has no git history,
-so turning the flag on breaks configure with a confusing `No SOURCES given to target` error. Always
-configure with `-DENABLE_NCNN=OFF` (the default) until the vendor implementation is committed.
+### ENABLE_NCNN flag
+`backend/CMakeLists.txt` declares `option(ENABLE_NCNN "Enable NCNN vendor backend" OFF)`.
+With the flag ON, `backend/src/vendor/ncnn/ncnn_engine.{h,cpp}` is compiled and
+linked against a prebuilt `ncnn::ncnn` CMake target (point `ncnn_DIR` at the
+install's `lib/cmake/ncnn`). Historically this file was missing from the repo
+because `.gitignore` contained an unanchored `ncnn/` rule that also matched
+`backend/src/vendor/ncnn/`; the rule is now anchored to `/ncnn/` so only the
+top-level vendor sibling directory is ignored.
 
-If you hit this on an inherited build tree, reset the cache:
 ```
-cmake -DENABLE_NCNN=OFF -S backend -B backend/build
+cmake -S backend -B backend/build -DENABLE_NCNN=ON \
+      -Dncnn_DIR=/path/to/ncnn-install/lib/cmake/ncnn
 ```
+
+If the Extractor API in your NCNN build differs (`set_num_threads` was
+removed from Extractor in recent versions), threading is driven via
+`Net::opt.num_threads`, which `NcnnEngine` already sets from `NetConfig`.
 
 ## Tauri desktop shell (`frontend/src-tauri/`)
 - Dev: `npm run tauri dev` from `frontend/`

@@ -39,7 +39,7 @@ results.txt
 frontend/src-tauri/target/
 
 # External Repositories / Dependencies
-ncnn/
+/ncnn/
 backend/third_party/*/
 !backend/third_party/CMakeLists.txt
 
