@@ -90,3 +90,71 @@ describe('workflowStore importWorkflow', () => {
     expect(useWorkflowStore.getState().nodes[0].id).toBe('node_99');
   });
 });
+
+describe('workflowStore removeNode / duplicateNode', () => {
+  beforeEach(resetStore);
+
+  function seedTwoConnectedNodes() {
+    const s = useWorkflowStore.getState();
+    s.addNode({
+      id: 'a',
+      type: 'inputImage',
+      position: { x: 0, y: 0 },
+      data: { label: 'a', type: 'inputImage', status: 'idle', config: {} } as WorkflowNodeData,
+    });
+    s.addNode({
+      id: 'b',
+      type: 'output',
+      position: { x: 100, y: 0 },
+      data: { label: 'b', type: 'output', status: 'idle', config: {} } as WorkflowNodeData,
+    });
+    useWorkflowStore.setState({
+      edges: [{ id: 'e1', source: 'a', target: 'b' }],
+    });
+  }
+
+  it('removeNode also removes edges touching the node', () => {
+    seedTwoConnectedNodes();
+    useWorkflowStore.getState().removeNode('a');
+    const { nodes, edges } = useWorkflowStore.getState();
+    expect(nodes.map((n) => n.id)).toEqual(['b']);
+    expect(edges).toHaveLength(0);
+  });
+
+  it('removeNode clears selection if the removed node was selected', () => {
+    seedTwoConnectedNodes();
+    useWorkflowStore.getState().setSelectedNode('a');
+    useWorkflowStore.getState().removeNode('a');
+    expect(useWorkflowStore.getState().selectedNodeId).toBeNull();
+  });
+
+  it('duplicateNode offsets position and strips runtime fields', () => {
+    const s = useWorkflowStore.getState();
+    s.addNode({
+      id: 'a',
+      type: 'inputImage',
+      position: { x: 10, y: 20 },
+      data: {
+        label: 'a',
+        type: 'inputImage',
+        status: 'done',
+        config: { filePath: '/x.jpg' },
+        elapsedMs: 42,
+        output: [1, 2, 3],
+      } as WorkflowNodeData,
+    });
+    const newId = s.duplicateNode('a');
+    expect(newId).toBeTruthy();
+    const clone = useWorkflowStore.getState().nodes.find((n) => n.id === newId)!;
+    expect(clone.position).toEqual({ x: 50, y: 60 });
+    const d = clone.data as WorkflowNodeData;
+    expect(d.status).toBe('idle');
+    expect(d.elapsedMs).toBeUndefined();
+    expect(d.output).toBeUndefined();
+    expect(d.config).toEqual({ filePath: '/x.jpg' });
+  });
+
+  it('duplicateNode returns null for unknown id', () => {
+    expect(useWorkflowStore.getState().duplicateNode('nope')).toBeNull();
+  });
+});

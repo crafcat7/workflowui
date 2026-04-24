@@ -40,5 +40,5 @@ export const nodeTypeList: NodeTypeInfo[] = [
   { type: 'saveText', label: 'Save Text', icon: '💾', category: 'output' },
   { type: 'condition', label: 'Condition', icon: '🔀', category: 'control' },
   { type: 'output', label: 'Output', icon: '📤', category: 'output' },
-  { type: 'debug', label: 'Breakpoint', icon: '🔴', category: 'debug' },
+  { type: 'debug', label: 'Inspect', icon: '🔍', category: 'debug' },
 ];

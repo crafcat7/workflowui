@@ -56,6 +56,8 @@ interface WorkflowState {
   setNodes: (nodes: Node<WorkflowNodeData>[]) => void;
   setSelectedNode: (id: string | null) => void;
   addNode: (node: Node<WorkflowNodeData>) => void;
+  removeNode: (id: string) => void;
+  duplicateNode: (id: string) => string | null;
   updateNodeData: (id: string, data: Partial<WorkflowNodeData>) => void;
   updateNodeStatus: (id: string, status: NodeStatus) => void;
   setRunning: (running: boolean) => void;
@@ -94,6 +96,30 @@ export const useWorkflowStore = create<WorkflowState>()(
       setSelectedNode: (id) => set({ selectedNodeId: id }),
 
       addNode: (node) => set({ nodes: [...get().nodes, node] }),
+
+      removeNode: (id) => {
+        set({
+          nodes: get().nodes.filter((n) => n.id !== id),
+          edges: get().edges.filter((e) => e.source !== id && e.target !== id),
+          selectedNodeId: get().selectedNodeId === id ? null : get().selectedNodeId,
+        });
+      },
+
+      duplicateNode: (id) => {
+        const src = get().nodes.find((n) => n.id === id);
+        if (!src) return null;
+        const newId = generateNodeId();
+        const clone: Node<WorkflowNodeData> = {
+          ...src,
+          id: newId,
+          position: { x: src.position.x + 40, y: src.position.y + 40 },
+          selected: false,
+          // Deep-copy data and strip runtime fields so the clone starts idle.
+          data: stripRuntimeFields({ ...(src.data as WorkflowNodeData) }),
+        };
+        set({ nodes: [...get().nodes, clone], selectedNodeId: newId });
+        return newId;
+      },
 
       updateNodeData: (id, data) => {
         set({

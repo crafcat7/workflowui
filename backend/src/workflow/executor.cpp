@@ -29,10 +29,11 @@ void Executor::execute(const WorkflowGraph& graph) {
         auto* node = graph.get_node(node_id);
         if (!node) continue;
 
-        // Check for breakpoint / debug node
-        bool is_debug = (node->type == "debug");
-        if (is_debug || debug_.should_pause(node_id)) {
-            // Notify frontend we're paused
+        // Pause if this node carries a breakpoint or we're stepping.
+        // Debug-type nodes used to auto-pause implicitly; that special case
+        // has been removed in favor of explicit per-node breakpoints so
+        // there is a single consistent mental model.
+        if (debug_.should_pause(node_id)) {
             json data;
             data["node_id"] = node_id;
             data["type"] = node->type;

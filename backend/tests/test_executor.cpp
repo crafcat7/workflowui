@@ -1,6 +1,9 @@
 #include <gtest/gtest.h>
 #include "workflow/executor.h"
 #include "model/workflow_graph.h"
+#include <atomic>
+#include <chrono>
+#include <thread>
 
 using namespace workflow;
 
@@ -160,4 +163,130 @@ TEST(ExecutorTest, PostprocessTopK) {
     EXPECT_FLOAT_EQ(output[1], 0.9f);
     EXPECT_FLOAT_EQ(output[2], 4.0f);
     EXPECT_FLOAT_EQ(output[3], 0.8f);
+}
+
+// ---------------------------------------------------------------------------
+// Breakpoint tests (Phase 2)
+// ---------------------------------------------------------------------------
+
+namespace {
+
+WorkflowGraph make_passthrough_graph(const std::string& src, const std::string& dst) {
+    WorkflowGraph g;
+    NodeDef n1;
+    n1.id = src;
+    n1.type = "inputTensor";
+    n1.config["fillMode"] = "text";
+    n1.config["tensorText"] = "1 2 3";
+    g.add_node(n1);
+
+    NodeDef n2;
+    n2.id = dst;
+    n2.type = "output";
+    g.add_node(n2);
+
+    EdgeDef e;
+    e.source = src;
+    e.source_handle = "tensor_data";
+    e.target = dst;
+    e.target_handle = "data";
+    g.add_edge(e);
+    return g;
+}
+
+} // namespace
+
+TEST(DebugControllerTest, SetBreakpointsReplacesSet) {
+    DebugController dc;
+    dc.add_breakpoint("n1");
+    dc.add_breakpoint("n2");
+    EXPECT_TRUE(dc.has_breakpoint("n1"));
+
+    dc.set_breakpoints({"n3", "n4"});
+    EXPECT_FALSE(dc.has_breakpoint("n1"));
+    EXPECT_FALSE(dc.has_breakpoint("n2"));
+    EXPECT_TRUE(dc.has_breakpoint("n3"));
+    EXPECT_TRUE(dc.has_breakpoint("n4"));
+
+    dc.clear_breakpoints();
+    EXPECT_FALSE(dc.has_breakpoint("n3"));
+}
+
+TEST(DebugControllerTest, ResetPreservesBreakpoints) {
+    DebugController dc;
+    dc.add_breakpoint("n1");
+    dc.reset();
+    EXPECT_TRUE(dc.has_breakpoint("n1"));
+}
+
+TEST(ExecutorTest, DebugNodeDoesNotImplicitlyPause) {
+    // Regression: previously `type == "debug"` auto-paused execution. We
+    // now only pause on explicit breakpoints so Debug nodes are pure
+    // passthrough/logging.
+    auto engine = std::make_shared<MockEngine>();
+    Executor executor(engine);
+
+    WorkflowGraph g;
+    NodeDef n1;
+    n1.id = "n1";
+    n1.type = "inputTensor";
+    n1.config["fillMode"] = "text";
+    n1.config["tensorText"] = "1 2 3";
+    g.add_node(n1);
+
+    NodeDef n2;
+    n2.id = "dbg";
+    n2.type = "debug";
+    g.add_node(n2);
+
+    EdgeDef e;
+    e.source = "n1";
+    e.source_handle = "tensor_data";
+    e.target = "dbg";
+    e.target_handle = "data_in";
+    g.add_edge(e);
+
+    std::atomic<int> pause_count{0};
+    executor.set_pause_callback([&](const std::string&, const json&) {
+        pause_count.fetch_add(1);
+    });
+
+    executor.execute(g);
+    EXPECT_EQ(pause_count.load(), 0);
+}
+
+TEST(ExecutorTest, BreakpointPausesAndResumes) {
+    auto engine = std::make_shared<MockEngine>();
+    Executor executor(engine);
+
+    auto g = make_passthrough_graph("src", "dst");
+    executor.debug_controller().set_breakpoints({"dst"});
+
+    std::atomic<int> pause_count{0};
+    std::string paused_node;
+    executor.set_pause_callback([&](const std::string& id, const json&) {
+        paused_node = id;
+        pause_count.fetch_add(1);
+    });
+
+    std::atomic<bool> completed{false};
+    executor.set_status_callback([&](const std::string& id, const json& s) {
+        if (id == "__workflow__" && s.value("status", "") == "complete") {
+            completed.store(true);
+        }
+    });
+
+    std::thread runner([&] { executor.execute(g); });
+
+    // Wait for pause (bounded)
+    for (int i = 0; i < 50 && pause_count.load() == 0; ++i) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    ASSERT_EQ(pause_count.load(), 1);
+    EXPECT_EQ(paused_node, "dst");
+    EXPECT_FALSE(completed.load());
+
+    executor.debug_controller().resume();
+    runner.join();
+    EXPECT_TRUE(completed.load());
 }

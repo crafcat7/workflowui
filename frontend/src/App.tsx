@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // SPDX-FileCopyrightText: 2026 WorkflowUI contributors
-import { useCallback, useMemo, useRef } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import {
   ReactFlow,
   ReactFlowProvider,
@@ -23,6 +23,7 @@ import {
   pauseHistory,
   resumeHistory,
 } from './store/workflowStore';
+import { useDebugStore } from './store/debugStore';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { nodeTypes } from './nodes';
 import { NodePalette } from './panels/NodePalette';
@@ -30,6 +31,7 @@ import { PropertiesPanel } from './panels/PropertiesPanel';
 import { ConsolePanel } from './panels/ConsolePanel';
 import { ToastContainer } from './components/ToastContainer';
 import { ReconnectBanner } from './components/ReconnectBanner';
+import { NodeContextMenu, type NodeContextMenuState } from './components/NodeContextMenu';
 import { getLayoutedElements } from './utils/layout';
 import './App.css';
 
@@ -39,8 +41,10 @@ function AppInner() {
   const { nodes, edges, isRunning, onNodesChange, onEdgesChange, setEdges, setNodes, setSelectedNode, addNode } =
     useWorkflowStore();
   const selectedId = useWorkflowStore((s) => s.selectedNodeId);
+  const breakpoints = useDebugStore((s) => s.breakpoints);
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const { screenToFlowPosition } = useReactFlow();
+  const [contextMenu, setContextMenu] = useState<NodeContextMenuState | null>(null);
 
   const onConnect = useCallback(
     (connection: Connection) => {
@@ -58,7 +62,17 @@ function AppInner() {
 
   const onPaneClick = useCallback(() => {
     setSelectedNode(null);
+    setContextMenu(null);
   }, [setSelectedNode]);
+
+  const onNodeContextMenu = useCallback(
+    (e: React.MouseEvent, node: Node) => {
+      e.preventDefault();
+      setSelectedNode(node.id);
+      setContextMenu({ x: e.clientX, y: e.clientY, nodeId: node.id });
+    },
+    [setSelectedNode],
+  );
 
   const onDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -113,22 +127,30 @@ function AppInner() {
     [edges, isRunning],
   );
 
-  const styledNodes = useMemo(
-    () =>
-      nodes.map((n) => {
-        const data = n.data as unknown as WorkflowNodeData;
-        const isSelected = n.id === selectedId;
-        const isNodeRunning = data.status === 'running';
-        const category = getCategoryClass(n.type ?? '');
-        return {
-          ...n,
-          className: [category, isSelected ? 'selected' : '', isNodeRunning ? 'node-running' : '']
-            .filter(Boolean)
-            .join(' '),
-        };
-      }),
-    [nodes, selectedId],
-  );
+  const styledNodes = useMemo(() => {
+    const bpMap = new Map(breakpoints.map((b) => [b.nodeId, b.enabled]));
+    return nodes.map((n) => {
+      const data = n.data as unknown as WorkflowNodeData;
+      const isSelected = n.id === selectedId;
+      const isNodeRunning = data.status === 'running';
+      const isPaused = data.status === 'paused';
+      const hasBp = bpMap.has(n.id);
+      const bpEnabled = bpMap.get(n.id) === true;
+      const category = getCategoryClass(n.type ?? '');
+      return {
+        ...n,
+        className: [
+          category,
+          isSelected ? 'selected' : '',
+          isNodeRunning ? 'node-running' : '',
+          isPaused ? 'node-paused' : '',
+          hasBp ? (bpEnabled ? 'node-bp-armed' : 'node-bp-disabled') : '',
+        ]
+          .filter(Boolean)
+          .join(' '),
+      };
+    });
+  }, [nodes, selectedId, breakpoints]);
 
   const onLayout = useCallback(() => {
     const layouted = getLayoutedElements(nodes, edges);
@@ -154,6 +176,7 @@ function AppInner() {
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
           onNodeClick={onNodeClick}
+          onNodeContextMenu={onNodeContextMenu}
           onPaneClick={onPaneClick}
           onNodeDragStart={onNodeDragStart}
           onNodeDragStop={onNodeDragStop}
@@ -202,6 +225,10 @@ function AppInner() {
       <footer className="bottom-console">
         <ConsolePanel />
       </footer>
+
+      {contextMenu && (
+        <NodeContextMenu menu={contextMenu} onClose={() => setContextMenu(null)} />
+      )}
     </div>
   );
 }

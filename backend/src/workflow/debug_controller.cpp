@@ -17,6 +17,17 @@ bool DebugController::has_breakpoint(const std::string& node_id) const {
     return breakpoints_.count(node_id) > 0;
 }
 
+void DebugController::set_breakpoints(const std::vector<std::string>& node_ids) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    breakpoints_.clear();
+    breakpoints_.insert(node_ids.begin(), node_ids.end());
+}
+
+void DebugController::clear_breakpoints() {
+    std::lock_guard<std::mutex> lock(mutex_);
+    breakpoints_.clear();
+}
+
 bool DebugController::should_pause(const std::string& node_id) const {
     if (stepping_.load()) return true;
     return has_breakpoint(node_id);

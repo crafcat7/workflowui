@@ -114,6 +114,18 @@ int main(int argc, char* argv[]) {
             graph.add_edge(edge);
         }
 
+        // Seed breakpoints for this run. Replacing the set atomically keeps
+        // behavior predictable: whatever the frontend sends is the truth for
+        // this execution, and later debug.add_breakpoint/remove_breakpoint
+        // RPCs layer on top while paused.
+        std::vector<std::string> breakpoints;
+        if (params.contains("breakpoints") && params["breakpoints"].is_array()) {
+            for (auto& bp : params["breakpoints"]) {
+                if (bp.is_string()) breakpoints.push_back(bp.get<std::string>());
+            }
+        }
+        executor->debug_controller().set_breakpoints(breakpoints);
+
         // Execute in background thread
         std::thread([executor, graph = std::move(graph)]() mutable {
             executor->execute(graph);

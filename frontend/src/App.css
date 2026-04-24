@@ -1069,3 +1069,92 @@
   0%, 100% { opacity: 1; }
   50% { opacity: 0.35; }
 }
+
+/* ── Node breakpoint indicator (any node type) ────── */
+.react-flow__node.node-bp-armed {
+  box-shadow: inset 4px 0 0 #e0504c, 0 0 0 1px #e0504c55;
+}
+.react-flow__node.node-bp-armed::before {
+  content: '';
+  position: absolute;
+  top: 6px;
+  left: -14px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #e0504c;
+  box-shadow: 0 0 8px #e0504ccc;
+  pointer-events: none;
+}
+.react-flow__node.node-bp-disabled::before {
+  content: '';
+  position: absolute;
+  top: 6px;
+  left: -14px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 2px solid #e0504c;
+  pointer-events: none;
+}
+.react-flow__node.node-paused {
+  box-shadow: 0 0 0 2px #f0c040, 0 0 12px #f0c04066;
+}
+
+/* ── Node context menu ────────────────────────────── */
+.node-context-menu {
+  position: fixed;
+  z-index: 1100;
+  min-width: 180px;
+  background: #131326;
+  border: 1px solid #2a2a4a;
+  border-radius: 6px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+  padding: 4px;
+  font-size: 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  user-select: none;
+}
+.node-context-menu .ctx-item {
+  width: 100%;
+  background: transparent;
+  color: #c0c0d0;
+  border: none;
+  padding: 7px 10px;
+  text-align: left;
+  cursor: pointer;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font: inherit;
+}
+.node-context-menu .ctx-item:hover {
+  background: #1f1f3e;
+  color: #ffffff;
+}
+.node-context-menu .ctx-item.ctx-danger:hover {
+  background: #4a1a1a;
+  color: #ffb0b0;
+}
+.node-context-menu .ctx-icon {
+  width: 14px;
+  display: inline-block;
+  text-align: center;
+  font-size: 12px;
+}
+.node-context-menu .ctx-separator {
+  height: 1px;
+  background: #2a2a4a;
+  margin: 4px 0;
+}
+
+/* ── Step button ──────────────────────────────────── */
+.console-btn.step {
+  background: linear-gradient(180deg, #3a3a1a 0%, #2a2a10 100%);
+  border-color: #5a5a1a;
+  color: #f0e0a0;
+}
+.console-btn.step:hover:not(:disabled) {
+  background: linear-gradient(180deg, #4a4a1a 0%, #3a3a10 100%);
+}

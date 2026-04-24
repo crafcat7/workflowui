@@ -8,7 +8,7 @@ import { showToast } from '../store/toastStore';
 
 export function ConsolePanel() {
   const { isRunning, setRunning, nodes, edges, exportWorkflow, importWorkflow } = useWorkflowStore();
-  const { logs, clearLogs, pausedAtNodeId, setPausedAt } = useDebugStore();
+  const { logs, clearLogs, pausedAtNodeId, setPausedAt, breakpoints } = useDebugStore();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const logEndRef = useRef<HTMLDivElement>(null);
   const [wsConnected, setWsConnected] = useState(wsClient.connected);
@@ -53,15 +53,13 @@ export function ConsolePanel() {
       return;
     }
 
-    // Only include debug nodes that are properly connected (have both input and output edges)
-    const debugNodeIds = activeNodes
-      .filter((n) => n.type === 'debug')
-      .filter((n) => {
-        const hasInput = edges.some((e) => e.target === n.id);
-        const hasOutput = edges.some((e) => e.source === n.id);
-        return hasInput && hasOutput;
-      })
-      .map((n) => n.id);
+    // Breakpoints come from the explicit debug store (set via right-click
+    // context menu). Only enabled ones, and only for nodes actually part of
+    // this run, are sent to the backend.
+    const activeIdSet = new Set(activeNodes.map((n) => n.id));
+    const breakpointIds = breakpoints
+      .filter((b) => b.enabled && activeIdSet.has(b.nodeId))
+      .map((b) => b.nodeId);
 
     try {
       await wsClient.call('workflow.execute', {
@@ -76,7 +74,7 @@ export function ConsolePanel() {
           target: e.target,
           targetHandle: e.targetHandle,
         })),
-        breakpoints: debugNodeIds,
+        breakpoints: breakpointIds,
       });
     } catch (err) {
       showToast(`Execution error: ${(err as Error).message}`, 'error');
@@ -91,6 +89,11 @@ export function ConsolePanel() {
 
   const handleContinue = () => {
     wsClient.notify('debug.continue');
+    setPausedAt(null);
+  };
+
+  const handleStepOver = () => {
+    wsClient.notify('debug.step_over');
     setPausedAt(null);
   };
 
@@ -143,9 +146,17 @@ export function ConsolePanel() {
             className="console-btn continue"
             onClick={handleContinue}
             disabled={!pausedAtNodeId}
-            title="Continue execution"
+            title="Continue execution (until next breakpoint)"
           >
             <span className="btn-icon">⏵</span> CONTINUE
+          </button>
+          <button
+            className="console-btn step"
+            onClick={handleStepOver}
+            disabled={!pausedAtNodeId}
+            title="Step over (run next node then pause)"
+          >
+            <span className="btn-icon">⤼</span> STEP
           </button>
           <button className="console-btn stop" onClick={handleStop} disabled={!isRunning} title="Stop workflow">
             <span className="btn-icon">■</span> STOP
@@ -164,15 +175,11 @@ export function ConsolePanel() {
             <span className="console-paused-badge">PAUSED @ {pausedAtNodeId}</span>
           )}
           {(() => {
-            const armed = nodes
-              .filter((n) => n.type === 'debug')
-              .filter((n) => {
-                const hasIn = edges.some((e) => e.target === n.id);
-                const hasOut = edges.some((e) => e.source === n.id);
-                return hasIn && hasOut;
-              }).length;
+            const armed = breakpoints.filter((b) => b.enabled).length;
             return armed > 0 ? (
-              <span className="console-bp-count">{armed} BP</span>
+              <span className="console-bp-count" title="Armed breakpoints">
+                {armed} BP
+              </span>
             ) : null;
           })()}
           <div className="console-ws-status" title={wsConnected ? 'Connected' : 'Disconnected'}>
