@@ -35,6 +35,18 @@ interface DebugPausedEvent {
   run_id?: string;
 }
 
+/**
+ * Response shape for the `workflow.state` RPC. Used after a WS
+ * reconnect to reconcile the local canvas with whatever the backend
+ * observed while we were offline. `run_id` may be empty if the
+ * backend has never executed anything.
+ */
+interface WorkflowStateSnapshot {
+  run_id?: string;
+  statuses?: Record<string, string>;
+  paused_at?: string;
+}
+
 const VALID_STATUSES: ReadonlySet<string> = new Set(['idle', 'running', 'done', 'error', 'paused', 'skipped']);
 
 function coerceStatus(raw: string): NodeStatus {
@@ -73,9 +85,58 @@ function isFreshEvent(evRunId: string | undefined): boolean {
 }
 
 /**
+ * Reconcile local canvas with the backend's view of the executor after
+ * a WebSocket reconnect. Events emitted while the socket was down are
+ * gone for good — without this, any node that transitioned while we
+ * were offline would stay stuck on whatever stale status we had last.
+ *
+ * Exported for tests; wired from `initWorkflowRunner()` on every
+ * reconnect (not the initial connect).
+ */
+export async function reconcileFromSnapshot(): Promise<void> {
+  let snap: WorkflowStateSnapshot;
+  try {
+    snap = await wsClient.call<WorkflowStateSnapshot>('workflow.state');
+  } catch (err) {
+    // `workflow.state` is new (W1). Older backends will reply with
+    // method-not-found (-32601); that's fine — just skip reconcile
+    // and carry on with the pre-W1 behavior.
+    console.warn('[WorkflowRunner] workflow.state failed, skipping reconcile:', err);
+    return;
+  }
+
+  // Re-align our stale-event filter with the backend's view. If the
+  // backend has no run, clear; otherwise take its run_id so any
+  // in-flight events from that run we missed still match.
+  setActiveRunId(snap.run_id && snap.run_id.length > 0 ? snap.run_id : null);
+
+  const store = useWorkflowStore.getState();
+  if (snap.statuses) {
+    for (const [nodeId, status] of Object.entries(snap.statuses)) {
+      // Only touch nodes we know about; the backend can't rename
+      // a node out from under us, but it *can* report a node that
+      // was removed locally in an unsaved edit.
+      if (store.nodesById.has(nodeId)) {
+        store.updateNodeStatus(nodeId, coerceStatus(status));
+      }
+    }
+  }
+
+  const debug = useDebugStore.getState();
+  if (snap.paused_at) {
+    debug.setPausedAt(snap.paused_at);
+  } else {
+    debug.setPausedAt(null);
+  }
+}
+
+/**
  * Initialize notification handlers. Call once at app startup.
  */
 export function initWorkflowRunner() {
+  wsClient.onReconnect(() => {
+    void reconcileFromSnapshot();
+  });
   wsClient.onNotification((method, params) => {
     switch (method) {
       case 'node.status': {

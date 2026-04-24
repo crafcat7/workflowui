@@ -38,6 +38,7 @@ export interface ConnectionState {
 }
 type ConnectionStateHandler = (state: ConnectionState) => void;
 type ConnectionHandler = (connected: boolean) => void;
+type ReconnectHandler = () => void;
 
 const BASE_RETRY_MS = 500;
 const MAX_RETRY_MS = 15000;
@@ -55,6 +56,7 @@ export class WsClient {
   private notificationHandlers: NotificationHandler[] = [];
   private connectionHandlers: ConnectionHandler[] = [];
   private connectionStateHandlers: ConnectionStateHandler[] = [];
+  private reconnectHandlers: ReconnectHandler[] = [];
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private url: string;
   private _connected = false;
@@ -62,6 +64,11 @@ export class WsClient {
   private _attempt = 0;
   private _nextRetryMs = 0;
   private _stopped = false;
+  // False until the very first `onopen`. Any subsequent `onopen` is a
+  // reconnect, which is observable to subscribers via `onReconnect` so
+  // they can re-seed state the backend may have updated while we were
+  // offline (see W1: workflow.state snapshot).
+  private _hadFirstOpen = false;
 
   constructor(url?: string) {
     // Resolution order:
@@ -89,12 +96,22 @@ export class WsClient {
       }
 
       this.ws.onopen = () => {
+        const wasReconnect = this._hadFirstOpen;
+        this._hadFirstOpen = true;
         this._connected = true;
         this._reconnecting = false;
         this._attempt = 0;
         this._nextRetryMs = 0;
         this.emitState();
         this.notifyConnection(true);
+        // Fire reconnect handlers *after* the standard connection
+        // notification so subscribers that need a base `connected`
+        // signal don't race with reconcile logic.
+        if (wasReconnect) {
+          for (const h of this.reconnectHandlers) {
+            try { h(); } catch (e) { console.error('[WsClient] reconnect handler error:', e); }
+          }
+        }
         if (!settled) {
           settled = true;
           resolve();
@@ -212,6 +229,23 @@ export class WsClient {
   }
 
   /**
+   * Subscribe to reconnect events. Fires every time the socket
+   * re-opens after a prior successful connection (i.e. *not* on the
+   * initial connect). Subscribers typically use this to pull a
+   * backend state snapshot (e.g. `workflow.state`) and reconcile
+   * whatever they missed while offline.
+   *
+   * Handlers fire after `onConnection(true)` so they see a usable
+   * `connected` state if they gate on it.
+   */
+  onReconnect(handler: ReconnectHandler) {
+    this.reconnectHandlers.push(handler);
+    return () => {
+      this.reconnectHandlers = this.reconnectHandlers.filter((h) => h !== handler);
+    };
+  }
+
+  /**
    * Subscribe to rich connection state (connected + reconnect metadata).
    * Fires immediately with the current state so UI can render without races.
    */
@@ -256,6 +290,9 @@ export class WsClient {
     this.ws = null;
     this._connected = false;
     this._reconnecting = false;
+    // Explicit disconnect ends the session; a later connect() is a
+    // fresh one, not a reconnect, so don't fire reconcile handlers.
+    this._hadFirstOpen = false;
     this.emitState();
   }
 
