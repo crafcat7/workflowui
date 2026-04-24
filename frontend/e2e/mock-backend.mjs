@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// SPDX-FileCopyrightText: 2026 WorkflowUI contributors
 /**
  * Mock WebSocket backend for E2E tests.
  * Implements JSON-RPC 2.0 over WebSocket, mimicking the C++ backend.

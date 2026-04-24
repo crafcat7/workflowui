@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// SPDX-FileCopyrightText: 2026 WorkflowUI contributors
 import type { NodeTypes } from '@xyflow/react';
 import { InputImageNode } from './InputImageNode';
 import { InputTensorNode } from './InputTensorNode';

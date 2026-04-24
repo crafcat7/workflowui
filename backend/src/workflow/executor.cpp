@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// SPDX-FileCopyrightText: 2026 WorkflowUI contributors
 #include "executor.h"
 #include "handlers/core_handlers.h"
 #include <stdexcept>

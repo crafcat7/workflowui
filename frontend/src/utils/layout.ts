@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// SPDX-FileCopyrightText: 2026 WorkflowUI contributors
 import dagre from 'dagre';
 import { type Node, type Edge } from '@xyflow/react';
 

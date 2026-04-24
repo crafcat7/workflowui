@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (c) 2026 workflowUI contributors
+// SPDX-FileCopyrightText: 2026 WorkflowUI contributors
 #pragma once
 
 #include <filesystem>

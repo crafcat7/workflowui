@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// SPDX-FileCopyrightText: 2026 WorkflowUI contributors
 import { test, expect, type Page } from '@playwright/test';
 import { ChildProcess, fork } from 'child_process';
 import path from 'path';

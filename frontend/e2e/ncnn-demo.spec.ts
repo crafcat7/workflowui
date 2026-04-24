@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// SPDX-FileCopyrightText: 2026 WorkflowUI contributors
 /**
  * End-to-end simulation of a user loading the NCNN demo workflow,
  * running it against a real C++ backend process, and verifying that

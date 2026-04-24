@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// SPDX-FileCopyrightText: 2026 WorkflowUI contributors
 /**
  * LabeledHandle - A React Flow handle with a visible text label and data-type color coding.
  * Uses CSS classes for positioning so multiple handles on the same side don't overlap.

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// SPDX-FileCopyrightText: 2026 WorkflowUI contributors
 import { useToastStore } from '../store/toastStore';
 
 export function ToastContainer() {

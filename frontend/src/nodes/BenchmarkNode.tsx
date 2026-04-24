@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// SPDX-FileCopyrightText: 2026 WorkflowUI contributors
 import { Position, type Node, type NodeProps } from '@xyflow/react';
 import { LabeledHandle } from '../components/LabeledHandle';
 import type { WorkflowNodeData } from '../store/workflowStore';

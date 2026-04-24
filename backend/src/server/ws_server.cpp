@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// SPDX-FileCopyrightText: 2026 WorkflowUI contributors
 #include "ws_server.h"
 #include "security_config.h"
 #include <App.h>

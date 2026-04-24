@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// SPDX-FileCopyrightText: 2026 WorkflowUI contributors
 #include <gtest/gtest.h>
 #include "workflow/executor.h"
 #include "model/workflow_graph.h"
