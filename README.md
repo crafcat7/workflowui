@@ -24,7 +24,7 @@ A visual, programmable workbench for orchestrating inference pipelines. Build pi
 Three decoupled layers:
 
 - **Frontend** — React 19 + `@xyflow/react` + Zustand. Graph editor, transport client, execution coordinator (`WorkflowRunner`).
-- **Backend Wrapper** — C++17 WebSocket service built on uWebSockets. Hosts the capability registry, workflow scheduler/executor, debug controller, file-access security policy, and per-node handlers.
+- **Backend Wrapper** — C++17 WebSocket service built on uWebSockets. Hosts the workflow scheduler/executor, debug controller, file-access security policy, and per-node handlers.
 - **Vendor Layer** — Pure-virtual `InferenceEngine` base class. NCNN is the first real implementation; a stub engine is linked in when `-DENABLE_NCNN=OFF`.
 
 ### Wire protocol
@@ -35,7 +35,6 @@ Client → Server (requests):
 
 | Method | Purpose |
 |---|---|
-| `capabilities` | Returns registered vendors and operations |
 | `vendor.getConfigSchema` | Returns config fields supported by a vendor |
 | `workflow.execute` | Starts workflow execution on a background thread |
 | `debug.add_breakpoint` | Adds a breakpoint on a node |
@@ -192,8 +191,6 @@ The frontend palette (`frontend/src/nodes/index.ts`) exposes 11 node components:
 | Condition | control | Branching logic |
 | Debug | debug | Breakpoint / data inspection |
 
-The backend exposes 8 capability operations registered at startup: `init_net`, `execute`, `benchmark`, `read_image`, `read_tensor`, `save_file`, `condition`, `postprocess`.
-
 ## Debugging
 
 - Attach a Debug node anywhere in the graph and toggle its breakpoint.
@@ -243,7 +240,6 @@ workflowUI/
 │   ├── src/
 │   │   ├── main.cpp             # Entry point; CLI, RPC routing, engine bootstrap
 │   │   ├── server/              # ws_server + rpc_handler (uWS + JSON-RPC 2.0)
-│   │   ├── capability/          # registry (vendors + operations)
 │   │   ├── workflow/            # executor, scheduler, debug_controller, handlers/
 │   │   ├── model/               # node + workflow_graph data models
 │   │   ├── security/            # file_access policy (shared-dir sandbox)

@@ -54,7 +54,6 @@ set(BACKEND_SOURCES
   src/server/ws_server.cpp
   src/server/rpc_handler.cpp
   src/server/security_config.cpp
-  src/capability/registry.cpp
   src/workflow/executor.cpp
   src/workflow/scheduler.cpp
   src/workflow/debug_controller.cpp

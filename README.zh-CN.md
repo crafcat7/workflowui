@@ -35,7 +35,6 @@ WebSocket 监听路径为 `/*`，消息格式为 JSON-RPC 2.0。
 
 | 方法 | 作用 |
 |---|---|
-| `capabilities` | 返回已注册的 vendor 与 operation 列表 |
 | `vendor.getConfigSchema` | 查询某 vendor 的配置字段 |
 | `workflow.execute` | 在后台线程启动工作流执行 |
 | `debug.add_breakpoint` | 为某节点添加断点 |
@@ -214,7 +213,6 @@ workflowUI/
 │   ├── src/
 │   │   ├── main.cpp             # 入口：CLI、RPC 路由、引擎初始化
 │   │   ├── server/              # ws_server + rpc_handler（uWS + JSON-RPC 2.0）
-│   │   ├── capability/          # 能力注册表（vendors + operations）
 │   │   ├── workflow/            # executor、scheduler、debug_controller、handlers/
 │   │   ├── model/               # node 与 workflow_graph 数据模型
 │   │   ├── security/            # 文件访问策略（共享目录沙箱）

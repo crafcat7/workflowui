@@ -3,7 +3,6 @@
 #include "server/ws_server.h"
 #include "server/rpc_handler.h"
 #include "server/security_config.h"
-#include "capability/registry.h"
 #include "workflow/executor.h"
 #include "model/workflow_graph.h"
 #include "vendor/inference_engine.h"
@@ -163,27 +162,11 @@ int main(int argc, char* argv[]) {
     std::cout << "[Backend] Using stub engine (NCNN not enabled)\n";
 #endif
 
-    // ── Capability registry ──
-    CapabilityRegistry capabilities;
-    capabilities.register_vendor(engine->name());
-    capabilities.register_operation({"init_net", {"model_path", "config"}, {"net_handle"}, "Initialize neural network"});
-    capabilities.register_operation({"execute", {"net_handle", "input_data"}, {"output_data"}, "Run inference"});
-    capabilities.register_operation({"benchmark", {"net_handle", "input_data", "duration_sec"}, {"runs", "avg_ms"}, "Benchmark inference"});
-    capabilities.register_operation({"read_image", {"file_path"}, {"image_data"}, "Read image file"});
-    capabilities.register_operation({"read_tensor", {}, {"tensor_data"}, "Read tensor from text"});
-    capabilities.register_operation({"save_file", {"data", "file_path"}, {}, "Save data to file"});
-    capabilities.register_operation({"condition", {"input_data", "expression"}, {"true_branch", "false_branch"}, "Conditional branch"});
-    capabilities.register_operation({"postprocess", {"input_data", "op", "iouThreshold", "k"}, {"output_data"}, "Postprocess outputs"});
-
     // ── Executor ──
     auto executor = std::make_shared<Executor>(engine);
 
     // ── RPC Handler ──
     RpcHandler rpc;
-
-    rpc.register_method("capabilities", [&](const json&) -> json {
-        return capabilities.to_json();
-    });
 
     rpc.register_method("vendor.getConfigSchema", [&](const json&) -> json {
         json result;

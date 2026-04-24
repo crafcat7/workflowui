@@ -47,16 +47,8 @@ function assert(condition, label) {
 }
 
 async function runTests() {
-  // ── Test 1: capabilities ──
-  console.log('\n[Test 1] capabilities');
-  const caps = await send('capabilities');
-  assert(caps && caps.vendors && caps.vendors.length > 0, 'has vendor field');
-  assert(Array.isArray(caps.operations), 'has operations array');
-  assert(caps.operations.length > 0, 'operations not empty');
-  assert(caps.vendors[0] === 'stub' || caps.vendors[0] === 'ncnn', 'vendor is stub or ncnn');
-
-  // ── Test 2: unknown method ──
-  console.log('\n[Test 2] unknown method');
+  // ── Test 1: unknown method ──
+  console.log('\n[Test 1] unknown method');
   try {
     await send('nonexistent');
     assert(false, 'should have thrown');
@@ -66,8 +58,8 @@ async function runTests() {
     assert(true, 'handled gracefully');
   }
 
-  // ── Test 3: workflow.execute with simple graph ──
-  console.log('\n[Test 3] workflow.execute (simple 2-node graph)');
+  // ── Test 2: workflow.execute with simple graph ──
+  console.log('\n[Test 2] workflow.execute (simple 2-node graph)');
   notifications.length = 0;
 
   const execResult = await send('workflow.execute', {
@@ -96,16 +88,16 @@ async function runTests() {
   console.log(`  workflow.complete notifications: ${completeNotifs.length}`);
   assert(completeNotifs.length >= 1, 'got workflow.complete notification');
 
-  // ── Test 4: debug.add_breakpoint / remove_breakpoint ──
-  console.log('\n[Test 4] debug breakpoints');
+  // ── Test 3: debug.add_breakpoint / remove_breakpoint ──
+  console.log('\n[Test 3] debug breakpoints');
   const addBp = await send('debug.add_breakpoint', { node_id: 'n1' });
   assert(addBp && addBp.ok === true, 'add_breakpoint ok');
 
   const rmBp = await send('debug.remove_breakpoint', { node_id: 'n1' });
   assert(rmBp && rmBp.ok === true, 'remove_breakpoint ok');
 
-  // ── Test 5: workflow with debug breakpoint ──
-  console.log('\n[Test 5] workflow with breakpoint');
+  // ── Test 4: workflow with debug breakpoint ──
+  console.log('\n[Test 4] workflow with breakpoint');
   notifications.length = 0;
 
   await send('debug.add_breakpoint', { node_id: 'n2' });
@@ -133,8 +125,8 @@ async function runTests() {
 
   await send('debug.remove_breakpoint', { node_id: 'n2' });
 
-  // ── Test 6: postprocess NMS ──
-  console.log('\n[Test 6] workflow with postprocess');
+  // ── Test 5: postprocess NMS ──
+  console.log('\n[Test 5] workflow with postprocess');
   notifications.length = 0;
 
   await send('workflow.execute', {
