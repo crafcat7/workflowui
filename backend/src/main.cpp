@@ -17,6 +17,39 @@
 #include <vector>
 #include <nlohmann/json.hpp>
 
+#include <csignal>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <unistd.h>
+#include <execinfo.h>
+
+// Async-signal-safe-ish crash reporter. WSL swallows core dumps and gdb is
+// not installed in our dev container, so we self-print a backtrace on fatal
+// signals. Uses backtrace()/backtrace_symbols_fd(); symbols require the
+// binary to be linked with -rdynamic (added in CMake below).
+namespace {
+void crash_handler(int sig) {
+    void* frames[64];
+    int n = backtrace(frames, 64);
+    const char* name = strsignal(sig);
+    // Write(2) is signal-safe; iostreams are not.
+    char hdr[128];
+    int hl = std::snprintf(hdr, sizeof(hdr), "\n[CRASH] signal %d (%s), backtrace (%d frames):\n",
+                           sig, name ? name : "?", n);
+    if (hl > 0) (void)!write(STDERR_FILENO, hdr, static_cast<size_t>(hl));
+    backtrace_symbols_fd(frames, n, STDERR_FILENO);
+    std::signal(sig, SIG_DFL);
+    std::raise(sig);
+}
+
+void install_crash_handlers() {
+    for (int s : {SIGSEGV, SIGABRT, SIGBUS, SIGFPE, SIGILL}) {
+        std::signal(s, crash_handler);
+    }
+}
+}  // namespace
+
 using namespace workflow;
 using json = nlohmann::json;
 
@@ -45,6 +78,7 @@ public:
 };
 
 int main(int argc, char* argv[]) {
+    install_crash_handlers();
     // ── CLI parsing ──
     // Accepts a legacy positional port (`./backend 9091`) for back-compat
     // plus long flags for the security knobs. Kept deliberately minimal;

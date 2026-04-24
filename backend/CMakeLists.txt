@@ -70,6 +70,12 @@ endif()
 
 add_executable(workflow_backend ${BACKEND_SOURCES})
 
+# -rdynamic so backtrace_symbols() in the signal crash reporter can resolve
+# our own symbols (not just libc).
+if(NOT WIN32)
+  set_target_properties(workflow_backend PROPERTIES ENABLE_EXPORTS ON)
+endif()
+
 target_include_directories(workflow_backend PRIVATE
   src
   "${uwebsockets_SOURCE_DIR}/src"
