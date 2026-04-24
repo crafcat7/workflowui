@@ -66,16 +66,25 @@ void WsServer::run() {
     });
 
     // uWS::Loop is tied to the calling thread. Capturing it here lets
-    // broadcast() on other threads marshal work back in via `defer`.
-    loop_ = (void*)uWS::Loop::get();
-
-    publish_fn_ = [&app](std::string msg) {
-        app.publish(BROADCAST_TOPIC, msg, uWS::OpCode::TEXT);
-    };
+    // broadcast() on other threads marshal work back in via `defer`. The
+    // lock pairs with broadcast()'s snapshot and with the tear-down below
+    // so a concurrent broadcast() never observes a half-initialized or
+    // half-destroyed publisher.
+    {
+        std::lock_guard<std::mutex> lock(publisher_mu_);
+        loop_ = (void*)uWS::Loop::get();
+        publish_fn_ = [&app](std::string msg) {
+            app.publish(BROADCAST_TOPIC, msg, uWS::OpCode::TEXT);
+        };
+    }
 
     app.run();
-    publish_fn_ = nullptr;
-    loop_ = nullptr;
+
+    {
+        std::lock_guard<std::mutex> lock(publisher_mu_);
+        publish_fn_ = nullptr;
+        loop_ = nullptr;
+    }
 }
 
 void WsServer::broadcast(const std::string& method, const json& params) {
@@ -86,12 +95,20 @@ void WsServer::broadcast(const std::string& method, const json& params) {
 
     std::string msg = notification.dump();
 
-    if (loop_ && publish_fn_) {
-        auto fn = publish_fn_;
-        ((uWS::Loop*)loop_)->defer([fn, msg = std::move(msg)]() {
-            if (fn) {
-                fn(msg);
-            }
+    // Snapshot the publisher under the lock so the event-loop pointer and
+    // the publish functor can't be torn down between our null-check and
+    // the defer() call below.
+    void* loop = nullptr;
+    std::function<void(std::string)> fn;
+    {
+        std::lock_guard<std::mutex> lock(publisher_mu_);
+        loop = loop_;
+        fn = publish_fn_;
+    }
+
+    if (loop && fn) {
+        ((uWS::Loop*)loop)->defer([fn = std::move(fn), msg = std::move(msg)]() {
+            fn(msg);
         });
     }
 }

@@ -3,6 +3,7 @@
 #pragma once
 #include "rpc_handler.h"
 #include <functional>
+#include <mutex>
 #include <string>
 
 namespace workflow {
@@ -25,7 +26,11 @@ private:
     int port_;
     RpcHandler& handler_;
 
-    // For thread-safe broadcasting: queue messages and defer to event loop
+    // `publish_fn_` and `loop_` are written by the uWS thread in run() and
+    // read by broadcast() from arbitrary threads. The mutex guards the pair
+    // as a unit so broadcast() never sees a half-torn publisher during
+    // shutdown.
+    std::mutex publisher_mu_;
     std::function<void(std::string)> publish_fn_;
     void* loop_ = nullptr;  // uWS::Loop*, stored as void* to avoid header dep
 };
