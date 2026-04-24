@@ -75,14 +75,14 @@ Target: bring every hand-written source file to the canonical
 - [ ] frontend/src/App.test.tsx
 - [ ] (possible others: SaveImageNode.tsx — check)
 
-## Batch 2 — Debug prints & noise (behavior-neutral)
+## Batch 2 — Debug prints & noise (behavior-neutral)  [DONE @ 487a872]
 
-- [ ] backend/src/workflow/handlers/core_handlers.cpp:107  remove `[PostprocessHandler] Output size:` cout (and unused `<iostream>` if becomes unused).
-- [ ] backend/src/main.cpp:66  remove `[Stub] init_net called` trace inside StubEngine.
-- [ ] frontend/src/main.tsx:10  remove `console.log('Connected to backend')` (keep the warn on catch).
-- [ ] frontend/src/transport/WsClient.ts:96  remove `console.log('[WsClient] Connected to', …)`.
-- [ ] frontend/src/transport/WsClient.ts:142  remove `console.log('[WsClient] Reconnect attempt …')`.
-- [ ] frontend/src/engine/WorkflowRunner.ts:94  remove the TODO capabilities log + decide fate of that case (delete case or wire up — go with delete for now since nothing depends on it).
+- [x] backend/src/workflow/handlers/core_handlers.cpp:107  remove `[PostprocessHandler] Output size:` cout (and unused `<iostream>` if becomes unused).
+- [x] backend/src/main.cpp:66  remove `[Stub] init_net called` trace inside StubEngine.
+- [x] frontend/src/main.tsx:10  remove `console.log('Connected to backend')` (keep the warn on catch).
+- [x] frontend/src/transport/WsClient.ts:96  remove `console.log('[WsClient] Connected to', …)`.
+- [x] frontend/src/transport/WsClient.ts:142  remove `console.log('[WsClient] Reconnect attempt …')`.
+- [x] frontend/src/engine/WorkflowRunner.ts:94  remove the TODO capabilities log + decide fate of that case (delete case or wire up — go with delete for now since nothing depends on it).
 
 Keeps (operator logs, NOT findings): ws_server banners, crash backtrace, stub/ncnn engine startup announcement.
 
@@ -104,24 +104,24 @@ Keeps (operator logs, NOT findings): ws_server banners, crash backtrace, stub/nc
 - [ ] frontend/src/store/workflowStore.ts:259-265  fix or remove the stale "nudge handleSet" comment in `resumeHistory`. Keep behavior; just drop misleading comment.
 - [ ] frontend/src/engine/WorkflowRunner.ts  if capabilities stub is deleted above, also remove the unused helper if it becomes dead.
 
-## Batch 5 — Unused includes (backend, mechanical, low risk)
+## Batch 5 — Unused includes (backend, mechanical, low risk)  [DONE @ 487a872]
 
-- [ ] backend/src/workflow/executor.cpp  drop `<chrono>`, `<fstream>`, `<sstream>`, `<iostream>`.
-- [ ] backend/src/workflow/handlers/core_handlers.cpp  drop duplicate `<numeric>` (line 9) and unused `<cmath>`; drop `<iostream>` after debug print removed.
-- [ ] backend/src/workflow/handlers/core_handlers.h  drop `<vector>`.
-- [ ] backend/src/capability/registry.h  drop `<functional>`.
-- [ ] backend/src/model/node.h  drop `<memory>`.
+- [x] backend/src/workflow/executor.cpp  drop `<chrono>`, `<fstream>`, `<sstream>`, `<iostream>`.
+- [x] backend/src/workflow/handlers/core_handlers.cpp  drop duplicate `<numeric>` (line 9) and unused `<cmath>`; drop `<iostream>` after debug print removed.
+- [x] backend/src/workflow/handlers/core_handlers.h  drop `<vector>`.
+- [x] backend/src/capability/registry.h  drop `<functional>`.
+- [x] backend/src/model/node.h  drop `<memory>` (add explicit `<cstdint>`).
 
-## Batch 6 — Misleading / stale comments (low risk, high value)
+## Batch 6 — Misleading / stale comments (low risk, high value)  [PARTIAL @ 487a872]
 
-- [ ] backend/src/workflow/executor.cpp:50-52  shorten Debug-type pause comment to "// Pause before execution if this node has a breakpoint set, or if we are stepping."
-- [ ] backend/src/workflow/debug_controller.h:32-33  update `should_pause` doc to mention stepping.
-- [ ] backend/src/workflow/handlers/core_handlers.cpp:21-23  clarify `resolve_path` comment (remove "unchanged" claim).
-- [ ] backend/src/server/ws_server.cpp:69  drop the "Store loop and publish function…" what-comment.
-- [ ] backend/src/server/security_config.h:40-41  fix the stale "caller is responsible for creating it" claim.
-- [ ] frontend/src/hooks/useKeyboardShortcuts.ts:22,134-136  minor reword per audit.
-- [ ] backend/src/workflow/handlers/core_handlers.cpp:263  rename `final_output` → `sample_output` inside BenchmarkHandler (file-local) and tighten its comment.
-- [ ] backend/src/workflow/executor.cpp:134-138  drop redundant `if (!extra.empty())` guard in notify_status.
+- [x] backend/src/workflow/executor.cpp:50-52  shorten Debug-type pause comment.
+- [x] backend/src/workflow/debug_controller.h:32-33  update `should_pause` doc.
+- [x] backend/src/workflow/handlers/core_handlers.cpp:21-23  clarify `resolve_path` comment.
+- [x] backend/src/server/ws_server.cpp:69  replace the "Store loop and publish function…" what-comment with rationale.
+- [x] backend/src/server/security_config.h:40-41  fix the stale "caller is responsible for creating it" claim.
+- [-] frontend/src/hooks/useKeyboardShortcuts.ts:22,134-136  minor reword — SKIPPED (current wording already clear).
+- [x] backend/src/workflow/handlers/core_handlers.cpp:263  rename `final_output` → `sample_output` and tighten comment.
+- [x] backend/src/workflow/executor.cpp:134-138  drop redundant `if (!extra.empty())` guard.
 
 ## Batch 7 — Type-safety clean-ups (frontend)
 

@@ -46,7 +46,6 @@ public:
     void stop();
 
     bool is_stopped() const { return stopped_.load(); }
-    bool is_stepping() const { return stepping_.load(); }
 
     /**
      * Reset pause/stop/step flags for a new run. Does NOT clear breakpoints

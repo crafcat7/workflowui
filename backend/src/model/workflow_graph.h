@@ -11,7 +11,6 @@ namespace workflow {
  */
 class WorkflowGraph {
 public:
-    void clear();
     void add_node(const NodeDef& node);
     void add_edge(const EdgeDef& edge);
 

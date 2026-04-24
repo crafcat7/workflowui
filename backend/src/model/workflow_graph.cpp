@@ -5,12 +5,6 @@
 
 namespace workflow {
 
-void WorkflowGraph::clear() {
-    nodes_.clear();
-    edges_.clear();
-    node_index_.clear();
-}
-
 void WorkflowGraph::add_node(const NodeDef& node) {
     node_index_[node.id] = nodes_.size();
     nodes_.push_back(node);

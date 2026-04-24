@@ -7,9 +7,6 @@ namespace workflow {
 
 using json = nlohmann::json;
 
-// Callback: send JSON message to a specific client
-using SendCallback = std::function<void(const std::string& message)>;
-
 /**
  * Routes incoming JSON-RPC requests to appropriate handlers.
  */

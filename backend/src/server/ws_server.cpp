@@ -17,8 +17,6 @@ WsServer::WsServer(int port, RpcHandler& handler)
     : port_(port), handler_(handler) {}
 
 void WsServer::run() {
-    running_ = true;
-
     auto app = uWS::App();
 
     app.ws<PerSocketData>("/*", {
@@ -62,7 +60,6 @@ void WsServer::run() {
             std::cout << "[WS] Server listening on port " << port_ << "\n";
         } else {
             std::cerr << "[WS] Failed to listen on port " << port_ << "\n";
-            running_ = false;
         }
     });
 
@@ -77,10 +74,6 @@ void WsServer::run() {
     app.run();
     publish_fn_ = nullptr;
     loop_ = nullptr;
-}
-
-void WsServer::stop() {
-    running_ = false;
 }
 
 void WsServer::broadcast(const std::string& method, const json& params) {

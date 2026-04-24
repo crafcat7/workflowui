@@ -25,9 +25,6 @@ public:
 
     json to_json() const;
 
-    const std::vector<std::string>& vendors() const { return vendors_; }
-    const std::vector<OperationDef>& operations() const { return operations_; }
-
 private:
     std::vector<std::string> vendors_;
     std::vector<OperationDef> operations_;

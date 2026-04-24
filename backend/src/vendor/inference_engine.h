@@ -10,11 +10,9 @@ namespace workflow {
 using Duration = std::chrono::milliseconds;
 
 struct NetConfig {
-    std::string vendor;        // vendor identifier (e.g. "ncnn", "mnn", "onnx")
     std::string model_path;
     std::string param_path;
     int num_threads = 1;
-    bool use_gpu = false;
     // Named blob support
     std::string input_name = "data";
     std::string output_name = "output";
