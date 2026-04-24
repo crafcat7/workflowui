@@ -230,6 +230,19 @@ export function initWorkflowRunner() {
         if (update.runs_count !== undefined) dataUpdate.runsCount = update.runs_count;
         if (update.avg_ms !== undefined) dataUpdate.avgMs = update.avg_ms;
 
+        // Mirror the error string onto the node itself so PropertiesPanel
+        // can surface it inline. The console log + toast still fire, but
+        // a user who clicks on the red node afterwards shouldn't have to
+        // hunt through a scrolled-away console to find *why* it failed.
+        // Explicitly clear the field on a successful `done` status so a
+        // subsequent re-run that succeeds doesn't leave stale red text
+        // under a green badge.
+        if (update.error) {
+          dataUpdate.error = update.kind ? `[${update.kind}] ${update.error}` : update.error;
+        } else if (update.status === 'done') {
+          dataUpdate.error = undefined;
+        }
+
         if (Object.keys(dataUpdate).length > 0) {
           store.updateNodeData(update.node_id, dataUpdate);
         }

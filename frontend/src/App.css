@@ -253,6 +253,18 @@
 .props-status-badge.error { background: #3a1a1a; color: #e08080; }
 .props-status-badge.paused { background: #3a2a1a; color: #e0c080; }
 
+.props-error {
+  font-size: 11px;
+  color: #ffa0a0;
+  background: #2a0e0e;
+  border-left: 2px solid #c04040;
+  padding: 6px 8px;
+  margin: 6px 0;
+  word-break: break-word;
+  white-space: pre-wrap;
+  font-family: 'Consolas', 'Monaco', monospace;
+}
+
 .props-elapsed {
   font-size: 10px;
   color: #4080d0;

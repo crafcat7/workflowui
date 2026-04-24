@@ -412,12 +412,25 @@ function NodeIdentity({ data, id }: { data: WorkflowNodeData; id: string }) {
 }
 
 function NodeStatusRow({ data }: { data: WorkflowNodeData }) {
+  // `error` is set by WorkflowRunner when a node.status update carries an
+  // `error` string (runtime failures, upstream_failed, invalid_config, …)
+  // and also by S1's validation_failed handler for graph-level problems.
+  // The console log is the primary surface, but a user who dismissed the
+  // toast and then clicks the red node deserves to see *why* right here,
+  // not to have to scroll back through the console. Missing/undefined
+  // means either success or a run before any error fired.
+  const errorText = (data as WorkflowNodeData & { error?: string }).error;
   return (
     <>
       <div className="props-status-row">
         <span className="props-status-label">STATUS</span>
         <span className={`props-status-badge ${data.status}`}>{data.status.toUpperCase()}</span>
       </div>
+      {errorText && (
+        <div className="props-error" role="alert">
+          {errorText}
+        </div>
+      )}
       {data.elapsedMs !== undefined && (
         <div className="props-elapsed">Elapsed: {data.elapsedMs.toFixed(1)}ms</div>
       )}

@@ -39,7 +39,7 @@ function rebuildNodesById(
  * JSON so that pressing Ctrl+Z after a run undoes the last *edit* rather than
  * the last status tick.
  */
-const RUNTIME_DATA_KEYS = ['status', 'elapsedMs', 'output', 'runsCount', 'avgMs'] as const;
+const RUNTIME_DATA_KEYS = ['status', 'elapsedMs', 'output', 'runsCount', 'avgMs', 'error'] as const;
 
 export interface WorkflowNodeData {
   label: string;
