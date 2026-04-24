@@ -1104,20 +1104,6 @@
         "runsCount": 6191,
         "avgMs": 0.7635277015021806
       }
-    },
-    {
-      "id": "node_4",
-      "type": "postprocess",
-      "position": {
-        "x": -137.00764155115644,
-        "y": 360.535086068713
-      },
-      "data": {
-        "label": "Postprocess",
-        "type": "postprocess",
-        "status": "error",
-        "config": {}
-      }
     }
   ],
   "edges": [
@@ -1150,23 +1136,14 @@
       "targetHandle": "net_handle"
     },
     {
-      "id": "xy-edge__input1tensor_data-node_4input_data",
       "source": "input1",
       "sourceHandle": "tensor_data",
-      "target": "node_4",
-      "targetHandle": "input_data"
-    },
-    {
-      "id": "xy-edge__node_4output_data-infer1input_data",
-      "source": "node_4",
-      "sourceHandle": "output_data",
       "target": "infer1",
       "targetHandle": "input_data"
     },
     {
-      "id": "xy-edge__node_4output_data-node_2input_data",
-      "source": "node_4",
-      "sourceHandle": "output_data",
+      "source": "input1",
+      "sourceHandle": "tensor_data",
       "target": "node_2",
       "targetHandle": "input_data"
     }

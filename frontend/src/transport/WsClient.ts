@@ -64,7 +64,20 @@ export class WsClient {
   private _stopped = false;
 
   constructor(url?: string) {
-    this.url = url ?? (import.meta as unknown as Record<string, Record<string, string>>)?.env?.VITE_WS_URL ?? 'ws://localhost:9090';
+    // Resolution order:
+    //   1. explicit constructor arg (tests / advanced embedding)
+    //   2. window.__VITE_WS_URL_OVERRIDE__ (E2E init-script injection; must
+    //      win over build-time env so a single built bundle can point at a
+    //      different backend per Playwright spec)
+    //   3. Vite build-time env VITE_WS_URL
+    //   4. hard default (matches backend's default listen port)
+    const runtimeOverride = typeof window !== 'undefined'
+      ? (window as unknown as { __VITE_WS_URL_OVERRIDE__?: string }).__VITE_WS_URL_OVERRIDE__
+      : undefined;
+    this.url = url
+      ?? runtimeOverride
+      ?? (import.meta as unknown as Record<string, Record<string, string>>)?.env?.VITE_WS_URL
+      ?? 'ws://localhost:9090';
   }
 
   connect(): Promise<void> {
