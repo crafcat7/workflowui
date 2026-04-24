@@ -278,3 +278,34 @@ TEST(ExecutorTest, BreakpointPausesAndResumes) {
     runner.join();
     EXPECT_TRUE(completed.load());
 }
+
+// Regression: net handles produced by `createNet` must not leak across
+// runs. Before architecture-audit §M1 the engine's `destroy_net` had no
+// callers, so every re-run permanently accumulated handles.
+TEST(ExecutorTest, ReleasesNetHandlesBetweenRuns) {
+    auto engine = std::make_shared<MockEngine>();
+    Executor executor(engine);
+
+    WorkflowGraph g;
+    NodeDef net;
+    net.id = "net";
+    net.type = "createNet";
+    net.config["emptyWeights"] = "true";
+    g.add_node(net);
+
+    executor.execute(g);
+    ASSERT_EQ(engine->live_handles.size(), 1u);
+
+    // Second run: the first handle should be released before the new
+    // one is allocated.
+    executor.execute(g);
+    EXPECT_EQ(engine->live_handles.size(), 1u);
+
+    // And destructing the executor must release the last live handle.
+    {
+        Executor one_shot(engine);
+        one_shot.execute(g);
+        EXPECT_EQ(engine->live_handles.size(), 2u);
+    }
+    EXPECT_EQ(engine->live_handles.size(), 1u);
+}

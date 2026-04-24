@@ -28,6 +28,7 @@ using PauseCallback = std::function<void(const std::string& node_id, const json&
 class Executor : public ExecutionContext {
 public:
     explicit Executor(std::shared_ptr<InferenceEngine> engine);
+    ~Executor() override;
 
     void set_status_callback(StatusCallback cb) { status_cb_ = std::move(cb); }
     void set_pause_callback(PauseCallback cb) { pause_cb_ = std::move(cb); }

@@ -6,9 +6,35 @@
 
 namespace workflow {
 
+namespace {
+
+// Destroy every net handle currently held in `port_data_` and erase those
+// entries. `int64_t` variant slot is reserved for `NetHandle` per
+// `model/node.h`, so a type-based sweep is sufficient and doesn't need a
+// separate tracking list.
+void release_net_handles(InferenceEngine& engine,
+                         std::unordered_map<std::string, PortValue>& port_data) {
+    for (auto it = port_data.begin(); it != port_data.end(); ) {
+        if (auto* handle = std::get_if<int64_t>(&it->second)) {
+            engine.destroy_net(*handle);
+            it = port_data.erase(it);
+        } else {
+            ++it;
+        }
+    }
+}
+
+} // namespace
+
 Executor::Executor(std::shared_ptr<InferenceEngine> engine)
     : engine_(std::move(engine)) {
     register_handlers();
+}
+
+Executor::~Executor() {
+    if (engine_) {
+        release_net_handles(*engine_, port_data_);
+    }
 }
 
 void Executor::register_handlers() {
@@ -17,6 +43,12 @@ void Executor::register_handlers() {
 
 void Executor::execute(const WorkflowGraph& graph) {
     debug_.reset();
+    // Release nets created by the previous run before we drop the port
+    // map; without this, `init_net` handles leak for the whole process
+    // lifetime (inference_engine.h:89 `destroy_net` had no callers).
+    if (engine_) {
+        release_net_handles(*engine_, port_data_);
+    }
     port_data_.clear();
     dead_ports_.clear();
 
