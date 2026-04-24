@@ -13,6 +13,7 @@ import { useWorkflowStore, type WorkflowNodeData } from './workflowStore';
 function resetStore() {
   useWorkflowStore.setState({
     nodes: [],
+    nodesById: new Map(),
     edges: [],
     selectedNodeId: null,
     isRunning: false,
@@ -145,7 +146,7 @@ describe('workflowStore removeNode / duplicateNode', () => {
     });
     const newId = s.duplicateNode('a');
     expect(newId).toBeTruthy();
-    const clone = useWorkflowStore.getState().nodes.find((n) => n.id === newId)!;
+    const clone = useWorkflowStore.getState().getNodeById(newId!)!;
     expect(clone.position).toEqual({ x: 50, y: 60 });
     const d = clone.data as WorkflowNodeData;
     expect(d.status).toBe('idle');
@@ -156,5 +157,79 @@ describe('workflowStore removeNode / duplicateNode', () => {
 
   it('duplicateNode returns null for unknown id', () => {
     expect(useWorkflowStore.getState().duplicateNode('nope')).toBeNull();
+  });
+});
+
+describe('workflowStore nodesById cache', () => {
+  beforeEach(resetStore);
+
+  // Shared factory for the trio of tests below — cache correctness
+  // is a cross-cutting invariant, not something one scenario owns.
+  const seedNode = (id: string): void => {
+    useWorkflowStore.getState().addNode({
+      id,
+      type: 'inputImage',
+      position: { x: 0, y: 0 },
+      data: { label: id, type: 'inputImage', status: 'idle', config: {} } as WorkflowNodeData,
+    });
+  };
+
+  it('getNodeById returns the node after addNode and undefined for unknown ids', () => {
+    // The whole point of the F1 cache is to replace an O(n) `.find`
+    // with an O(1) Map lookup; verify the selector actually resolves
+    // the seeded node and reports `undefined` (not `null`) for misses.
+    seedNode('a');
+    const s = useWorkflowStore.getState();
+    expect(s.getNodeById('a')?.id).toBe('a');
+    expect(s.getNodeById('missing')).toBeUndefined();
+  });
+
+  it('keeps nodesById in sync across addNode / updateNodeStatus / removeNode', () => {
+    // Every mutator is supposed to rebuild nodesById; this test
+    // pins that invariant across the three shapes of mutation
+    // (append, mutate-in-place, delete) so a future refactor that
+    // forgets one path fails loudly instead of silently returning
+    // stale references.
+    seedNode('a');
+    seedNode('b');
+    useWorkflowStore.getState().updateNodeStatus('a', 'running');
+
+    const afterUpdate = useWorkflowStore.getState();
+    expect(afterUpdate.getNodeById('a')?.data.status).toBe('running');
+    // Cache entry must be the same object reference as the array
+    // element — otherwise selectors would tear against the canvas.
+    expect(afterUpdate.getNodeById('a')).toBe(
+      afterUpdate.nodes.find((n) => n.id === 'a'),
+    );
+
+    useWorkflowStore.getState().removeNode('a');
+    const afterRemove = useWorkflowStore.getState();
+    expect(afterRemove.getNodeById('a')).toBeUndefined();
+    expect(afterRemove.getNodeById('b')?.id).toBe('b');
+    expect(afterRemove.nodesById.size).toBe(afterRemove.nodes.length);
+  });
+
+  it('rebuilds nodesById after importWorkflow', () => {
+    // importWorkflow replaces the whole array; the cache must be
+    // regenerated from the imported nodes, not merged with the old
+    // state (which would resurrect dead ids).
+    seedNode('stale');
+    const payload = JSON.stringify({
+      version: 1,
+      nodes: [
+        {
+          id: 'fresh',
+          type: 'inputImage',
+          position: { x: 1, y: 2 },
+          data: { label: 'fresh', type: 'inputImage', status: 'idle', config: {} },
+        },
+      ],
+      edges: [],
+    });
+    useWorkflowStore.getState().importWorkflow(payload);
+    const s = useWorkflowStore.getState();
+    expect(s.getNodeById('stale')).toBeUndefined();
+    expect(s.getNodeById('fresh')?.id).toBe('fresh');
+    expect(s.nodesById.size).toBe(1);
   });
 });

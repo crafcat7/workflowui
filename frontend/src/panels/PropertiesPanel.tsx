@@ -79,8 +79,10 @@ function useVendorSchema() {
 // ---------------------------------------------------------------------------
 
 export function PropertiesPanel() {
-  const { nodes, selectedNodeId, updateNodeData } = useWorkflowStore();
-  const selectedNode = nodes.find((n) => n.id === selectedNodeId);
+  const { selectedNodeId, updateNodeData } = useWorkflowStore();
+  const selectedNode = useWorkflowStore((s) =>
+    selectedNodeId ? s.nodesById.get(selectedNodeId) : undefined,
+  );
 
   return (
     <div className="properties-panel">

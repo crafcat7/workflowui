@@ -14,6 +14,26 @@ import {
 export type NodeStatus = 'idle' | 'running' | 'done' | 'error' | 'paused' | 'skipped';
 
 /**
+ * Per-store id → node index. Rebuilt on every mutating action that
+ * changes the `nodes` array, then read back through `getNodeById`
+ * instead of the O(n) `nodes.find(n => n.id === id)` pattern that
+ * had spread across panels, hooks and the edge-validation hot path.
+ *
+ * React Flow still owns the authoritative array (its diffing and
+ * `applyNodeChanges` need array semantics), so this is a cache, not
+ * a replacement. The cache invariant: after every `set({ nodes })`
+ * we call `rebuildNodesById(nodes)`; consumers that read `nodesById`
+ * out-of-band therefore never see it diverge from `nodes`.
+ */
+function rebuildNodesById(
+  nodes: ReadonlyArray<Node<WorkflowNodeData>>,
+): Map<string, Node<WorkflowNodeData>> {
+  const m = new Map<string, Node<WorkflowNodeData>>();
+  for (const n of nodes) m.set(n.id, n);
+  return m;
+}
+
+/**
  * Fields that represent *runtime* execution state (as opposed to user-authored
  * workflow definition). These are excluded from undo snapshots and from export
  * JSON so that pressing Ctrl+Z after a run undoes the last *edit* rather than
@@ -46,6 +66,8 @@ function stripNodesForSnapshot(nodes: Node<WorkflowNodeData>[]): Node<WorkflowNo
 
 interface WorkflowState {
   nodes: Node<WorkflowNodeData>[];
+  /** Id-keyed mirror of `nodes` kept in sync by every mutator. Read via `getNodeById`, not directly, so the cache-vs-array invariant stays encapsulated. */
+  nodesById: Map<string, Node<WorkflowNodeData>>;
   edges: Edge[];
   selectedNodeId: string | null;
   isRunning: boolean;
@@ -61,6 +83,8 @@ interface WorkflowState {
   updateNodeData: (id: string, data: Partial<WorkflowNodeData>) => void;
   updateNodeStatus: (id: string, status: NodeStatus) => void;
   setRunning: (running: boolean) => void;
+  /** O(1) id lookup replacing `state.nodes.find(n => n.id === id)`. Returns `undefined` when the id is not present (matching Map semantics). */
+  getNodeById: (id: string) => Node<WorkflowNodeData> | undefined;
   exportWorkflow: () => string;
   importWorkflow: (json: string) => void;
 }
@@ -72,12 +96,14 @@ export const useWorkflowStore = create<WorkflowState>()(
   temporal(
     (set, get) => ({
       nodes: [],
+      nodesById: new Map(),
       edges: [],
       selectedNodeId: null,
       isRunning: false,
 
       onNodesChange: (changes) => {
-        set({ nodes: applyNodeChanges(changes, get().nodes) as Node<WorkflowNodeData>[] });
+        const next = applyNodeChanges(changes, get().nodes) as Node<WorkflowNodeData>[];
+        set({ nodes: next, nodesById: rebuildNodesById(next) });
       },
 
       onEdgesChange: (changes) => {
@@ -89,23 +115,28 @@ export const useWorkflowStore = create<WorkflowState>()(
       },
 
       setNodes: (nodes) => {
-        set({ nodes });
+        set({ nodes, nodesById: rebuildNodesById(nodes) });
       },
 
       setSelectedNode: (id) => set({ selectedNodeId: id }),
 
-      addNode: (node) => set({ nodes: [...get().nodes, node] }),
+      addNode: (node) => {
+        const nodes = [...get().nodes, node];
+        set({ nodes, nodesById: rebuildNodesById(nodes) });
+      },
 
       removeNode: (id) => {
+        const nodes = get().nodes.filter((n) => n.id !== id);
         set({
-          nodes: get().nodes.filter((n) => n.id !== id),
+          nodes,
+          nodesById: rebuildNodesById(nodes),
           edges: get().edges.filter((e) => e.source !== id && e.target !== id),
           selectedNodeId: get().selectedNodeId === id ? null : get().selectedNodeId,
         });
       },
 
       duplicateNode: (id) => {
-        const src = get().nodes.find((n) => n.id === id);
+        const src = get().nodesById.get(id);
         if (!src) return null;
         const newId = generateNodeId();
         const clone: Node<WorkflowNodeData> = {
@@ -116,27 +147,28 @@ export const useWorkflowStore = create<WorkflowState>()(
           // Deep-copy data and strip runtime fields so the clone starts idle.
           data: stripRuntimeFields({ ...(src.data as WorkflowNodeData) }),
         };
-        set({ nodes: [...get().nodes, clone], selectedNodeId: newId });
+        const nodes = [...get().nodes, clone];
+        set({ nodes, nodesById: rebuildNodesById(nodes), selectedNodeId: newId });
         return newId;
       },
 
       updateNodeData: (id, data) => {
-        set({
-          nodes: get().nodes.map((n) =>
-            n.id === id ? { ...n, data: { ...n.data, ...data } } : n,
-          ),
-        });
+        const nodes = get().nodes.map((n) =>
+          n.id === id ? { ...n, data: { ...n.data, ...data } } : n,
+        );
+        set({ nodes, nodesById: rebuildNodesById(nodes) });
       },
 
       updateNodeStatus: (id, status) => {
-        set({
-          nodes: get().nodes.map((n) =>
-            n.id === id ? { ...n, data: { ...n.data, status } } : n,
-          ),
-        });
+        const nodes = get().nodes.map((n) =>
+          n.id === id ? { ...n, data: { ...n.data, status } } : n,
+        );
+        set({ nodes, nodesById: rebuildNodesById(nodes) });
       },
 
       setRunning: (running) => set({ isRunning: running }),
+
+      getNodeById: (id) => get().nodesById.get(id),
 
       exportWorkflow: () => {
         const { nodes, edges } = get();
@@ -192,7 +224,13 @@ export const useWorkflowStore = create<WorkflowState>()(
           }
         }
 
-        set({ nodes, edges, selectedNodeId: null, isRunning: false });
+        set({
+          nodes,
+          nodesById: rebuildNodesById(nodes),
+          edges,
+          selectedNodeId: null,
+          isRunning: false,
+        });
       },
     }),
     {

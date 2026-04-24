@@ -138,7 +138,7 @@ export function useKeyboardShortcuts(deps: KeyboardShortcutDeps) {
 function handleLegacyCopy() {
   const state = useWorkflowStore.getState();
   if (!state.selectedNodeId) return;
-  const node = state.nodes.find((n) => n.id === state.selectedNodeId);
+  const node = state.nodesById.get(state.selectedNodeId);
   if (!node) return;
   void navigator.clipboard
     .writeText(JSON.stringify({ type: 'workflow_node', node }))

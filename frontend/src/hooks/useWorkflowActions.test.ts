@@ -32,9 +32,19 @@ function makeNode(id: string): Node<WorkflowNodeData> {
 }
 
 describe('useWorkflowActions', () => {
+  // Seed both `nodes` and the id-keyed cache together. After F1 the
+  // store exposes a `nodesById` Map that mutators keep in sync; bare
+  // `setState({ nodes: [...] })` bypasses that sync and leaves
+  // `duplicateNode` / `getNodeById` looking at a stale (empty) cache.
+  function seed(nodes: Node<WorkflowNodeData>[], extra: Partial<ReturnType<typeof useWorkflowStore.getState>> = {}) {
+    const nodesById = new Map(nodes.map((n) => [n.id, n]));
+    useWorkflowStore.setState({ nodes, nodesById, ...extra });
+  }
+
   beforeEach(() => {
     useWorkflowStore.setState({
       nodes: [],
+      nodesById: new Map(),
       edges: [],
       selectedNodeId: null,
       isRunning: false,
@@ -48,27 +58,21 @@ describe('useWorkflowActions', () => {
   });
 
   it('duplicateSelected no-ops when nothing selected', () => {
-    useWorkflowStore.setState({ nodes: [makeNode('a')] });
+    seed([makeNode('a')]);
     const { result } = renderHook(() => useWorkflowActions());
     act(() => result.current.duplicateSelected());
     expect(useWorkflowStore.getState().nodes).toHaveLength(1);
   });
 
   it('duplicateSelected clones the selected node', () => {
-    useWorkflowStore.setState({
-      nodes: [makeNode('a')],
-      selectedNodeId: 'a',
-    });
+    seed([makeNode('a')], { selectedNodeId: 'a' });
     const { result } = renderHook(() => useWorkflowActions());
     act(() => result.current.duplicateSelected());
     expect(useWorkflowStore.getState().nodes.length).toBe(2);
   });
 
   it('toggleBreakpointOnSelected adds and removes a breakpoint', () => {
-    useWorkflowStore.setState({
-      nodes: [makeNode('a')],
-      selectedNodeId: 'a',
-    });
+    seed([makeNode('a')], { selectedNodeId: 'a' });
     const { result } = renderHook(() => useWorkflowActions());
     act(() => result.current.toggleBreakpointOnSelected());
     expect(useDebugStore.getState().breakpoints).toHaveLength(1);
@@ -84,16 +88,14 @@ describe('useWorkflowActions', () => {
   });
 
   it('selectAll marks all nodes selected', () => {
-    useWorkflowStore.setState({
-      nodes: [makeNode('a'), makeNode('b'), makeNode('c')],
-    });
+    seed([makeNode('a'), makeNode('b'), makeNode('c')]);
     const { result } = renderHook(() => useWorkflowActions());
     act(() => result.current.selectAll());
     expect(useWorkflowStore.getState().nodes.every((n) => n.selected)).toBe(true);
   });
 
   it('run no-ops when already running', async () => {
-    useWorkflowStore.setState({ isRunning: true, nodes: [makeNode('a')] });
+    seed([makeNode('a')], { isRunning: true });
     const { result } = renderHook(() => useWorkflowActions());
     await act(async () => {
       await result.current.run();

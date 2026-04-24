@@ -113,8 +113,7 @@ function AppInner() {
     (connection: Connection) => {
       // Tag each edge with its source data type so the stylesheet can color
       // it (and so backend can route metadata later).
-      const nodes = useWorkflowStore.getState().nodes;
-      const srcNode = nodes.find((n) => n.id === connection.source);
+      const srcNode = useWorkflowStore.getState().nodesById.get(connection.source ?? '');
       const srcPort = getPort(srcNode?.type, connection.sourceHandle);
       setEdges((eds) =>
         addEdge(
