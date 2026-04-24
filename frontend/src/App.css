@@ -59,6 +59,40 @@
   border-bottom: 1px solid #1a1a3a;
 }
 
+/* Search input sits between the title and the first category. Kept
+ * visually lighter than the node cards below so it reads as chrome,
+ * not content. */
+.palette-search {
+  padding: 8px 10px;
+  border-bottom: 1px solid #1a1a3a;
+}
+.palette-search-input {
+  width: 100%;
+  box-sizing: border-box;
+  background: #0f0f22;
+  border: 1px solid #2a2a4a;
+  color: #d0d0e8;
+  font-size: 12px;
+  padding: 5px 8px;
+  border-radius: 3px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.palette-search-input:focus {
+  border-color: #4a4aa0;
+}
+.palette-search-input::placeholder {
+  color: #555580;
+}
+
+/* Only rendered when a non-empty query returns no hits. */
+.palette-empty {
+  padding: 10px 14px;
+  color: #6a6a8a;
+  font-size: 11px;
+  font-style: italic;
+}
+
 .palette-category {
   border-bottom: 1px solid #1a1a3a;
 }
