@@ -4,12 +4,38 @@
 
 #include <net.h>
 #include <mat.h>
+#include <datareader.h>
 
 #include <chrono>
 #include <cstring>
 #include <stdexcept>
 
 namespace workflow {
+
+namespace {
+/**
+ * Mirrors ncnn's own benchmark tool (upstream `DataReaderFromEmpty` in
+ * ncnn/benchmark/benchncnn.cpp): hands back zero-filled bytes for any
+ * read request so `ncnn::Net::load_model` can fully initialize every
+ * layer's weight blob even when the user has no .bin file. Without it,
+ * calling create_extractor + extract on a net that only had load_param()
+ * run walks into layers whose weight Mats are still default-constructed
+ * (data pointer invalid), which segfaults deep inside Convolution::forward
+ * / memcpy. Returning zeros keeps the forward graph traversal valid; the
+ * output is garbage (effectively a uniform softmax) but the pipeline does
+ * not crash, which is the whole point of emptyWeights=true.
+ */
+class DataReaderFromEmpty : public ncnn::DataReader {
+public:
+#if NCNN_STRING
+    virtual int scan(const char* /*format*/, void* /*p*/) const { return 0; }
+#endif
+    virtual size_t read(void* buf, size_t size) const {
+        std::memset(buf, 0, size);
+        return size;
+    }
+};
+}  // namespace
 
 /**
  * Per-net state: the ncnn::Net itself, the last NetConfig so
@@ -65,12 +91,18 @@ NetHandle NcnnEngine::init_net(const NetConfig& config) {
     }
 
     if (config.empty_weights) {
-        // ncnn exposes no public "zero-fill" helper; the cleanest way is to
-        // let load_model report missing-weight failures so the caller sees
-        // the real diagnostic. Users asking for emptyWeights but without a
-        // .bin file path are responsible for providing a compatible stub.
+        // No .bin on disk: feed ncnn a zero DataReader so every layer's
+        // weight blob gets a real (zero-filled) allocation. Inference
+        // produces meaningless output but won't crash inside Convolution.
         if (!config.model_path.empty()) {
-            entry->net.load_model(config.model_path.c_str());
+            if (entry->net.load_model(config.model_path.c_str()) != 0) {
+                throw std::runtime_error("NcnnEngine: failed to load .bin: " + config.model_path);
+            }
+        } else {
+            DataReaderFromEmpty dr;
+            if (entry->net.load_model(dr) != 0) {
+                throw std::runtime_error("NcnnEngine: failed to synthesize zero weights for " + config.param_path);
+            }
         }
     } else {
         if (config.model_path.empty()) {
