@@ -115,7 +115,6 @@ set(BACKEND_LIB_SOURCES ${BACKEND_SOURCES})
 list(REMOVE_ITEM BACKEND_LIB_SOURCES src/main.cpp)
 
 set(BACKEND_TEST_SOURCES
-  tests/main_test.cpp
   tests/test_executor.cpp
   tests/test_security_config.cpp
   tests/test_condition.cpp

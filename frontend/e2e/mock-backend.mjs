@@ -8,10 +8,6 @@ import { WebSocketServer } from 'ws';
 const port = parseInt(process.argv[2] || '9099', 10);
 const wss = new WebSocketServer({ port });
 
-/** Simulated net handles */
-let nextHandle = 1;
-const nets = new Map();
-
 function broadcast(ws, method, params) {
   ws.send(JSON.stringify({ jsonrpc: '2.0', method, params }));
 }
@@ -77,16 +73,13 @@ function handleRpc(ws, msg) {
       delay += 50;
 
       if (node.type === 'createNet') {
-        const h = nextHandle++;
-        nets.set(h, node.config || {});
         setTimeout(() => broadcast(ws, 'node.status', { node_id: nid, status: 'done', elapsed_ms: 0.1 }), delay);
       } else if (node.type === 'inference') {
         setTimeout(() => broadcast(ws, 'node.status', { node_id: nid, status: 'done', elapsed_ms: 1.0 }), delay);
-      } else if (node.type === 'debug') {
-        // Check if breakpoint — simulate pause
-        setTimeout(() => broadcast(ws, 'debug.paused', { node_id: nid, data: {} }), delay);
-        // Will resume on debug.continue
       } else {
+        // `debug` nodes used to emit debug.paused here, but nothing was wired
+        // up to resume them (debug.continue is a no-op notification), so the
+        // simulated run would deadlock. Treat them as a normal passthrough.
         setTimeout(() => broadcast(ws, 'node.status', { node_id: nid, status: 'done' }), delay);
       }
       delay += 50;

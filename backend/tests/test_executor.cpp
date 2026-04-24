@@ -1,27 +1,13 @@
 #include <gtest/gtest.h>
 #include "workflow/executor.h"
 #include "model/workflow_graph.h"
+#include "mock_engine.h"
 #include <atomic>
 #include <chrono>
 #include <thread>
 
 using namespace workflow;
-
-// A simple stub engine for testing
-class MockEngine : public InferenceEngine {
-public:
-    std::string name() const override { return "mock"; }
-    std::vector<ConfigFieldSchema> config_schema() const override { return {}; }
-    NetHandle init_net(const NetConfig&) override { return 1; }
-    void configure(NetHandle, const NetConfig&) override {}
-    InferResult execute(NetHandle, const TensorData& input) override {
-        return {input, std::chrono::milliseconds(1)};
-    }
-    BenchmarkResult benchmark(NetHandle, const TensorData&, int) override {
-        return {1, 1.0, 1.0, 1.0};
-    }
-    void destroy_net(NetHandle) override {}
-};
+using workflow::testing::MockEngine;
 
 TEST(ExecutorTest, SimpleGraphExecution) {
     auto engine = std::make_shared<MockEngine>();

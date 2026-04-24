@@ -95,9 +95,12 @@ test.describe('NCNN demo end-to-end', () => {
 
     await gotoAppWithBackend(page);
     await expect(page.locator('.react-flow')).toBeVisible();
-    // WS should connect within a couple seconds.
-    await expect(page.locator('.console-ws-status')).toBeVisible();
-    await page.waitForTimeout(800);
+    // Wait for the WS handshake to actually complete (dot turns green)
+    // instead of a fixed sleep. The app does its first RPC right after,
+    // so a late connect used to drop the initial frame on slow CI.
+    await expect(page.locator('.console-ws-status .ws-dot.connected')).toBeVisible({
+      timeout: 10_000,
+    });
 
     // Load the demo workflow via the hidden file input. The LOAD button
     // triggers a native file picker; setInputFiles bypasses that.
@@ -112,12 +115,15 @@ test.describe('NCNN demo end-to-end', () => {
     const runBtn = page.locator('button').filter({ hasText: /^\s*▶?\s*RUN\s*$/i }).first();
     await runBtn.click();
 
-    // The demo contains a benchmark node with duration=30s. In the stub
-    // engine that returns immediately (runs=1000, avg=1ms), so real
-    // wall-clock completion is <5s. We give it 40s to be safe on slow CI.
+    // The demo contains a benchmark node with duration=30s. The stub
+    // engine returns immediately (runs=1000, avg=1ms), but the
+    // BenchmarkHandler still honors the requested wall-clock, so the
+    // real lower bound is ~30s + scheduling overhead. 45s gives a
+    // small cushion; set E2E_SLOW=1 to extend further for slow CI.
+    const completeTimeoutMs = process.env.E2E_SLOW ? 90_000 : 45_000;
     await expect.poll(
       () => wsEvents.some((e) => e.method === 'workflow.complete'),
-      { timeout: 40_000, message: 'workflow.complete never arrived' },
+      { timeout: completeTimeoutMs, message: 'workflow.complete never arrived' },
     ).toBe(true);
 
     // Every node from the demo should have reached status=done (or an

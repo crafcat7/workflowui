@@ -8,16 +8,24 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 let mockBackend: ChildProcess;
 
 test.beforeAll(async () => {
-  // Start mock WS backend
+  // Start mock WS backend. We resolve strictly on the "listening" stdout
+  // banner so the first test never races an unready socket; a bounded
+  // deadline turns a stuck child into a clear failure instead of a cascade
+  // of connection timeouts.
   mockBackend = fork(path.join(__dirname, 'mock-backend.mjs'), ['9099'], {
     stdio: 'pipe',
   });
-  // Wait for it to be ready
-  await new Promise<void>((resolve) => {
+  await new Promise<void>((resolve, reject) => {
+    const deadline = setTimeout(
+      () => reject(new Error('mock-backend never emitted "listening" banner within 5s')),
+      5000,
+    );
     mockBackend.stdout?.on('data', (data: Buffer) => {
-      if (data.toString().includes('listening')) resolve();
+      if (data.toString().includes('listening')) {
+        clearTimeout(deadline);
+        resolve();
+      }
     });
-    setTimeout(resolve, 2000);
   });
 });
 
@@ -25,11 +33,27 @@ test.afterAll(async () => {
   mockBackend?.kill();
 });
 
-// Helper: wait for WS connection indicator to show "Connected"
+// Force every test in this file to point its WsClient at the mock backend
+// regardless of how the Vite dev server was started (CI starts it with the
+// right VITE_WS_URL, but developers often have a dev server already running
+// with different env vars — `reuseExistingServer: true` would then silently
+// talk to the wrong URL). The override is picked up by WsClient before
+// constructing its socket.
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => {
+    (window as unknown as { __VITE_WS_URL_OVERRIDE__: string }).__VITE_WS_URL_OVERRIDE__ =
+      'ws://localhost:9099';
+  });
+});
+
+// Helper: wait for WS indicator to actually report "Connected" (dot turns
+// green + text flips to ONLINE). The App renders `.console-ws-status`
+// immediately on load, so testing for mere visibility doesn't prove the
+// socket handshake completed.
 async function waitForConnection(page: Page) {
-  await page.waitForSelector('.console-ws-status', { timeout: 10000 });
-  // Give a moment for WS to connect
-  await page.waitForTimeout(1000);
+  await expect(page.locator('.console-ws-status .ws-dot.connected')).toBeVisible({
+    timeout: 10_000,
+  });
 }
 
 test.describe('Canvas & basic UI', () => {
@@ -50,8 +74,7 @@ test.describe('Canvas & basic UI', () => {
   test('shows WS connection status', async ({ page }) => {
     await page.goto('/');
     await waitForConnection(page);
-    const status = page.locator('.console-ws-status');
-    await expect(status).toBeVisible();
+    await expect(page.locator('.console-ws-status')).toContainText(/ONLINE/i);
   });
 
   test('shows MiniMap', async ({ page }) => {
@@ -121,23 +144,52 @@ test.describe('Node CRUD', () => {
 
 test.describe('Workflow execution', () => {
   test('runs a workflow and receives status updates', async ({ page }) => {
+    // Capture every JSON-RPC frame so we can assert on lifecycle events
+    // instead of waiting out a wall-clock delay.
+    const wsEvents: Array<{ method: string; params: Record<string, unknown> }> = [];
+    page.on('websocket', (ws) => {
+      ws.on('framereceived', (evt) => {
+        try {
+          const payload =
+            typeof evt.payload === 'string' ? evt.payload : evt.payload.toString('utf8');
+          const msg = JSON.parse(payload);
+          if (msg.method) wsEvents.push({ method: msg.method, params: msg.params ?? {} });
+        } catch {
+          /* binary or non-json */
+        }
+      });
+    });
+
     await page.goto('/');
     await waitForConnection(page);
 
-    // Add two nodes
-    const pane = page.locator('.react-flow__pane');
-    await page.locator('.palette-node-card').filter({ hasText: 'Input Tensor' }).first().dragTo(pane);
-    await page.locator('.palette-node-card').filter({ hasText: 'Output' }).first().dragTo(pane);
+    // Single-node workflow: the run action scopes to connected nodes when
+    // there is more than one, which would require drawing an edge between
+    // handles (very awkward in Playwright). A one-node graph always runs
+    // as-is, so we use Input Tensor alone.
+    await page
+      .locator('.palette-node-card')
+      .filter({ hasText: 'Input Tensor' })
+      .first()
+      .dragTo(page.locator('.react-flow__pane'));
 
     // Click Run button
     const runBtn = page.locator('button').filter({ hasText: /Run|Execute/i }).first();
     await runBtn.click();
 
-    // Wait for workflow completion — the mock backend sends workflow.complete after all nodes
-    await page.waitForTimeout(2000);
+    // The mock backend emits workflow.complete after all nodes report done.
+    await expect
+      .poll(() => wsEvents.some((e) => e.method === 'workflow.complete'), {
+        timeout: 10_000,
+        message: 'workflow.complete never arrived from mock backend',
+      })
+      .toBe(true);
 
-    // Nodes should have status indicators (done state)
-    // The toast or status should show success
+    // The one node should have reported done.
+    const doneCount = wsEvents.filter(
+      (e) => e.method === 'node.status' && e.params.status === 'done',
+    ).length;
+    expect(doneCount).toBeGreaterThanOrEqual(1);
   });
 });
 
@@ -165,13 +217,18 @@ test.describe('Save / Load workflow', () => {
 });
 
 test.describe('WS disconnection', () => {
-  test('shows offline status when backend is down', async ({ page }) => {
-    // Navigate with a WS URL that doesn't exist
-    await page.goto('/?_test=1');
-    // The status indicator should eventually show disconnected
-    // (this depends on the actual WS URL configured — mock may or may not be running)
-    await page.waitForTimeout(1000);
-    const status = page.locator('.console-ws-status');
-    await expect(status).toBeVisible();
+  test('shows offline status when backend URL is unreachable', async ({ page }) => {
+    // Point WsClient at a port nothing is listening on so the socket cannot
+    // complete its handshake. The status indicator must settle on
+    // disconnected/OFFLINE rather than a stale connected state.
+    await page.addInitScript(() => {
+      (window as unknown as { __VITE_WS_URL_OVERRIDE__: string }).__VITE_WS_URL_OVERRIDE__ =
+        'ws://127.0.0.1:1';
+    });
+    await page.goto('/');
+    await expect(page.locator('.console-ws-status .ws-dot.disconnected')).toBeVisible({
+      timeout: 10_000,
+    });
+    await expect(page.locator('.console-ws-status')).toContainText(/OFFLINE/i);
   });
 });
