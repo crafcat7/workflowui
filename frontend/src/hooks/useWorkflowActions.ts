@@ -19,6 +19,7 @@ import {
 import { useDebugStore, type Breakpoint } from '../store/debugStore';
 import { wsClient } from '../transport/WsClient';
 import { showToast } from '../store/toastStore';
+import { setActiveRunId } from '../engine/WorkflowRunner';
 
 export interface WorkflowActions {
   run: () => Promise<void>;
@@ -79,7 +80,7 @@ export function useWorkflowActions(triggerLoad?: () => void): WorkflowActions {
       .map((b: Breakpoint) => b.nodeId);
 
     try {
-      await wsClient.call('workflow.execute', {
+      const reply = (await wsClient.call('workflow.execute', {
         nodes: activeNodes.map((n) => ({
           id: n.id,
           type: n.type,
@@ -92,7 +93,11 @@ export function useWorkflowActions(triggerLoad?: () => void): WorkflowActions {
           targetHandle: e.targetHandle,
         })),
         breakpoints: breakpointIds,
-      });
+      })) as { status?: string; run_id?: string } | undefined;
+      // Record the run_id so WorkflowRunner can filter stale events
+      // from any previously-cancelled run. Missing run_id means an
+      // older backend: we fall back to accepting every event.
+      setActiveRunId(reply?.run_id ?? null);
     } catch (err) {
       showToast(`Execution error: ${(err as Error).message}`, 'error');
       useWorkflowStore.getState().setRunning(false);
