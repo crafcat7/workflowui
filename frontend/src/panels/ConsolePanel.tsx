@@ -1,150 +1,55 @@
 // SPDX-License-Identifier: MIT
 // SPDX-FileCopyrightText: 2026 WorkflowUI contributors
-import { useRef, useEffect, useState } from 'react';
-import { useWorkflowStore, type WorkflowNodeData } from '../store/workflowStore';
+/**
+ * ConsolePanel - toolbar + log area at the bottom of the app.
+ *
+ * All command logic (run/stop/save/load/…) lives in useWorkflowActions and
+ * is shared with the keyboard-shortcut layer. This component is now purely
+ * presentational plus connection-state wiring.
+ */
+
+import { useEffect, useRef, useState } from 'react';
+import { useWorkflowStore } from '../store/workflowStore';
 import { useDebugStore } from '../store/debugStore';
 import { wsClient } from '../transport/WsClient';
-import { showToast } from '../store/toastStore';
+import type { WorkflowActions } from '../hooks/useWorkflowActions';
 
-export function ConsolePanel() {
-  const { isRunning, setRunning, nodes, edges, exportWorkflow, importWorkflow } = useWorkflowStore();
-  const { logs, clearLogs, pausedAtNodeId, setPausedAt, breakpoints } = useDebugStore();
-  const fileInputRef = useRef<HTMLInputElement>(null);
+interface Props {
+  actions: WorkflowActions;
+}
+
+export function ConsolePanel({ actions }: Props) {
+  const isRunning = useWorkflowStore((s) => s.isRunning);
+  const logs = useDebugStore((s) => s.logs);
+  const pausedAtNodeId = useDebugStore((s) => s.pausedAtNodeId);
+  const breakpoints = useDebugStore((s) => s.breakpoints);
+
   const logEndRef = useRef<HTMLDivElement>(null);
   const [wsConnected, setWsConnected] = useState(wsClient.connected);
   const [collapsed, setCollapsed] = useState(false);
 
-  useEffect(() => {
-    return wsClient.onConnection(setWsConnected);
-  }, []);
-
+  useEffect(() => wsClient.onConnection(setWsConnected), []);
   useEffect(() => {
     logEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [logs.length]);
 
-  const handleRun = async () => {
-    if (!wsClient.connected) {
-      showToast('Backend not connected', 'error');
-      return;
-    }
-    if (nodes.length === 0) {
-      showToast('Add some nodes first', 'warn');
-      return;
-    }
-    setRunning(true);
-    clearLogs();
-
-    // Filter out isolated nodes (nodes with absolutely no connections)
-    // Keep nodes that have at least one incoming or outgoing edge, plus 
-    // keep nodes if the entire graph only has 1 node (just to allow a single run)
-    const connectedNodeIds = new Set<string>();
-    edges.forEach((e) => {
-      connectedNodeIds.add(e.source);
-      connectedNodeIds.add(e.target);
-    });
-
-    const activeNodes = nodes.length === 1 
-      ? nodes 
-      : nodes.filter((n) => connectedNodeIds.has(n.id));
-
-    if (activeNodes.length === 0) {
-      showToast('No connected nodes to execute', 'warn');
-      setRunning(false);
-      return;
-    }
-
-    // Breakpoints come from the explicit debug store (set via right-click
-    // context menu). Only enabled ones, and only for nodes actually part of
-    // this run, are sent to the backend.
-    const activeIdSet = new Set(activeNodes.map((n) => n.id));
-    const breakpointIds = breakpoints
-      .filter((b) => b.enabled && activeIdSet.has(b.nodeId))
-      .map((b) => b.nodeId);
-
-    try {
-      await wsClient.call('workflow.execute', {
-        nodes: activeNodes.map((n) => ({
-          id: n.id,
-          type: n.type,
-          config: (n.data as unknown as WorkflowNodeData).config,
-        })),
-        edges: edges.map((e) => ({
-          source: e.source,
-          sourceHandle: e.sourceHandle,
-          target: e.target,
-          targetHandle: e.targetHandle,
-        })),
-        breakpoints: breakpointIds,
-      });
-    } catch (err) {
-      showToast(`Execution error: ${(err as Error).message}`, 'error');
-      setRunning(false);
-    }
-  };
-
-  const handleStop = () => {
-    wsClient.notify('workflow.stop');
-    setRunning(false);
-  };
-
-  const handleContinue = () => {
-    wsClient.notify('debug.continue');
-    setPausedAt(null);
-  };
-
-  const handleStepOver = () => {
-    wsClient.notify('debug.step_over');
-    setPausedAt(null);
-  };
-
-  const handleSave = () => {
-    const json = exportWorkflow();
-    const blob = new Blob([json], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'workflow.json';
-    a.click();
-    URL.revokeObjectURL(url);
-    showToast('Workflow saved', 'success');
-  };
-
-  const handleLoad = () => {
-    fileInputRef.current?.click();
-  };
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      const text = ev.target?.result as string;
-      if (text) {
-        try {
-          importWorkflow(text);
-          showToast('Workflow loaded', 'success');
-        } catch (err) {
-          showToast(`Failed to load workflow: ${(err as Error).message}`, 'error');
-        }
-      }
-    };
-    reader.onerror = () => {
-      showToast('Could not read file', 'error');
-    };
-    reader.readAsText(file);
-    e.target.value = '';
-  };
+  const armedBpCount = breakpoints.filter((b) => b.enabled).length;
 
   return (
     <div className={`console-panel ${collapsed ? 'collapsed' : ''}`}>
       <div className="console-toolbar">
         <div className="console-toolbar-left">
-          <button className="console-btn run" onClick={handleRun} disabled={isRunning} title="Run workflow">
-            <span className="btn-icon">▶</span> RUN
+          <button
+            className="console-btn run"
+            onClick={() => void actions.run()}
+            disabled={isRunning && !pausedAtNodeId}
+            title="Run workflow (R) / Resume if paused"
+          >
+            <span className="btn-icon">▶</span> {pausedAtNodeId ? 'RESUME' : 'RUN'}
           </button>
           <button
             className="console-btn continue"
-            onClick={handleContinue}
+            onClick={actions.continueExec}
             disabled={!pausedAtNodeId}
             title="Continue execution (until next breakpoint)"
           >
@@ -152,36 +57,45 @@ export function ConsolePanel() {
           </button>
           <button
             className="console-btn step"
-            onClick={handleStepOver}
+            onClick={actions.stepOver}
             disabled={!pausedAtNodeId}
             title="Step over (run next node then pause)"
           >
             <span className="btn-icon">⤼</span> STEP
           </button>
-          <button className="console-btn stop" onClick={handleStop} disabled={!isRunning} title="Stop workflow">
+          <button
+            className="console-btn stop"
+            onClick={actions.stop}
+            disabled={!isRunning}
+            title="Stop workflow"
+          >
             <span className="btn-icon">■</span> STOP
           </button>
           <div className="console-separator" />
-          <button className="console-btn file-op" onClick={handleSave} title="Save workflow">
+          <button
+            className="console-btn file-op"
+            onClick={actions.save}
+            title="Save workflow (Cmd/Ctrl+S)"
+          >
             SAVE
           </button>
-          <button className="console-btn file-op" onClick={handleLoad} title="Load workflow">
+          <button
+            className="console-btn file-op"
+            onClick={actions.load}
+            title="Load workflow (Cmd/Ctrl+O)"
+          >
             LOAD
           </button>
-          <input ref={fileInputRef} type="file" accept=".json" style={{ display: 'none' }} onChange={handleFileChange} />
         </div>
         <div className="console-toolbar-right">
           {pausedAtNodeId && (
             <span className="console-paused-badge">PAUSED @ {pausedAtNodeId}</span>
           )}
-          {(() => {
-            const armed = breakpoints.filter((b) => b.enabled).length;
-            return armed > 0 ? (
-              <span className="console-bp-count" title="Armed breakpoints">
-                {armed} BP
-              </span>
-            ) : null;
-          })()}
+          {armedBpCount > 0 && (
+            <span className="console-bp-count" title="Armed breakpoints">
+              {armedBpCount} BP
+            </span>
+          )}
           <div className="console-ws-status" title={wsConnected ? 'Connected' : 'Disconnected'}>
             <span className={`ws-dot ${wsConnected ? 'connected' : 'disconnected'}`} />
             {wsConnected ? 'ONLINE' : 'OFFLINE'}

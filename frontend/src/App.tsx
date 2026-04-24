@@ -25,6 +25,7 @@ import {
 } from './store/workflowStore';
 import { useDebugStore } from './store/debugStore';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
+import { useWorkflowActions } from './hooks/useWorkflowActions';
 import { nodeTypes } from './nodes';
 import { NodePalette } from './panels/NodePalette';
 import { PropertiesPanel } from './panels/PropertiesPanel';
@@ -32,19 +33,49 @@ import { ConsolePanel } from './panels/ConsolePanel';
 import { ToastContainer } from './components/ToastContainer';
 import { ReconnectBanner } from './components/ReconnectBanner';
 import { NodeContextMenu, type NodeContextMenuState } from './components/NodeContextMenu';
+import { showToast } from './store/toastStore';
 import { getLayoutedElements } from './utils/layout';
 import './App.css';
 
 function AppInner() {
-  useKeyboardShortcuts();
-
-  const { nodes, edges, isRunning, onNodesChange, onEdgesChange, setEdges, setNodes, setSelectedNode, addNode } =
+  const { nodes, edges, isRunning, onNodesChange, onEdgesChange, setEdges, setNodes, setSelectedNode, addNode, importWorkflow } =
     useWorkflowStore();
   const selectedId = useWorkflowStore((s) => s.selectedNodeId);
   const breakpoints = useDebugStore((s) => s.breakpoints);
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
-  const { screenToFlowPosition } = useReactFlow();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const { screenToFlowPosition, fitView } = useReactFlow();
   const [contextMenu, setContextMenu] = useState<NodeContextMenuState | null>(null);
+
+  // Hidden file input shared by toolbar Load button and Cmd+O shortcut.
+  const triggerLoad = useCallback(() => {
+    fileInputRef.current?.click();
+  }, []);
+
+  const onFileChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      e.target.value = '';
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        const text = ev.target?.result as string;
+        if (!text) return;
+        try {
+          importWorkflow(text);
+          showToast('Workflow loaded', 'success');
+        } catch (err) {
+          showToast(`Failed to load workflow: ${(err as Error).message}`, 'error');
+        }
+      };
+      reader.onerror = () => showToast('Could not read file', 'error');
+      reader.readAsText(file);
+    },
+    [importWorkflow],
+  );
+
+  const actions = useWorkflowActions(triggerLoad);
+  useKeyboardShortcuts({ actions, fitView: () => fitView({ duration: 300 }) });
 
   const onConnect = useCallback(
     (connection: Connection) => {
@@ -223,8 +254,17 @@ function AppInner() {
 
       {/* Bottom - Console */}
       <footer className="bottom-console">
-        <ConsolePanel />
+        <ConsolePanel actions={actions} />
       </footer>
+
+      {/* Hidden file input driven by Cmd+O / toolbar Load */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".json"
+        style={{ display: 'none' }}
+        onChange={onFileChange}
+      />
 
       {contextMenu && (
         <NodeContextMenu menu={contextMenu} onClose={() => setContextMenu(null)} />
