@@ -45,6 +45,7 @@ export const NODE_PORTS: Record<string, PortDef[]> = {
     { id: 'benchmark_result', direction: 'source', dataType: 'generic' },
   ],
   saveText: [{ id: 'data', direction: 'target', dataType: 'generic' }],
+  saveImage: [{ id: 'image_data', direction: 'target', dataType: 'image' }],
   condition: [
     { id: 'input_data', direction: 'target', dataType: 'tensor' },
     { id: 'true_branch', direction: 'source', dataType: 'branch' },

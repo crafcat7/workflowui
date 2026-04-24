@@ -126,6 +126,7 @@ describe('registry coverage', () => {
       'inference',
       'benchmark',
       'saveText',
+      'saveImage',
       'condition',
       'postprocess',
       'output',

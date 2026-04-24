@@ -131,6 +131,22 @@ export const NODE_SCHEMAS: Record<string, NodeTypeSchema> = {
     ],
   },
 
+  saveImage: {
+    sections: [
+      {
+        title: 'OUTPUT FILE',
+        fields: [
+          {
+            key: 'filePath',
+            label: 'File Path',
+            kind: 'filepath',
+            placeholder: 'output.png',
+          },
+        ],
+      },
+    ],
+  },
+
   condition: {
     sections: [
       {

@@ -9,6 +9,7 @@ describe('NODE_SCHEMAS', () => {
       'inputImage',
       'inputTensor',
       'saveText',
+      'saveImage',
       'condition',
       'benchmark',
       'postprocess',
