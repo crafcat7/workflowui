@@ -15,6 +15,7 @@ FRONTEND_DIR="$ROOT_DIR/frontend"
 NCNN_SRC_DIR="/tmp/ncnn"
 NCNN_INSTALL_DIR="/tmp/ncnn-install"
 BACKEND_PORT="${BACKEND_PORT:-9090}"
+FRONTEND_PORT="${FRONTEND_PORT:-5173}"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -149,15 +150,24 @@ start_services() {
   fi
   ok "后端已启动 (PID=$BACKEND_PID, 端口=$BACKEND_PORT)"
 
-  info "启动前端开发服务器..."
-  (cd "$FRONTEND_DIR" && VITE_WS_URL="ws://localhost:$BACKEND_PORT" npx vite --host) &
+  info "启动前端开发服务器 (端口 $FRONTEND_PORT)..."
+  # 若 $FRONTEND_PORT 已被占用，直接报错退出——Vite 的自动换端口会让
+  # 浏览器使用未登记的 origin，被后端的 origin 白名单拒绝，表现为
+  # "Backend disconnected — reconnecting" 死循环。
+  if ss -tlnp 2>/dev/null | grep -q ":$FRONTEND_PORT "; then
+    kill $BACKEND_PID 2>/dev/null
+    err "前端端口 $FRONTEND_PORT 已被占用，请释放该端口或设置 FRONTEND_PORT=其他值后重试"
+  fi
+  (cd "$FRONTEND_DIR" && \
+    VITE_WS_URL="ws://localhost:$BACKEND_PORT" \
+    npx vite --host --port "$FRONTEND_PORT" --strictPort) &
   FRONTEND_PID=$!
 
   ok "前端开发服务器已启动 (PID=$FRONTEND_PID)"
   echo ""
   echo -e "${GREEN}════════════════════════════════════════════════${NC}"
   echo -e "${GREEN}  WorkflowUI 已启动${NC}"
-  echo -e "  前端:  ${CYAN}http://localhost:5173${NC}"
+  echo -e "  前端:  ${CYAN}http://localhost:$FRONTEND_PORT${NC}"
   echo -e "  后端:  ${CYAN}ws://localhost:$BACKEND_PORT${NC}"
   echo -e "  引擎:  ${YELLOW}$( [ "$ENABLE_NCNN" = "ON" ] && echo "NCNN" || echo "Stub" )${NC}"
   echo -e "${GREEN}════════════════════════════════════════════════${NC}"
