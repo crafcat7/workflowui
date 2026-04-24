@@ -294,6 +294,16 @@ int main(int argc, char* argv[]) {
         return {{"cancelled", true}, {"run_id", run_id}};
     });
 
+    // Snapshot of executor state for reconnect reconciliation. A
+    // client that missed events while the WebSocket was down calls
+    // this right after re-opening to merge per-node statuses back
+    // into its canvas; without it, nodes that finished mid-outage
+    // would stay stuck on `running` forever. Cheap — just copies
+    // a small map under a mutex.
+    rpc.register_method("workflow.state", [&](const json&) -> json {
+        return executor->snapshot_state();
+    });
+
     rpc.register_notify("debug.continue", [&](const json&) {
         executor->debug_controller().resume();
     });

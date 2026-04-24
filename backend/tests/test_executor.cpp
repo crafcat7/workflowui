@@ -574,3 +574,90 @@ TEST(ExecutorTest, ValidationAllowsGenericAndImageToTensor) {
     ASSERT_FALSE(sink_msgs.empty());
     EXPECT_EQ(sink_msgs.back().at("status"), "done");
 }
+
+// W1 reconnect reconciliation: snapshot_state() must return a usable
+// shape before any run has happened — empty run_id, empty statuses,
+// no paused_at. The frontend calls this right after a reconnect and
+// needs to tolerate a backend that never ran anything.
+TEST(ExecutorTest, SnapshotStateBeforeAnyRunIsEmpty) {
+    auto engine = std::make_shared<MockEngine>();
+    Executor executor(engine);
+
+    json snap = executor.snapshot_state();
+    ASSERT_TRUE(snap.is_object());
+    EXPECT_EQ(snap.value("run_id", "missing"), "");
+    ASSERT_TRUE(snap.contains("statuses"));
+    EXPECT_TRUE(snap["statuses"].is_object());
+    EXPECT_EQ(snap["statuses"].size(), 0u);
+    EXPECT_FALSE(snap.contains("paused_at"));
+}
+
+// After a completed run, the snapshot retains the per-node terminal
+// status (done/error/skipped) and the run_id, so a client that
+// reconnected *after* completion can still reconcile. Running a new
+// graph must clear the previous snapshot entries.
+TEST(ExecutorTest, SnapshotStateReflectsCompletedRunAndClearsOnRerun) {
+    auto engine = std::make_shared<MockEngine>();
+    Executor executor(engine);
+
+    auto g1 = make_passthrough_graph("src", "dst");
+    executor.execute(g1, "run-A");
+
+    json snap = executor.snapshot_state();
+    EXPECT_EQ(snap["run_id"], "run-A");
+    EXPECT_EQ(snap["statuses"].value("src", ""), "done");
+    EXPECT_EQ(snap["statuses"].value("dst", ""), "done");
+    EXPECT_FALSE(snap.contains("paused_at"));
+
+    // Second run with a *different* node id — the previous run's
+    // entries must not bleed into the new snapshot.
+    auto g2 = make_passthrough_graph("s2", "d2");
+    executor.execute(g2, "run-B");
+
+    json snap2 = executor.snapshot_state();
+    EXPECT_EQ(snap2["run_id"], "run-B");
+    EXPECT_FALSE(snap2["statuses"].contains("src"));
+    EXPECT_FALSE(snap2["statuses"].contains("dst"));
+    EXPECT_EQ(snap2["statuses"].value("s2", ""), "done");
+    EXPECT_EQ(snap2["statuses"].value("d2", ""), "done");
+}
+
+// While a run is paused at a breakpoint, snapshot_state() must report
+// `paused_at` and flag that node's status as "paused". This is the
+// reconnect case that actually matters: the user hit a breakpoint,
+// network blipped, and on reopen the UI needs to know to re-show the
+// debug panel anchored at the right node.
+TEST(ExecutorTest, SnapshotStateReportsPausedAtDuringBreakpoint) {
+    auto engine = std::make_shared<MockEngine>();
+    Executor executor(engine);
+
+    auto g = make_passthrough_graph("src", "dst");
+    executor.debug_controller().set_breakpoints({"dst"});
+
+    std::atomic<int> pause_count{0};
+    executor.set_pause_callback([&](const std::string&, const json&) {
+        pause_count.fetch_add(1);
+    });
+
+    std::thread runner([&] { executor.execute(g, "run-pause"); });
+
+    for (int i = 0; i < 50 && pause_count.load() == 0; ++i) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    ASSERT_EQ(pause_count.load(), 1);
+
+    json snap = executor.snapshot_state();
+    EXPECT_EQ(snap["run_id"], "run-pause");
+    EXPECT_EQ(snap.value("paused_at", ""), "dst");
+    EXPECT_EQ(snap["statuses"].value("dst", ""), "paused");
+    EXPECT_EQ(snap["statuses"].value("src", ""), "done");
+
+    executor.debug_controller().resume();
+    runner.join();
+
+    // After the run completes, paused_at is cleared and the node's
+    // status reflects the real terminal state.
+    json snap_after = executor.snapshot_state();
+    EXPECT_FALSE(snap_after.contains("paused_at"));
+    EXPECT_EQ(snap_after["statuses"].value("dst", ""), "done");
+}

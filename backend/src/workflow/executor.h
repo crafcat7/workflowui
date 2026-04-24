@@ -11,6 +11,7 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <memory>
+#include <mutex>
 #include <nlohmann/json.hpp>
 
 namespace workflow {
@@ -54,7 +55,23 @@ public:
 
     // Returns the run_id of the currently-executing workflow, or the
     // most recent one if none is running. Empty before the first run.
-    std::string current_run_id() const { return current_run_id_; }
+    std::string current_run_id() const;
+
+    // Snapshot of the executor's observable state for the `workflow.state`
+    // RPC. Used by the frontend after a WebSocket reconnect to reconcile
+    // the canvas with the backend (events dropped while disconnected
+    // can otherwise leave nodes stuck on `running`).
+    //
+    // Shape: {
+    //   "run_id":    string,                     // current or most recent
+    //   "statuses":  { node_id: status_string }, // per-node last status
+    //   "paused_at": string (optional)           // node_id currently paused
+    // }
+    //
+    // `statuses` only contains entries from the current/most recent run;
+    // it is cleared at the start of every new `execute()`. Safe to call
+    // concurrently with a running execution.
+    nlohmann::json snapshot_state() const;
 
     // ExecutionContext implementation
     PortValue resolve_input(const std::string& node_id, const std::string& handle, const WorkflowGraph& graph) override;
@@ -115,10 +132,19 @@ private:
 
     // Tags every status / pause event with the run that produced it so
     // clients can discard events from a run they already cancelled or
-    // superseded. Mutated only by execute(); read by notify_status /
-    // the pause path on the same thread, so no extra synchronization
-    // is required beyond what the worker thread already provides.
+    // superseded. Written by execute() before any events are emitted and
+    // read by the worker path (notify_status, pause handler) as well as
+    // the RPC thread (snapshot_state, current_run_id), hence the mutex.
     std::string current_run_id_;
+
+    // Per-node last-known status for the current/most recent run, plus
+    // the node id we are currently paused at (empty when not paused).
+    // Populated from the worker thread by notify_status / the pause
+    // block in execute(); read from the RPC thread by snapshot_state().
+    // All three fields share `state_mutex_`.
+    std::unordered_map<std::string, std::string> node_statuses_;
+    std::string paused_at_;
+    mutable std::mutex state_mutex_;
 };
 
 } // namespace workflow

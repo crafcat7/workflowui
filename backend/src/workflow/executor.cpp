@@ -125,7 +125,15 @@ json Executor::describe_nodes() const {
 }
 
 void Executor::execute(const WorkflowGraph& graph, std::string run_id) {
-    current_run_id_ = std::move(run_id);
+    {
+        std::lock_guard<std::mutex> lk(state_mutex_);
+        current_run_id_ = std::move(run_id);
+        // Per-run snapshot: clear stale per-node statuses from whatever
+        // executed before. `paused_at_` is always empty at this point
+        // (prior execute() would have joined by now), but reset defensively.
+        node_statuses_.clear();
+        paused_at_.clear();
+    }
     debug_.reset();
     // Release nets created by the previous run before we drop the port
     // map; without this, `init_net` handles leak for the whole process
@@ -219,12 +227,27 @@ void Executor::execute(const WorkflowGraph& graph, std::string run_id) {
             // Stamp the pause event with the run id for the same reason
             // notify_status does: a client that cancelled this run must
             // be able to drop the paused event without acting on it.
-            if (!current_run_id_.empty()) {
-                data["run_id"] = current_run_id_;
+            std::string run_id_copy;
+            {
+                // Snapshot: mark this node as paused so a reconnecting
+                // client sees via `workflow.state` that the run is
+                // waiting here. Cleared right after wait_for_resume()
+                // returns, before the node starts executing.
+                std::lock_guard<std::mutex> lk(state_mutex_);
+                paused_at_ = node_id;
+                node_statuses_[node_id] = "paused";
+                run_id_copy = current_run_id_;
+            }
+            if (!run_id_copy.empty()) {
+                data["run_id"] = run_id_copy;
             }
             if (pause_cb_) pause_cb_(node_id, data);
 
             debug_.wait_for_resume();
+            {
+                std::lock_guard<std::mutex> lk(state_mutex_);
+                paused_at_.clear();
+            }
             if (debug_.is_stopped()) break;
         }
 
@@ -300,6 +323,23 @@ bool Executor::should_skip(const std::string& node_id, const WorkflowGraph& grap
 
 void Executor::notify_status(const std::string& node_id, const std::string& status,
                              const json& extra) {
+    std::string run_id_copy;
+    {
+        // Record this status in the per-run snapshot so a reconnecting
+        // client can reconcile via `workflow.state`. Skip the synthetic
+        // `__workflow__` node — it is a workflow-level control event
+        // (complete / validation_failed), not a node state.
+        //
+        // This must happen even when `status_cb_` is unset: tests and
+        // embeds that don't wire a callback still rely on snapshot_state()
+        // reflecting reality, and decoupling the snapshot from the wire
+        // callback matches the intent (snapshot = truth, callback = fan-out).
+        std::lock_guard<std::mutex> lk(state_mutex_);
+        if (node_id != "__workflow__") {
+            node_statuses_[node_id] = status;
+        }
+        run_id_copy = current_run_id_;
+    }
     if (!status_cb_) return;
     json msg;
     msg["node_id"] = node_id;
@@ -307,8 +347,8 @@ void Executor::notify_status(const std::string& node_id, const std::string& stat
     // Tag the event with the current run so clients can ignore stale
     // messages from a superseded/cancelled run (see Executor::execute).
     // Empty when the caller did not provide a run_id (e.g. legacy tests).
-    if (!current_run_id_.empty()) {
-        msg["run_id"] = current_run_id_;
+    if (!run_id_copy.empty()) {
+        msg["run_id"] = run_id_copy;
     }
     for (auto& [k, v] : extra.items()) {
         msg[k] = v;
@@ -452,6 +492,26 @@ bool Executor::validate_graph(const WorkflowGraph& graph) {
         status_cb_("__workflow__", msg);
     }
     return false;
+}
+
+std::string Executor::current_run_id() const {
+    std::lock_guard<std::mutex> lk(state_mutex_);
+    return current_run_id_;
+}
+
+json Executor::snapshot_state() const {
+    json out;
+    json statuses = json::object();
+    std::lock_guard<std::mutex> lk(state_mutex_);
+    for (const auto& [id, st] : node_statuses_) {
+        statuses[id] = st;
+    }
+    out["run_id"] = current_run_id_;
+    out["statuses"] = std::move(statuses);
+    if (!paused_at_.empty()) {
+        out["paused_at"] = paused_at_;
+    }
+    return out;
 }
 
 } // namespace workflow
