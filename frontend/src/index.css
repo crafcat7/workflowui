@@ -55,6 +55,37 @@ html, body, #root {
   animation: toast-in 0.3s ease-out;
   max-width: 400px;
   box-shadow: 0 4px 16px rgba(0,0,0,0.6);
+  /* Grid layout reserves a fixed slot for the dismiss button so
+     longer messages never shove it off-screen. */
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.toast-message {
+  /* Allow wrapping for multi-line error messages but keep them
+     inside the max-width. */
+  word-break: break-word;
+}
+
+.toast-dismiss {
+  background: transparent;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  padding: 2px 6px;
+  border-radius: 2px;
+  opacity: 0.7;
+}
+
+.toast-dismiss:hover,
+.toast-dismiss:focus-visible {
+  opacity: 1;
+  outline: 1px solid currentColor;
+  outline-offset: 1px;
 }
 
 .toast.info { background: #1a3a5a; border: 1px solid #2a5a7a; color: #80c0ff; }
