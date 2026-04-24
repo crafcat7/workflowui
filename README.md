@@ -10,7 +10,7 @@ A visual, programmable workbench for orchestrating inference pipelines. Build pi
 - **Full-stack debugging.** Set breakpoints on Debug nodes; the backend scheduler pauses execution and streams node status / paused frames back to the UI over WebSocket for inspection.
 - **Browser + desktop.** Runs as a Vite dev server in the browser or as a Tauri v2 native desktop application sharing the same frontend.
 - **Pluggable inference vendor layer.** The backend defines an abstract `InferenceEngine` interface in `backend/src/vendor/`. An NCNN implementation is shipped; a built-in `StubEngine` (echo) is used when NCNN is disabled at build time so the rest of the system remains fully exercised.
-- **Undo / redo, console, properties & palette panels.** The frontend ships Toolbar, NodePalette, PropertiesPanel, DebugPanel and ConsolePanel, with Zustand + `zundo` for time-travel.
+- **Undo / redo, console, properties & palette panels.** The frontend ships NodePalette, PropertiesPanel, and ConsolePanel (which hosts the toolbar controls and debug log), with Zustand + `zundo` for time-travel.
 
 ## Architecture
 
@@ -83,8 +83,8 @@ This clones and builds NCNN from source under `/tmp/ncnn` (CPU only, no Vulkan, 
 ```bash
 ./setup.sh --dev                    # skip build, just launch pre-built binaries
 ./setup.sh --test                   # full test suite (gtest + vitest + integration + playwright)
-./setup.sh --shared-dir /srv/share  # set the shared root directory
 BACKEND_PORT=8080 ./setup.sh        # custom backend port
+FRONTEND_PORT=5174 ./setup.sh       # custom frontend dev-server port
 ./setup.sh --help
 ```
 
@@ -139,11 +139,10 @@ npm run build        # production build (tsc -b + vite build)
 npm run preview
 ```
 
-The frontend derives the WebSocket URL from the current page host, defaulting to port `9090`. Override via env vars:
+The frontend derives the WebSocket URL from the current page host, defaulting to port `9090`. Override via env var:
 
 ```bash
 VITE_WS_URL=ws://localhost:8080 npm run dev
-VITE_WS_PORT=8080 npm run dev
 ```
 
 #### Security knobs
@@ -177,7 +176,7 @@ Tauri v2.10 config lives in `frontend/src-tauri/`. The window is `1280×800`, id
 
 ## Node Types
 
-The frontend palette (`frontend/src/nodes/index.ts`) exposes 10 node components:
+The frontend palette (`frontend/src/nodes/index.ts`) exposes 11 node components:
 
 | Node | Category | Description |
 |---|---|---|
@@ -188,6 +187,7 @@ The frontend palette (`frontend/src/nodes/index.ts`) exposes 10 node components:
 | Benchmark | inference | Micro-benchmark a loaded net |
 | Postprocess | inference | Built-in post-processing (e.g. softmax / top-k) |
 | Save Text | output | Persist textual results |
+| Save Image | output | Persist image results |
 | Output | output | Display output data in the UI |
 | Condition | control | Branching logic |
 | Debug | debug | Breakpoint / data inspection |
@@ -226,9 +226,7 @@ npm run test:e2e          # headless
 npm run test:e2e:headed   # headed
 ```
 
-The E2E suite in `frontend/e2e/workflow.spec.ts` contains 11 tests across Canvas, Node CRUD, Workflow execution, Save/Load, and WebSocket disconnection scenarios. It runs against a mock WebSocket backend at `frontend/e2e/mock-backend.mjs`, so no C++ build is required.
-
-A live-backend suite is also available: `test:e2e:live`, plus `live-checks.mjs`, `live-benchmark-check.mjs`, `live-timing-check.mjs` in `frontend/e2e/`.
+The E2E suite in `frontend/e2e/workflow.spec.ts` contains 11 tests across Canvas, Node CRUD, Workflow execution, Save/Load, and WebSocket disconnection scenarios. It runs against a mock WebSocket backend at `frontend/e2e/mock-backend.mjs`, so no C++ build is required. A second spec, `ncnn-demo.spec.ts`, boots the real C++ backend (if `backend/build/workflow_backend` exists) and replays the bundled NCNN demo workflow end-to-end.
 
 ### Integration test
 
@@ -256,18 +254,16 @@ workflowUI/
 ├── frontend/
 │   ├── src/
 │   │   ├── App.tsx              # React Flow canvas
-│   │   ├── nodes/               # 10 custom node components (+ tests)
-│   │   ├── panels/              # Toolbar, NodePalette, PropertiesPanel, DebugPanel, ConsolePanel
+│   │   ├── nodes/               # 11 custom node components (+ tests)
+│   │   ├── panels/              # NodePalette, PropertiesPanel, ConsolePanel
 │   │   ├── transport/           # WsClient (JSON-RPC 2.0 + auto-reconnect)
 │   │   ├── engine/              # WorkflowRunner (frontend execution coordinator)
 │   │   ├── store/               # Zustand stores (workflow/debug/toast) with zundo history
 │   │   ├── components/, hooks/, utils/
-│   ├── e2e/                     # Playwright specs + mock-backend.mjs + live-*.mjs
+│   ├── e2e/                     # Playwright specs + mock-backend.mjs
 │   ├── src-tauri/               # Tauri v2 desktop shell (Rust)
 │   └── playwright.config.ts
-├── shared/                      # Default shared root for remote-client file access
-│   └── demo/NCNN_demo/          # Bundled demo (shufflenet.param + workflow.json)
-└── demo/                        # Example workflows
+└── demo/                        # Example workflows (bundled NCNN demo)
 ```
 
 ## Tech Stack

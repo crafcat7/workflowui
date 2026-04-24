@@ -47,7 +47,8 @@ for arg in "$@"; do
       echo "  --test      运行 Playwright E2E 测试"
       echo ""
       echo "环境变量:"
-      echo "  BACKEND_PORT   后端 WebSocket 端口 (默认 9090)"
+      echo "  BACKEND_PORT    后端 WebSocket 端口 (默认 9090)"
+      echo "  FRONTEND_PORT   前端 dev-server 端口 (默认 5173)"
       exit 0
       ;;
     *) err "未知参数: $arg（使用 --help 查看帮助）" ;;
