@@ -270,14 +270,28 @@ int main(int argc, char* argv[]) {
         // Hand off to the session: it stops+joins any previous run
         // before launching the new worker, giving this RPC a
         // well-defined "start now" semantic even under rapid
-        // back-to-back invocations.
-        run_session.start(std::move(graph));
+        // back-to-back invocations. The returned run_id is echoed
+        // back to the client so it can tag subsequent events and
+        // correlate a later workflow.cancel.
+        std::string run_id = run_session.start(std::move(graph));
 
-        return {{"status", "started"}};
+        return {{"status", "started"}, {"run_id", run_id}};
     });
 
     rpc.register_notify("workflow.stop", [&](const json&) {
         executor->stop();
+    });
+
+    // Explicit cancel verb: semantically identical to workflow.stop
+    // today but returns the run_id that was interrupted so a client
+    // can confirm which run it just cancelled (important when the
+    // user double-taps cancel during back-to-back runs). Mid-node
+    // preemption is still not implemented — the cancel is observed
+    // at the next node boundary.
+    rpc.register_method("workflow.cancel", [&](const json&) -> json {
+        std::string run_id = run_session.current_run_id();
+        executor->stop();
+        return {{"cancelled", true}, {"run_id", run_id}};
     });
 
     rpc.register_notify("debug.continue", [&](const json&) {

@@ -1,9 +1,33 @@
 // SPDX-License-Identifier: MIT
 // SPDX-FileCopyrightText: 2026 WorkflowUI contributors
 #include "run_session.h"
+#include <atomic>
+#include <chrono>
+#include <sstream>
 #include <utility>
 
 namespace workflow {
+
+namespace {
+
+// Monotonic, per-process run id. Format `run-<seq>-<ms>` where <seq>
+// is a process-local counter (so repeated starts within the same
+// millisecond still differ) and <ms> is steady_clock milliseconds
+// since process start (human-sortable without leaking wall-clock
+// time, and safe against system clock jumps). Kept short because it
+// travels on every status event.
+std::string make_run_id() {
+    static std::atomic<uint64_t> seq{0};
+    static const auto epoch = std::chrono::steady_clock::now();
+    const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                        std::chrono::steady_clock::now() - epoch)
+                        .count();
+    std::ostringstream oss;
+    oss << "run-" << seq.fetch_add(1, std::memory_order_relaxed) << "-" << ms;
+    return oss.str();
+}
+
+} // namespace
 
 RunSession::RunSession(std::shared_ptr<Executor> executor)
     : executor_(std::move(executor)) {}
@@ -15,7 +39,7 @@ RunSession::~RunSession() {
     shutdown();
 }
 
-void RunSession::start(WorkflowGraph graph) {
+std::string RunSession::start(WorkflowGraph graph) {
     std::lock_guard<std::mutex> lock(mutex_);
 
     // Tear down the previous run, if any. Executor::stop() flips an
@@ -26,13 +50,26 @@ void RunSession::start(WorkflowGraph graph) {
         worker_.join();
     }
 
+    // Assign a fresh id AFTER the previous run is fully joined: that
+    // way no stale status event from the prior run can accidentally
+    // be tagged with the new id (the executor writes current_run_id_
+    // from its own thread, and we've just proven that thread is gone).
+    last_run_id_ = make_run_id();
+
     // Capture by value (graph already moved into the lambda, executor
     // is a shared_ptr so the worker keeps it alive independently of
     // the RunSession); if the session is destroyed mid-run, shutdown()
     // will still synchronize via the mutex and the join below.
-    worker_ = std::thread([exec = executor_, g = std::move(graph)]() mutable {
-        if (exec) exec->execute(g);
+    worker_ = std::thread([exec = executor_, g = std::move(graph),
+                           id = last_run_id_]() mutable {
+        if (exec) exec->execute(g, id);
     });
+    return last_run_id_;
+}
+
+std::string RunSession::current_run_id() const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return last_run_id_;
 }
 
 void RunSession::shutdown() {

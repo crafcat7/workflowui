@@ -97,6 +97,52 @@ TEST(RunSessionTest, RestartStopsPreviousRunAndCleansUp) {
     EXPECT_GE(complete_events.load(), 1);
 }
 
+TEST(RunSessionTest, StartReturnsUniqueRunIdAndTagsEvents) {
+    // R1 semantics: every start() must return a distinct run_id, and
+    // every status event emitted by the executor for that run must
+    // carry the same id verbatim so clients can filter stale events.
+    auto engine = std::make_shared<MockEngine>();
+    auto executor = std::make_shared<Executor>(engine);
+
+    std::vector<std::string> run_ids_on_events;
+    std::mutex events_mu;
+    executor->set_status_callback([&](const std::string&, const json& msg) {
+        std::lock_guard<std::mutex> lk(events_mu);
+        if (msg.contains("run_id")) {
+            run_ids_on_events.push_back(msg["run_id"].get<std::string>());
+        }
+    });
+
+    RunSession session(executor);
+    std::string id1 = session.start(make_trivial_graph());
+    EXPECT_FALSE(id1.empty());
+    // Let the first run finish before starting the second so we can
+    // reason about which events belong to which id without timing
+    // assumptions about stop-and-relaunch.
+    ASSERT_TRUE(wait_for(
+        [&]{
+            std::lock_guard<std::mutex> lk(events_mu);
+            return !run_ids_on_events.empty();
+        },
+        std::chrono::seconds(2)));
+    session.shutdown();
+
+    std::string id2 = session.start(make_trivial_graph());
+    EXPECT_FALSE(id2.empty());
+    EXPECT_NE(id1, id2) << "successive starts must yield distinct run_ids";
+    EXPECT_EQ(id2, session.current_run_id());
+    session.shutdown();
+
+    // Every observed event must have carried one of the two ids —
+    // never a blank or third value.
+    std::lock_guard<std::mutex> lk(events_mu);
+    EXPECT_FALSE(run_ids_on_events.empty());
+    for (const auto& id : run_ids_on_events) {
+        EXPECT_TRUE(id == id1 || id == id2)
+            << "unexpected run_id on status event: " << id;
+    }
+}
+
 TEST(RunSessionTest, ShutdownWithoutStartIsNoop) {
     // Destroying/shutdown-ing a session that never started a run
     // must not deadlock, crash, or do anything observable.

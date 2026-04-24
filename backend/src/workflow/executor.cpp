@@ -124,7 +124,8 @@ json Executor::describe_nodes() const {
     return out;
 }
 
-void Executor::execute(const WorkflowGraph& graph) {
+void Executor::execute(const WorkflowGraph& graph, std::string run_id) {
+    current_run_id_ = std::move(run_id);
     debug_.reset();
     // Release nets created by the previous run before we drop the port
     // map; without this, `init_net` handles leak for the whole process
@@ -215,6 +216,12 @@ void Executor::execute(const WorkflowGraph& graph) {
                 inputs.push_back(std::move(entry));
             }
             data["inputs"] = std::move(inputs);
+            // Stamp the pause event with the run id for the same reason
+            // notify_status does: a client that cancelled this run must
+            // be able to drop the paused event without acting on it.
+            if (!current_run_id_.empty()) {
+                data["run_id"] = current_run_id_;
+            }
             if (pause_cb_) pause_cb_(node_id, data);
 
             debug_.wait_for_resume();
@@ -297,6 +304,12 @@ void Executor::notify_status(const std::string& node_id, const std::string& stat
     json msg;
     msg["node_id"] = node_id;
     msg["status"] = status;
+    // Tag the event with the current run so clients can ignore stale
+    // messages from a superseded/cancelled run (see Executor::execute).
+    // Empty when the caller did not provide a run_id (e.g. legacy tests).
+    if (!current_run_id_.empty()) {
+        msg["run_id"] = current_run_id_;
+    }
     for (auto& [k, v] : extra.items()) {
         msg[k] = v;
     }

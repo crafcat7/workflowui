@@ -43,10 +43,18 @@ public:
     json describe_nodes() const;
 
     // Execute the full workflow. Blocks until complete or stopped.
-    void execute(const WorkflowGraph& graph);
+    // `run_id` tags every status/pause event emitted by this run so
+    // clients can discard stale events from an earlier run that was
+    // cancelled or superseded. May be empty (legacy callers); tests
+    // and simple embeds are not required to generate one.
+    void execute(const WorkflowGraph& graph, std::string run_id = {});
 
     // Stop current execution
     void stop();
+
+    // Returns the run_id of the currently-executing workflow, or the
+    // most recent one if none is running. Empty before the first run.
+    std::string current_run_id() const { return current_run_id_; }
 
     // ExecutionContext implementation
     PortValue resolve_input(const std::string& node_id, const std::string& handle, const WorkflowGraph& graph) override;
@@ -104,6 +112,13 @@ private:
 
     // Registry of node handlers
     std::unordered_map<std::string, std::shared_ptr<NodeHandler>> handlers_;
+
+    // Tags every status / pause event with the run that produced it so
+    // clients can discard events from a run they already cancelled or
+    // superseded. Mutated only by execute(); read by notify_status /
+    // the pause path on the same thread, so no extra synchronization
+    // is required beyond what the worker thread already provides.
+    std::string current_run_id_;
 };
 
 } // namespace workflow
