@@ -22,6 +22,7 @@
  */
 
 import type { HandleDataType } from '../components/LabeledHandle';
+import { NODE_MANIFEST } from './manifest';
 
 export interface PortDef {
   id: string;
@@ -29,38 +30,12 @@ export interface PortDef {
   dataType: HandleDataType;
 }
 
-/** Registry of ports per node type. Empty array means no typed ports. */
-export const NODE_PORTS: Record<string, PortDef[]> = {
-  inputImage: [{ id: 'image_data', direction: 'source', dataType: 'image' }],
-  inputTensor: [{ id: 'tensor_data', direction: 'source', dataType: 'tensor' }],
-  createNet: [{ id: 'net_handle', direction: 'source', dataType: 'net' }],
-  inference: [
-    { id: 'net_handle', direction: 'target', dataType: 'net' },
-    { id: 'input_data', direction: 'target', dataType: 'tensor' },
-    { id: 'output_data', direction: 'source', dataType: 'tensor' },
-  ],
-  benchmark: [
-    { id: 'net_handle', direction: 'target', dataType: 'net' },
-    { id: 'input_data', direction: 'target', dataType: 'tensor' },
-    { id: 'benchmark_result', direction: 'source', dataType: 'generic' },
-  ],
-  saveText: [{ id: 'data', direction: 'target', dataType: 'generic' }],
-  saveImage: [{ id: 'image_data', direction: 'target', dataType: 'image' }],
-  condition: [
-    { id: 'input_data', direction: 'target', dataType: 'tensor' },
-    { id: 'true_branch', direction: 'source', dataType: 'branch' },
-    { id: 'false_branch', direction: 'source', dataType: 'branch' },
-  ],
-  postprocess: [
-    { id: 'input_data', direction: 'target', dataType: 'tensor' },
-    { id: 'output_data', direction: 'source', dataType: 'tensor' },
-  ],
-  output: [{ id: 'data', direction: 'target', dataType: 'generic' }],
-  debug: [
-    { id: 'data_in', direction: 'target', dataType: 'generic' },
-    { id: 'data_out', direction: 'source', dataType: 'generic' },
-  ],
-};
+/** Registry of ports per node type. Derived from `NODE_MANIFEST` so there
+ *  is a single source of truth; adding a node type only requires an entry
+ *  in the manifest. */
+export const NODE_PORTS: Record<string, PortDef[]> = Object.fromEntries(
+  NODE_MANIFEST.map((e) => [e.type, e.ports]),
+);
 
 export function getPort(nodeType: string | undefined, handleId: string | null | undefined): PortDef | null {
   if (!nodeType || !handleId) return null;

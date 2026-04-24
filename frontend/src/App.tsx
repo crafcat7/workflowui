@@ -28,6 +28,7 @@ import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { useWorkflowActions } from './hooks/useWorkflowActions';
 import { nodeTypes } from './nodes';
 import { validateConnection, getPort } from './nodes/portSchema';
+import { CATEGORY_VISUALS, getManifestEntry } from './nodes/manifest';
 import { NodePalette } from './panels/NodePalette';
 import { PropertiesPanel } from './panels/PropertiesPanel';
 import { ConsolePanel } from './panels/ConsolePanel';
@@ -338,31 +339,22 @@ function getCategoryClass(type: string): string {
 }
 
 /**
- * Single source of truth for node categorization: MiniMap swatch color
- * and canvas CSS class. Unknown / missing types fall back to the default.
+ * Node category visuals (minimap color + CSS class) come from the
+ * single manifest in `nodes/manifest.ts`. Unknown / missing types fall
+ * back to the default.
  */
 interface NodeCategory {
   miniMapColor: string;
   cssClass: string;
 }
 
-const NODE_CATEGORIES: Record<string, NodeCategory> = {
-  inputImage:  { miniMapColor: '#2a9d8f', cssClass: 'node-input' },
-  inputTensor: { miniMapColor: '#2a9d8f', cssClass: 'node-input' },
-  createNet:   { miniMapColor: '#9b59b6', cssClass: 'node-inference' },
-  inference:   { miniMapColor: '#9b59b6', cssClass: 'node-inference' },
-  benchmark:   { miniMapColor: '#9b59b6', cssClass: 'node-inference' },
-  saveText:    { miniMapColor: '#2ecc71', cssClass: 'node-output' },
-  saveImage:   { miniMapColor: '#2ecc71', cssClass: 'node-output' },
-  output:      { miniMapColor: '#2ecc71', cssClass: 'node-output' },
-  condition:   { miniMapColor: '#6080c0', cssClass: 'node-control' },
-  debug:       { miniMapColor: '#e0c080', cssClass: 'node-debug' },
-};
-
 const DEFAULT_NODE_CATEGORY: NodeCategory = { miniMapColor: '#444', cssClass: '' };
 
 function nodeCategory(type: string | undefined): NodeCategory {
-  return (type && NODE_CATEGORIES[type]) || DEFAULT_NODE_CATEGORY;
+  const entry = getManifestEntry(type);
+  if (!entry) return DEFAULT_NODE_CATEGORY;
+  const visual = CATEGORY_VISUALS[entry.category];
+  return { miniMapColor: visual.color, cssClass: visual.cssClass };
 }
 
 export default App;

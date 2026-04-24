@@ -2,17 +2,14 @@
 // SPDX-FileCopyrightText: 2026 WorkflowUI contributors
 import { useState } from 'react';
 import { nodeTypeList, type NodeTypeInfo } from '../nodes';
+import { CATEGORY_VISUALS, type NodeCategoryKey } from '../nodes/manifest';
 
-const categories = [
-  { key: 'input', label: 'INPUT', color: '#2a9d8f' },
-  { key: 'inference', label: 'INFERENCE', color: '#9b59b6' },
-  { key: 'output', label: 'OUTPUT', color: '#2ecc71' },
-  { key: 'control', label: 'CONTROL', color: '#6080c0' },
-  { key: 'debug', label: 'DEBUG', color: '#e0c080' },
-] as const;
+// Render categories in the order they appear in CATEGORY_VISUALS
+// (which is also the manifest's declared category order).
+const categoryOrder = Object.keys(CATEGORY_VISUALS) as NodeCategoryKey[];
 
 function groupByCategory(list: NodeTypeInfo[]) {
-  const groups: Record<string, NodeTypeInfo[]> = {};
+  const groups: Partial<Record<NodeCategoryKey, NodeTypeInfo[]>> = {};
   for (const nt of list) {
     (groups[nt.category] ??= []).push(nt);
   }
@@ -32,18 +29,19 @@ export function NodePalette() {
   return (
     <div className="node-palette">
       <div className="palette-title">NODES</div>
-      {categories.map((cat) => {
-        const items = grouped[cat.key];
-        if (!items) return null;
-        const isCollapsed = collapsed[cat.key] ?? false;
+      {categoryOrder.map((key) => {
+        const items = grouped[key];
+        if (!items || items.length === 0) return null;
+        const visual = CATEGORY_VISUALS[key];
+        const isCollapsed = collapsed[key] ?? false;
         return (
-          <div className="palette-category" key={cat.key}>
+          <div className="palette-category" key={key}>
             <div
               className="palette-category-header"
-              onClick={() => setCollapsed((s) => ({ ...s, [cat.key]: !isCollapsed }))}
+              onClick={() => setCollapsed((s) => ({ ...s, [key]: !isCollapsed }))}
             >
-              <span className="palette-cat-indicator" style={{ background: cat.color }} />
-              <span className="palette-cat-label">{cat.label}</span>
+              <span className="palette-cat-indicator" style={{ background: visual.color }} />
+              <span className="palette-cat-label">{visual.label}</span>
               <span className="palette-cat-toggle">{isCollapsed ? '+' : '-'}</span>
             </div>
             {!isCollapsed && (

@@ -12,6 +12,7 @@ import { ConditionNode } from './ConditionNode';
 import { PostprocessNode } from './PostprocessNode';
 import { OutputNode } from './OutputNode';
 import { DebugNode } from './DebugNode';
+import { NODE_MANIFEST, type NodeCategoryKey } from './manifest';
 
 export const nodeTypes: NodeTypes = {
   inputImage: InputImageNode,
@@ -31,19 +32,13 @@ export interface NodeTypeInfo {
   type: string;
   label: string;
   icon: string;
-  category: 'input' | 'inference' | 'output' | 'control' | 'debug';
+  category: NodeCategoryKey;
 }
 
-export const nodeTypeList: NodeTypeInfo[] = [
-  { type: 'inputImage', label: 'Input Image', icon: '🖼', category: 'input' },
-  { type: 'inputTensor', label: 'Input Tensor', icon: '📊', category: 'input' },
-  { type: 'createNet', label: 'Create Net', icon: '🧠', category: 'inference' },
-  { type: 'inference', label: 'Inference', icon: '⚡', category: 'inference' },
-  { type: 'benchmark', label: 'Benchmark', icon: '📈', category: 'inference' },
-  { type: 'postprocess', label: 'Postprocess', icon: '🛠️', category: 'inference' },
-  { type: 'saveText', label: 'Save Text', icon: '💾', category: 'output' },
-  { type: 'saveImage', label: 'Save Image', icon: '🖼️', category: 'output' },
-  { type: 'condition', label: 'Condition', icon: '🔀', category: 'control' },
-  { type: 'output', label: 'Output', icon: '📤', category: 'output' },
-  { type: 'debug', label: 'Inspect', icon: '🔍', category: 'debug' },
-];
+// Derived from the manifest so drift is impossible.
+export const nodeTypeList: NodeTypeInfo[] = NODE_MANIFEST.map((e) => ({
+  type: e.type,
+  label: e.label,
+  icon: e.icon,
+  category: e.category,
+}));
