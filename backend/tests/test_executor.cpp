@@ -661,3 +661,101 @@ TEST(ExecutorTest, SnapshotStateReportsPausedAtDuringBreakpoint) {
     EXPECT_FALSE(snap_after.contains("paused_at"));
     EXPECT_EQ(snap_after["statuses"].value("dst", ""), "done");
 }
+
+// R1+ boundary cancel: a handler that finished *after* the user
+// pressed cancel must not ship its terminal event. Before the
+// post-handler `is_stopped()` check was added, the sequence went
+// `running → (user cancels) → handler returns → done` and the
+// client received a `done` for a node it had written off. With the
+// check in place, `done` is suppressed and the loop breaks before
+// touching any downstream node.
+TEST(ExecutorTest, CancelAfterHandlerStartsSuppressesDoneAndStopsLoop) {
+    auto engine = std::make_shared<MockEngine>();
+    Executor executor(engine);
+    auto g = make_passthrough_graph("src", "dst");
+
+    // Stop the run the moment we see `src` start running. The handler
+    // itself is trivial (pass-through inputTensor), so it will finish
+    // promptly — but post-handler the executor must re-check and
+    // short-circuit before emitting `done` or advancing to `dst`.
+    std::vector<std::pair<std::string, std::string>> events;
+    std::mutex ev_mu;
+    executor.set_status_callback([&](const std::string& id, const json& s) {
+        std::lock_guard<std::mutex> lk(ev_mu);
+        events.push_back({id, s.value("status", "")});
+        if (id == "src" && s.value("status", "") == "running") {
+            executor.stop();
+        }
+    });
+
+    std::thread runner([&] { executor.execute(g, "run-cancel"); });
+    runner.join();
+
+    // Expected wire events: src/running, __workflow__/complete. The
+    // crucial absences: no src/done (suppressed post-handler), no
+    // dst/running (loop broke before reaching it).
+    auto has_event = [&](const std::string& node, const std::string& st) {
+        std::lock_guard<std::mutex> lk(ev_mu);
+        for (auto& e : events) if (e.first == node && e.second == st) return true;
+        return false;
+    };
+    EXPECT_TRUE(has_event("src", "running"));
+    EXPECT_FALSE(has_event("src", "done"));
+    EXPECT_FALSE(has_event("dst", "running"));
+    EXPECT_FALSE(has_event("dst", "done"));
+    // complete still fires — FE's `isRunning` flag depends on it to
+    // clear, even on cancelled runs.
+    EXPECT_TRUE(has_event("__workflow__", "complete"));
+
+    // Snapshot reflects the partial state: src never received `done`
+    // so it stays on the last written status, which is `running`.
+    // This is acceptable because the FE's run_id filter treats a
+    // cancelled run's snapshot as stale anyway.
+    json snap = executor.snapshot_state();
+    EXPECT_EQ(snap["statuses"].value("src", ""), "running");
+    EXPECT_FALSE(snap["statuses"].contains("dst"));
+}
+
+// Symmetric case: a handler that *threw* after cancel must not ship
+// its error event either. Otherwise the FE would mark a node red
+// for a failure the user had already abandoned — surprising UX,
+// especially when the "failure" was just the handler reacting to
+// shutdown (e.g. thread interruption wrapped as an exception).
+TEST(ExecutorTest, CancelAfterHandlerThrowsSuppressesErrorEvent) {
+    auto engine = std::make_shared<MockEngine>();
+    Executor executor(engine);
+
+    // Use a graph with a handler that always throws — the cleanest
+    // way to drive the catch path without custom handler injection.
+    // `inputTensor` with `fillMode=text` and malformed text triggers
+    // a NodeError during execute().
+    WorkflowGraph g;
+    NodeDef bad;
+    bad.id = "bad";
+    bad.type = "inputTensor";
+    bad.config["fillMode"] = "text";
+    bad.config["tensorText"] = "not-a-number";  // triggers parse failure
+    g.add_node(bad);
+
+    std::vector<std::string> statuses_for_bad;
+    std::mutex ev_mu;
+    executor.set_status_callback([&](const std::string& id, const json& s) {
+        if (id != "bad") return;
+        std::lock_guard<std::mutex> lk(ev_mu);
+        statuses_for_bad.push_back(s.value("status", ""));
+        if (s.value("status", "") == "running") {
+            // Request cancel while the handler is executing; by the
+            // time it throws, the post-catch is_stopped() check must
+            // suppress the `error` event.
+            executor.stop();
+        }
+    });
+
+    std::thread runner([&] { executor.execute(g, "run-err-cancel"); });
+    runner.join();
+
+    std::lock_guard<std::mutex> lk(ev_mu);
+    // Sequence must be just [running] — neither `done` nor `error`.
+    ASSERT_EQ(statuses_for_bad.size(), 1u);
+    EXPECT_EQ(statuses_for_bad[0], "running");
+}

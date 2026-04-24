@@ -264,14 +264,24 @@ void Executor::execute(const WorkflowGraph& graph, std::string run_id) {
                                 "Unknown node type: " + node->type);
             }
             json extra = it->second->execute(*node, graph, *this);
+            // Post-node cancel check: the handler may have taken seconds
+            // (inference, file I/O) during which the user pressed cancel.
+            // Suppressing the terminal event here avoids shipping a
+            // `done`/`error` for a node the client has already written
+            // off. FE run_id filtering is a second line of defense;
+            // this is the first. `port_data_` is intentionally left
+            // populated so a fast re-run can reuse upstream outputs.
+            if (debug_.is_stopped()) break;
             notify_status(node_id, "done", extra);
         } catch (const NodeError& e) {
+            if (debug_.is_stopped()) break;
             record_failure(node_id, graph, NodeError::kind_to_string(e.kind()), e.message());
         } catch (const std::exception& e) {
             // Handlers not yet migrated to NodeError still land here; treat
             // as generic runtime errors but apply the same dead-port
             // propagation so downstream nodes get `upstream_failed`
             // instead of a confusing "Missing input" message.
+            if (debug_.is_stopped()) break;
             record_failure(node_id, graph, "runtime", e.what());
         }
     }

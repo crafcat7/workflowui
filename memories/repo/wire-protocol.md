@@ -16,7 +16,7 @@ future agents must preserve.
 - `vendor.getConfigSchema { vendor }` → `{ fields: [...] }`
 - `nodes.list {}` → `{ nodes: [{ type, label, category, ports: [{ id, direction, dataType }] }] }` sorted by `type`. Source of truth for what this backend build can execute.
 - `workflow.execute { nodes, edges, breakpoints }` → `{ status: "started", run_id }`. Validates params shape; failures throw `InvalidParams` → `-32602`.
-- `workflow.cancel {}` → `{ cancelled: true, run_id }`. Semantically identical to the legacy `workflow.stop` notification but returns the id it interrupted. Mid-node preemption is NOT implemented — cancel is observed at the next node boundary.
+- `workflow.cancel {}` → `{ cancelled: true, run_id }`. Semantically identical to the legacy `workflow.stop` notification but returns the id it interrupted. Mid-node preemption is NOT implemented — cancel is observed at node boundaries (both before and after each handler runs; R1+). If cancel arrives *during* a handler execution, the handler still runs to completion, but its terminal `done`/`error` event is suppressed and the loop breaks without advancing to downstream nodes. A cancelled node thus appears to the client as permanently `running` until the next run overwrites it — acceptable because the FE's `run_id` filter treats the cancelled run's events as stale anyway.
 - `workflow.state {}` → `{ run_id, statuses: { node_id → status_string }, paused_at? }`. Snapshot of the executor for reconnect reconciliation (W1). Called by the FE automatically on every WebSocket reopen after the first. See "Reconnect reconciliation" below.
 - `debug.add_breakpoint { node_id }` → `{ ok: true }`
 - `debug.remove_breakpoint { node_id }` → `{ ok: true }`
