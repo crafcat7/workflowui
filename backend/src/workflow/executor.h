@@ -58,6 +58,12 @@ private:
     void notify_status(const std::string& node_id, const std::string& status, const json& extra = {});
     void register_handlers();
 
+    // Record a handler failure: mark the node as failed, kill all of
+    // its source ports so downstream nodes skip with `upstream_failed`,
+    // and emit an error status with the structured kind.
+    void record_failure(const std::string& node_id, const WorkflowGraph& graph,
+                        const std::string& kind, const std::string& message);
+
     // Returns true if `node` has at least one input edge AND every input
     // edge's source port is dead; such a node is pruned (its outputs are
     // also marked dead, propagating the skip forward).
@@ -77,6 +83,15 @@ private:
     // skipped, or explicitly pruned by a Condition node). Keys are
     // "node_id:port_name" exactly like port_data_.
     std::unordered_set<std::string> dead_ports_;
+
+    // Nodes whose handler threw. Used to distinguish branch-pruned
+    // skips from upstream-failure skips when reporting downstream
+    // status. Value carries structured error metadata for the UI.
+    struct FailureInfo {
+        std::string kind;    // "missing_input" | "invalid_config" | ...
+        std::string message; // Human-readable, shown verbatim in UI
+    };
+    std::unordered_map<std::string, FailureInfo> failed_nodes_;
 
     // Registry of node handlers
     std::unordered_map<std::string, std::shared_ptr<NodeHandler>> handlers_;

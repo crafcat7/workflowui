@@ -11,7 +11,7 @@ import {
   applyEdgeChanges,
 } from '@xyflow/react';
 
-export type NodeStatus = 'idle' | 'running' | 'done' | 'error' | 'paused';
+export type NodeStatus = 'idle' | 'running' | 'done' | 'error' | 'paused' | 'skipped';
 
 /**
  * Fields that represent *runtime* execution state (as opposed to user-authored

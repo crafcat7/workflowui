@@ -2,6 +2,7 @@
 // SPDX-FileCopyrightText: 2026 WorkflowUI contributors
 #include "core_handlers.h"
 #include "condition_expr.h"
+#include "../node_error.h"
 #include "server/security_config.h"
 #include <fstream>
 #include <sstream>
@@ -51,7 +52,7 @@ public:
     }
     json execute(const NodeDef& node, const WorkflowGraph& graph, ExecutionContext& ctx) override {
         auto data_val = ctx.resolve_input(node.id, "input_data", graph);
-        if (std::holds_alternative<std::monostate>(data_val)) throw std::runtime_error("Missing input_data");
+        if (std::holds_alternative<std::monostate>(data_val)) throw NodeError(NodeError::Kind::MissingInput, "Missing input_data");
         
         auto& input = std::get<TensorData>(data_val);
         std::string op = get_config(node, "op");
@@ -108,7 +109,7 @@ public:
                 output.push_back(input[indices[i]]);
             }
         } else {
-            throw std::runtime_error("Unknown postprocess op: " + op);
+            throw NodeError(NodeError::Kind::InvalidConfig, "Unknown postprocess op: " + op);
         }
 
         ctx.set_output(node.id, "output_data", output);
@@ -128,7 +129,7 @@ public:
         std::string path = get_config(node, "filePath");
         auto resolved = resolve_path(path);
         std::ifstream f(resolved, std::ios::binary);
-        if (!f) throw std::runtime_error("Cannot open image: " + path);
+        if (!f) throw NodeError(NodeError::Kind::Runtime, "Cannot open image: " + path);
         std::vector<uint8_t> data((std::istreambuf_iterator<char>(f)),
                                    std::istreambuf_iterator<char>());
         ImageData img;
@@ -249,8 +250,8 @@ public:
         auto handle_val = ctx.resolve_input(node.id, "net_handle", graph);
         auto input_val = ctx.resolve_input(node.id, "input_data", graph);
 
-        if (std::holds_alternative<std::monostate>(handle_val)) throw std::runtime_error("Missing net_handle input");
-        if (std::holds_alternative<std::monostate>(input_val)) throw std::runtime_error("Missing input_data");
+        if (std::holds_alternative<std::monostate>(handle_val)) throw NodeError(NodeError::Kind::MissingInput, "Missing net_handle input");
+        if (std::holds_alternative<std::monostate>(input_val)) throw NodeError(NodeError::Kind::MissingInput, "Missing input_data");
 
         auto handle = std::get<int64_t>(handle_val);
         auto& input = std::get<TensorData>(input_val);
@@ -280,8 +281,8 @@ public:
         auto handle_val = ctx.resolve_input(node.id, "net_handle", graph);
         auto input_val = ctx.resolve_input(node.id, "input_data", graph);
 
-        if (std::holds_alternative<std::monostate>(handle_val)) throw std::runtime_error("Missing net_handle input");
-        if (std::holds_alternative<std::monostate>(input_val)) throw std::runtime_error("Missing input_data");
+        if (std::holds_alternative<std::monostate>(handle_val)) throw NodeError(NodeError::Kind::MissingInput, "Missing net_handle input");
+        if (std::holds_alternative<std::monostate>(input_val)) throw NodeError(NodeError::Kind::MissingInput, "Missing input_data");
 
         auto handle = std::get<int64_t>(handle_val);
         auto& input = std::get<TensorData>(input_val);
@@ -328,7 +329,7 @@ public:
         auto resolved = resolve_path(path);
 
         std::ofstream f(resolved);
-        if (!f.is_open()) throw std::runtime_error("Failed to open file for writing: " + path);
+        if (!f.is_open()) throw NodeError(NodeError::Kind::Runtime, "Failed to open file for writing: " + path);
 
         if (auto* t = std::get_if<TensorData>(&data_val)) {
             for (auto v : *t) f << v << "\n";
@@ -356,7 +357,7 @@ public:
 
         if (auto* img = std::get_if<ImageData>(&data_val)) {
             std::ofstream f(resolved, std::ios::binary);
-            if (!f.is_open()) throw std::runtime_error("Failed to open image file for writing: " + path);
+            if (!f.is_open()) throw NodeError(NodeError::Kind::Runtime, "Failed to open image file for writing: " + path);
             f.write(reinterpret_cast<const char*>(img->pixels.data()), img->pixels.size());
         }
         return {};

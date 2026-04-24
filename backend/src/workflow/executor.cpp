@@ -2,6 +2,7 @@
 // SPDX-FileCopyrightText: 2026 WorkflowUI contributors
 #include "executor.h"
 #include "handlers/core_handlers.h"
+#include "node_error.h"
 #include <algorithm>
 #include <stdexcept>
 
@@ -133,6 +134,7 @@ void Executor::execute(const WorkflowGraph& graph) {
     }
     port_data_.clear();
     dead_ports_.clear();
+    failed_nodes_.clear();
 
     auto order = scheduler_.schedule(graph);
 
@@ -142,18 +144,36 @@ void Executor::execute(const WorkflowGraph& graph) {
         auto* node = graph.get_node(node_id);
         if (!node) continue;
 
-        // Branch pruning: if every incoming edge's source port is dead,
-        // this node was only reachable through an un-taken Condition
-        // branch. Mark all of its outgoing edges' source ports dead so
-        // the skip propagates, notify the frontend, and move on.
+        // Branch pruning / upstream-failure propagation: if every incoming
+        // edge's source port is dead, this node is unreachable. Determine
+        // *why* (un-taken Condition branch vs. upstream handler failure)
+        // so the frontend can distinguish intentional pruning from error
+        // propagation, mark all of its outgoing edges' source ports dead
+        // so the skip keeps propagating, notify the frontend, and move on.
         if (should_skip(node_id, graph)) {
+            std::string upstream_cause;
+            for (auto* edge : graph.inputs_for(node_id)) {
+                if (failed_nodes_.count(edge->source)) {
+                    upstream_cause = edge->source;
+                    break;
+                }
+            }
             for (const auto& e : graph.edges()) {
                 if (e.source == node_id) {
                     dead_ports_.insert(node_id + ":" + e.source_handle);
                 }
             }
             json extra;
-            extra["reason"] = "branch_pruned";
+            if (!upstream_cause.empty()) {
+                extra["reason"] = "upstream_failed";
+                extra["upstream"] = upstream_cause;
+                // Inherit-mark this node as failed too so skip cascades
+                // downstream are attributed correctly.
+                failed_nodes_[node_id] = {"upstream_failed",
+                    "Upstream node '" + upstream_cause + "' failed"};
+            } else {
+                extra["reason"] = "branch_pruned";
+            }
             notify_status(node_id, "skipped", extra);
             continue;
         }
@@ -191,14 +211,19 @@ void Executor::execute(const WorkflowGraph& graph) {
         try {
             auto it = handlers_.find(node->type);
             if (it == handlers_.end()) {
-                throw std::runtime_error("Unknown node type: " + node->type);
+                throw NodeError(NodeError::Kind::InvalidConfig,
+                                "Unknown node type: " + node->type);
             }
             json extra = it->second->execute(*node, graph, *this);
             notify_status(node_id, "done", extra);
+        } catch (const NodeError& e) {
+            record_failure(node_id, graph, NodeError::kind_to_string(e.kind()), e.message());
         } catch (const std::exception& e) {
-            json err;
-            err["error"] = e.what();
-            notify_status(node_id, "error", err);
+            // Handlers not yet migrated to NodeError still land here; treat
+            // as generic runtime errors but apply the same dead-port
+            // propagation so downstream nodes get `upstream_failed`
+            // instead of a confusing "Missing input" message.
+            record_failure(node_id, graph, "runtime", e.what());
         }
     }
 
@@ -261,6 +286,20 @@ void Executor::notify_status(const std::string& node_id, const std::string& stat
         msg[k] = v;
     }
     status_cb_(node_id, msg);
+}
+
+void Executor::record_failure(const std::string& node_id, const WorkflowGraph& graph,
+                              const std::string& kind, const std::string& message) {
+    failed_nodes_[node_id] = {kind, message};
+    for (const auto& e : graph.edges()) {
+        if (e.source == node_id) {
+            dead_ports_.insert(node_id + ":" + e.source_handle);
+        }
+    }
+    json err;
+    err["error"] = message;
+    err["kind"] = kind;
+    notify_status(node_id, "error", err);
 }
 
 } // namespace workflow

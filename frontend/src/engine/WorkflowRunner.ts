@@ -16,6 +16,12 @@ interface NodeStatusUpdate {
   elapsed_ms?: number;
   output?: unknown;
   error?: string;
+  /** Typed error kind from backend NodeError (missing_input, invalid_config, runtime, upstream_failed). */
+  kind?: string;
+  /** For status=='skipped': why. Either 'branch_pruned' or 'upstream_failed'. */
+  reason?: string;
+  /** For status=='skipped' with reason=='upstream_failed': which node failed. */
+  upstream?: string;
   runs_count?: number;
   avg_ms?: number;
 }
@@ -25,7 +31,7 @@ interface DebugPausedEvent {
   data: Record<string, unknown>;
 }
 
-const VALID_STATUSES: ReadonlySet<string> = new Set(['idle', 'running', 'done', 'error', 'paused']);
+const VALID_STATUSES: ReadonlySet<string> = new Set(['idle', 'running', 'done', 'error', 'paused', 'skipped']);
 
 function coerceStatus(raw: string): NodeStatus {
   return (VALID_STATUSES.has(raw) ? raw : 'idle') as NodeStatus;
@@ -54,14 +60,17 @@ export function initWorkflowRunner() {
 
         useDebugStore.getState().addLog({
           nodeId: update.node_id,
-          message: update.error || `Status: ${update.status}`,
-          level: update.error ? 'error' : 'info',
+          message: buildLogMessage(update),
+          level: update.error ? 'error' : update.status === 'skipped' ? 'warn' : 'info',
           data: update.output,
         });
 
         // Surface errors prominently — the bottom console is often collapsed.
+        // Skipped nodes are *consequences* of an upstream error that already
+        // toasted, so don't double-notify.
         if (update.error) {
-          showToast(`[${update.node_id}] ${update.error}`, 'error');
+          const prefix = update.kind ? `${update.kind}: ` : '';
+          showToast(`[${update.node_id}] ${prefix}${update.error}`, 'error');
         }
         break;
       }
@@ -90,4 +99,25 @@ export function initWorkflowRunner() {
       }
     }
   });
+}
+
+/**
+ * Compose the console-log line for a status update. Errors show the
+ * typed kind when available; `skipped` nodes explain whether they were
+ * branch-pruned or sacrificed to an upstream failure.
+ */
+function buildLogMessage(u: NodeStatusUpdate): string {
+  if (u.error) {
+    return u.kind ? `[${u.kind}] ${u.error}` : u.error;
+  }
+  if (u.status === 'skipped') {
+    if (u.reason === 'upstream_failed' && u.upstream) {
+      return `Skipped (upstream '${u.upstream}' failed)`;
+    }
+    if (u.reason === 'branch_pruned') {
+      return 'Skipped (branch not taken)';
+    }
+    return 'Skipped';
+  }
+  return `Status: ${u.status}`;
 }

@@ -371,3 +371,56 @@ TEST(ExecutorTest, DescribeNodesCoversAllHandlers) {
     EXPECT_EQ(it->at("category"), "inference");
     EXPECT_EQ(it->at("ports").size(), 3u);
 }
+
+// A handler that fails must (a) emit an `error` status with a typed
+// kind and (b) mark its source ports dead so downstream nodes skip
+// with `reason=upstream_failed` instead of emitting their own
+// misleading 'Missing input' errors.
+TEST(ExecutorTest, UpstreamFailurePropagatesAsSkipNotError) {
+    auto engine = std::make_shared<MockEngine>();
+    Executor executor(engine);
+
+    WorkflowGraph graph;
+    // A: inference node with no inputs wired → handler will throw
+    //    NodeError(MissingInput, "Missing net_handle input"). A is a
+    //    *sink* from the scheduler's perspective only if we don't
+    //    give it inputs; but we also need downstream nodes that would
+    //    otherwise try to run, so plant B → output directly fed by A.
+    NodeDef a;
+    a.id = "a";
+    a.type = "inference"; // will fail: no net_handle/input_data edges
+    graph.add_node(a);
+
+    NodeDef b;
+    b.id = "b";
+    b.type = "output";
+    graph.add_node(b);
+
+    EdgeDef e1;
+    e1.source = "a";
+    e1.source_handle = "output_data";
+    e1.target = "b";
+    e1.target_handle = "data";
+    graph.add_edge(e1);
+
+    std::unordered_map<std::string, json> statuses; // last status per node
+    executor.set_status_callback([&](const std::string& id, const json& msg) {
+        if (id == "__workflow__") return;
+        statuses[id] = msg;
+    });
+
+    executor.execute(graph);
+
+    ASSERT_TRUE(statuses.count("a"));
+    EXPECT_EQ(statuses["a"].at("status"), "error");
+    EXPECT_EQ(statuses["a"].at("kind"), "missing_input");
+    EXPECT_NE(statuses["a"].at("error").get<std::string>().find("net_handle"),
+              std::string::npos);
+
+    ASSERT_TRUE(statuses.count("b"));
+    EXPECT_EQ(statuses["b"].at("status"), "skipped");
+    EXPECT_EQ(statuses["b"].at("reason"), "upstream_failed");
+    EXPECT_EQ(statuses["b"].at("upstream"), "a");
+    // Crucially, b must not have emitted an error of its own.
+    EXPECT_FALSE(statuses["b"].contains("kind"));
+}
