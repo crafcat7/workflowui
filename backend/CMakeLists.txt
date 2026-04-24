@@ -55,6 +55,7 @@ set(BACKEND_SOURCES
   src/server/rpc_handler.cpp
   src/server/security_config.cpp
   src/workflow/executor.cpp
+  src/workflow/run_session.cpp
   src/workflow/scheduler.cpp
   src/workflow/debug_controller.cpp
   src/workflow/handlers/core_handlers.cpp
@@ -118,6 +119,7 @@ set(BACKEND_TEST_SOURCES
   tests/test_security_config.cpp
   tests/test_condition.cpp
   tests/test_rpc_handler.cpp
+  tests/test_run_session.cpp
 )
 
 add_executable(workflow_test ${BACKEND_TEST_SOURCES} ${BACKEND_LIB_SOURCES})

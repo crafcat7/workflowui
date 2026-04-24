@@ -5,6 +5,7 @@
 #include "server/rpc_errors.h"
 #include "server/security_config.h"
 #include "workflow/executor.h"
+#include "workflow/run_session.h"
 #include "model/workflow_graph.h"
 #include "vendor/inference_engine.h"
 
@@ -15,7 +16,6 @@
 #include <iostream>
 #include <memory>
 #include <string>
-#include <thread>
 #include <vector>
 #include <nlohmann/json.hpp>
 
@@ -166,6 +166,12 @@ int main(int argc, char* argv[]) {
     // ── Executor ──
     auto executor = std::make_shared<Executor>(engine);
 
+    // Owns the worker thread that drives a running workflow. Replaces
+    // the previous detached-thread approach so the thread is guaranteed
+    // to be joined on shutdown, before the executor (and its engine
+    // handles) are destroyed.
+    RunSession run_session(executor);
+
     // ── RPC Handler ──
     RpcHandler rpc;
 
@@ -261,10 +267,11 @@ int main(int argc, char* argv[]) {
         }
         executor->debug_controller().set_breakpoints(breakpoints);
 
-        // Execute in background thread
-        std::thread([executor, graph = std::move(graph)]() mutable {
-            executor->execute(graph);
-        }).detach();
+        // Hand off to the session: it stops+joins any previous run
+        // before launching the new worker, giving this RPC a
+        // well-defined "start now" semantic even under rapid
+        // back-to-back invocations.
+        run_session.start(std::move(graph));
 
         return {{"status", "started"}};
     });
@@ -318,5 +325,11 @@ int main(int argc, char* argv[]) {
     std::cout << "[Backend] Starting WebSocket server on port " << port << "\n";
     server.run();
 
+    // `server.run()` typically blocks forever; if it ever returns (the
+    // embedded ws server's run-loop being interrupted, e.g. by a future
+    // signal-aware stop() hook) we still want a graceful teardown:
+    // stop the current workflow, join the worker, THEN let the
+    // executor's destructor release net handles.
+    run_session.shutdown();
     return 0;
 }
