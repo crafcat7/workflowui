@@ -36,33 +36,62 @@ bool DebugController::should_pause(const std::string& node_id) const {
 }
 
 void DebugController::wait_for_resume() {
-    paused_.store(true);
+    // Must be preceded by `begin_pause()`, which snapshots
+    // `resume_epoch_` into `pause_snapshot_` under the lock. Any
+    // resume/step/stop that lands between the snapshot and this
+    // wait advances `resume_epoch_` past the snapshot, so the
+    // predicate trips immediately and the worker never strands.
+    //
+    // If no resume has fired yet, `resume_epoch_ == pause_snapshot_`
+    // and the predicate correctly blocks until one arrives. The
+    // next resume/step/stop bumps the epoch under the lock and
+    // notifies, waking us.
     std::unique_lock<std::mutex> lock(mutex_);
-    cv_.wait(lock, [this] { return !paused_.load() || stopped_.load(); });
+    const uint64_t snapshot = pause_snapshot_;
+    cv_.wait(lock, [this, snapshot] {
+        return resume_epoch_ > snapshot || stopped_.load();
+    });
+}
+
+void DebugController::begin_pause() {
+    std::lock_guard<std::mutex> lock(mutex_);
+    pause_snapshot_ = resume_epoch_;
 }
 
 void DebugController::resume() {
-    paused_.store(false);
-    stepping_.store(false);
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        ++resume_epoch_;
+        stepping_.store(false);
+    }
     cv_.notify_all();
 }
 
 void DebugController::step_over() {
-    stepping_.store(true);
-    paused_.store(false);
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        ++resume_epoch_;
+        stepping_.store(true);
+    }
     cv_.notify_all();
 }
 
 void DebugController::stop() {
-    stopped_.store(true);
-    paused_.store(false);
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        ++resume_epoch_;
+        stopped_.store(true);
+    }
     cv_.notify_all();
 }
 
 void DebugController::reset() {
-    paused_.store(false);
+    std::lock_guard<std::mutex> lock(mutex_);
     stopped_.store(false);
     stepping_.store(false);
+    // resume_epoch_ intentionally preserved — a fresh run starts with
+    // pause_snapshot_ taken under the new ordering, so its absolute
+    // value is irrelevant.
 }
 
 } // namespace workflow

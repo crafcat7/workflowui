@@ -209,6 +209,12 @@ void Executor::execute(const WorkflowGraph& graph, std::string run_id) {
         // Pause before executing this node if it has a breakpoint set, or
         // if we are stepping.
         if (debug_.should_pause(node_id)) {
+            // Snapshot the resume epoch BEFORE publishing the pause
+            // event. A `resume` that races ahead of our
+            // `wait_for_resume` call still advances the epoch past
+            // this snapshot, so the wait predicate trips immediately
+            // instead of stranding the worker.
+            debug_.begin_pause();
             json data;
             data["node_id"] = node_id;
             data["type"] = node->type;
