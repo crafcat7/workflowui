@@ -44,19 +44,61 @@ interface VendorSchema {
 
 let cachedSchema: VendorSchema | null = null;
 let schemaPromise: Promise<VendorSchema> | null = null;
+// Monotonic token incremented on every cache invalidation. An
+// in-flight fetch captures the token at launch and refuses to
+// populate the cache (or resolve subscribers with its value) if the
+// token has advanced by the time its response lands — otherwise a
+// pre-reconnect response race-wins against the post-reconnect one
+// and the user ends up staring at a stale schema.
+let schemaEpoch = 0;
+
+// Subscribers that need to refetch after the cache is invalidated on
+// a WS reconnect. Each mounted `useVendorSchema` hook registers a
+// listener here and deregisters on unmount. Plain Set (no React
+// context) because the cache itself is module-scoped — any component
+// tree that imports this module shares the invalidation.
+const schemaSubscribers = new Set<() => void>();
+
+function invalidateVendorSchemaCache() {
+  schemaEpoch += 1;
+  cachedSchema = null;
+  schemaPromise = null;
+  // Copy before iterating: a subscriber may unmount (and thus
+  // deregister) synchronously in response to the fire, which would
+  // mutate the Set mid-iteration on some engines.
+  for (const fn of Array.from(schemaSubscribers)) fn();
+}
+
+// Wire once at module load. The backend may have been upgraded while
+// we were offline (new ncnn version → new fields, renamed groups),
+// so on reconnect we must treat any prior schema as stale. Using the
+// transport-level reconnect hook is cheaper than polling and doesn't
+// require every PropertiesPanel instance to own its own listener.
+wsClient.onReconnect(() => {
+  invalidateVendorSchemaCache();
+});
 
 function fetchVendorSchema(): Promise<VendorSchema> {
   if (cachedSchema) return Promise.resolve(cachedSchema);
   if (schemaPromise) return schemaPromise;
+  const launchedAt = schemaEpoch;
   schemaPromise = wsClient
     .call<VendorSchema>('vendor.getConfigSchema')
-    .then((s) => {
+    .then((s): VendorSchema => {
+      // If the cache was invalidated while this call was in flight,
+      // the response is stale: a newer fetch is either in progress
+      // or has already populated the cache. Resolve to whatever the
+      // current cached value is (falling back to the stale result as
+      // a last resort so we never reject the promise chain).
+      if (launchedAt !== schemaEpoch) {
+        return cachedSchema ?? s;
+      }
       cachedSchema = s;
       return s;
     })
-    .catch(() => {
+    .catch((): VendorSchema => {
       const fallback: VendorSchema = { vendor: 'unknown', fields: [] };
-      cachedSchema = fallback;
+      if (launchedAt === schemaEpoch) cachedSchema = fallback;
       return fallback;
     });
   return schemaPromise;
@@ -65,14 +107,37 @@ function fetchVendorSchema(): Promise<VendorSchema> {
 function useVendorSchema() {
   const [schema, setSchema] = useState<VendorSchema | null>(cachedSchema);
   useEffect(() => {
+    let cancelled = false;
+    const refetch = () => {
+      // Clear the displayed schema first so the vendor panel falls back
+      // to its skeleton while the new fetch is in flight; otherwise the
+      // user sees stale fields for a tick after reconnect.
+      if (!cancelled) setSchema(null);
+      fetchVendorSchema().then((s) => {
+        if (!cancelled) setSchema(s);
+      });
+    };
+    schemaSubscribers.add(refetch);
+
     if (cachedSchema) {
       setSchema(cachedSchema);
-      return;
+    } else {
+      fetchVendorSchema().then((s) => {
+        if (!cancelled) setSchema(s);
+      });
     }
-    fetchVendorSchema().then(setSchema);
+
+    return () => {
+      cancelled = true;
+      schemaSubscribers.delete(refetch);
+    };
   }, []);
   return schema;
 }
+
+// Exposed for tests — lets the suite simulate a reconnect without
+// having to spin up a real WsClient. Not part of the public surface.
+export const __test_invalidateVendorSchemaCache = invalidateVendorSchemaCache;
 
 // ---------------------------------------------------------------------------
 // Root panel
