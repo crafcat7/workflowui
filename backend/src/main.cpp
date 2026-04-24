@@ -79,6 +79,13 @@ public:
 
 int main(int argc, char* argv[]) {
     install_crash_handlers();
+    // Force unbuffered stdout/stderr so parent processes (Playwright spawn,
+    // CI log tailing, supervisord) see the "[WS] Server listening …" banner
+    // the instant it is emitted rather than when the glibc 4 KiB pipe buffer
+    // happens to fill. Without this, piping stdout to anything other than a
+    // tty deadlocks startup detection.
+    std::cout << std::unitbuf;
+    std::cerr << std::unitbuf;
     // ── CLI parsing ──
     // Accepts a legacy positional port (`./backend 9091`) for back-compat
     // plus long flags for the security knobs. Kept deliberately minimal;
