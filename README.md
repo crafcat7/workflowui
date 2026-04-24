@@ -104,11 +104,30 @@ cmake -S . -B build -DENABLE_NCNN=ON -Dncnn_DIR=/path/to/ncnn/lib/cmake/ncnn
 cmake --build build -j$(nproc)
 
 # Run (default port 9090)
-./build/workflow_backend 9090
-./build/workflow_backend 9090 --shared-dir /srv/share
+./build/workflow_backend                              # defaults everywhere
+./build/workflow_backend --port 9090
+./build/workflow_backend --port 9090 --shared-dir /srv/share
+./build/workflow_backend --allow-origin http://my-host:5173
+./build/workflow_backend --help
 ```
 
-The backend also reads the `SHARED_DIR` environment variable.
+### Cross-compiling the backend
+
+Toolchain files live in `backend/cmake/toolchains/`. The CI pipeline
+(`.github/workflows/ci.yml`) builds the full matrix; the same invocations
+reproduce each target locally:
+
+| Target | Host prerequisites | Invocation |
+|---|---|---|
+| `x86_64-linux` | gcc/clang | `cmake -S backend -B backend/build -DENABLE_NCNN=OFF` |
+| `aarch64-linux` | `gcc-aarch64-linux-gnu`, `qemu-user-static` (for tests) | `cmake -S backend -B backend/build-aarch64 -DCMAKE_TOOLCHAIN_FILE=backend/cmake/toolchains/aarch64-linux.cmake -DENABLE_NCNN=OFF` |
+| `aarch64-macos` | Xcode CLT on Apple silicon | same as x86_64-linux, but run on `macos-14` |
+| `x86_64-windows` (MinGW) | `mingw-w64` | `cmake -S backend -B backend/build-win -DCMAKE_TOOLCHAIN_FILE=backend/cmake/toolchains/x86_64-windows-mingw.cmake -DENABLE_NCNN=OFF` |
+
+The MinGW target is currently marked experimental in CI (uSockets on
+Windows is unvalidated in this tree). If you successfully run
+`workflow_test.exe` under wine or on a Windows host, flip
+`experimental: true` in the CI matrix.
 
 ### Frontend
 
@@ -127,14 +146,24 @@ VITE_WS_URL=ws://localhost:8080 npm run dev
 VITE_WS_PORT=8080 npm run dev
 ```
 
-#### File access policy
+#### Security knobs
 
-When a client connects from a non-loopback address the backend restricts all file reads/writes to the shared root (default `./shared`, configurable via `SHARED_DIR` or `--shared-dir`). Concretely:
+Two opt-in policies run server-side; both default to permissive so local
+dev and the Tauri shell work out of the box:
 
-- Local clients can reference any path the backend process can access.
-- Remote clients must use relative paths under the shared root, e.g. `demo/NCNN_demo/shufflenet.param`.
-- Remote clients may not use absolute paths.
-- The bundled demo lives at `shared/demo/NCNN_demo/`.
+- `--shared-dir <path>` enables a filesystem sandbox. Every path passed
+  to `inputImage`, `saveText`, `saveImage`, and `createNet` is
+  canonicalised and rejected if it escapes the directory (absolute
+  paths outside the root or `..` traversal throw a runtime error). With
+  no `--shared-dir` the backend falls back to resolving paths against
+  the process CWD, preserving pre-Phase-6 behaviour.
+- `--allow-origin <url>` (repeatable) restricts the WebSocket Origin
+  allow-list. Defaults cover `http://localhost:5173`,
+  `http://localhost:1420`, their 127.0.0.1 variants, and
+  `tauri://localhost`. Requests without an `Origin` header (native
+  clients, curl) are always accepted so CLI tooling keeps working;
+  browser requests from un-listed origins get a 403 during the upgrade.
+
 
 ### Tauri desktop app
 

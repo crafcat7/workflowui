@@ -1,0 +1,123 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 workflowUI contributors
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  # ─────────────────────────────────────────────────────────────────────────
+  # Frontend: type-check, unit tests, and production build.
+  # Single job, ubuntu-latest is sufficient because the output is pure JS.
+  # ─────────────────────────────────────────────────────────────────────────
+  frontend:
+    name: Frontend (type-check + test + build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npx tsc -b --noEmit
+      - run: npx vitest run --reporter=dot
+      - run: npx vite build
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # Backend matrix: native builds on x86_64-linux and aarch64-macos,
+  # plus aarch64-linux cross-compile (run under qemu-user-static) and an
+  # x86_64-windows mingw cross-compile.
+  #
+  # The windows-mingw target is kept in the matrix but marked
+  # continue-on-error: true because uSockets/uWebSockets has not been
+  # validated on MinGW in this codebase. When a fix lands, flip the flag.
+  # ─────────────────────────────────────────────────────────────────────────
+  backend:
+    name: Backend ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    continue-on-error: ${{ matrix.experimental }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-linux
+            os: ubuntu-latest
+            experimental: false
+            toolchain: ""
+            run_tests: true
+          - target: aarch64-linux
+            os: ubuntu-latest
+            experimental: false
+            toolchain: backend/cmake/toolchains/aarch64-linux.cmake
+            run_tests: true  # run via qemu-user-static
+          - target: aarch64-macos
+            os: macos-14
+            experimental: false
+            toolchain: ""
+            run_tests: true
+          - target: x86_64-windows
+            os: ubuntu-latest
+            experimental: true
+            toolchain: backend/cmake/toolchains/x86_64-windows-mingw.cmake
+            run_tests: false  # skip: uSockets on MinGW needs validation
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install cross toolchain (aarch64-linux)
+        if: matrix.target == 'aarch64-linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y g++-aarch64-linux-gnu qemu-user-static
+
+      - name: Install cross toolchain (x86_64-windows)
+        if: matrix.target == 'x86_64-windows'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y mingw-w64
+
+      - name: Configure
+        run: |
+          ARGS="-S backend -B backend/build -DENABLE_NCNN=OFF -DCMAKE_BUILD_TYPE=Release"
+          if [ -n "${{ matrix.toolchain }}" ]; then
+            ARGS="$ARGS -DCMAKE_TOOLCHAIN_FILE=${{ github.workspace }}/${{ matrix.toolchain }}"
+          fi
+          cmake $ARGS
+        shell: bash
+
+      - name: Build
+        run: cmake --build backend/build -j --config Release
+        shell: bash
+
+      - name: Run tests (native)
+        if: matrix.run_tests && matrix.target == 'x86_64-linux'
+        run: ./backend/build/workflow_test
+        shell: bash
+
+      - name: Run tests (macOS)
+        if: matrix.run_tests && matrix.target == 'aarch64-macos'
+        run: ./backend/build/workflow_test
+        shell: bash
+
+      - name: Run tests (aarch64 via qemu)
+        if: matrix.run_tests && matrix.target == 'aarch64-linux'
+        run: qemu-aarch64-static -L /usr/aarch64-linux-gnu ./backend/build/workflow_test
+        shell: bash
+
+      - name: Upload artefact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: workflow_backend-${{ matrix.target }}
+          path: |
+            backend/build/workflow_backend
+            backend/build/workflow_backend.exe
+          if-no-files-found: ignore

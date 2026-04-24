@@ -14,7 +14,12 @@ Stack: React 19 + `@xyflow/react` 12 + Zustand 5 + zundo 2 + Vite 8 + TS 6.
 - Configure: `cmake -S . -B build` (from `backend/`)
 - Build: `cmake --build backend/build`
 - Run tests: `./backend/build/workflow_test` (gtest)
-- Run server: `./backend/build/workflow_backend [--host 127.0.0.1] [--port 8787] [--shared-dir PATH]`
+- Run server: `./backend/build/workflow_backend [--port 9090] [--shared-dir PATH] [--allow-origin URL]...`
+  - Legacy positional port (`workflow_backend 9091`) is still accepted.
+  - `--help` prints the flag list.
+  - When `--shared-dir` is unset the sandbox is disabled; when `--allow-origin`
+    is not passed a default set (localhost:5173/1420 + `tauri://localhost`) is
+    installed. Clients without an Origin header always pass.
 
 ### ENABLE_NCNN flag — DO NOT enable without the vendor source
 `backend/CMakeLists.txt` declares `option(ENABLE_NCNN "Enable NCNN vendor backend" OFF)` and, when ON,
@@ -31,7 +36,18 @@ cmake -DENABLE_NCNN=OFF -S backend -B backend/build
 - Dev: `npm run tauri dev` from `frontend/`
 - Release: `npm run tauri build` from `frontend/`
 
-## Cross-compile requirement (pending)
-User expects builds on 4 architectures; infra does not yet exist. Likely targets:
-x86_64-linux, aarch64-linux, x86_64-windows, aarch64-macos. Planned via a `ci/` directory
-with GitHub Actions + cross-rs / cmake toolchain files. Not yet implemented.
+## Cross-compile (Phase 8)
+CI lives at `.github/workflows/ci.yml` and covers four targets:
+- `x86_64-linux` — native on `ubuntu-latest`.
+- `aarch64-linux` — cross-compiled with `g++-aarch64-linux-gnu`, tests
+  run via `qemu-user-static`. Toolchain file:
+  `backend/cmake/toolchains/aarch64-linux.cmake`.
+- `aarch64-macos` — native on `macos-14`.
+- `x86_64-windows` — MinGW cross-compile via `mingw-w64`. Marked
+  `continue-on-error: true` because uSockets/uWS on MinGW is
+  unvalidated; the job still builds to catch regressions.
+  Toolchain file: `backend/cmake/toolchains/x86_64-windows-mingw.cmake`.
+
+CMake now gates `pthread`/`z` linkage on `NOT WIN32`; the MinGW branch
+links `ws2_32` and static-links the MinGW runtime. `ENABLE_NCNN` stays
+OFF across every matrix target.

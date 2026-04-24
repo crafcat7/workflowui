@@ -79,9 +79,13 @@ target_include_directories(workflow_backend PRIVATE
 target_link_libraries(workflow_backend PRIVATE
   nlohmann_json::nlohmann_json
   uSockets
-  pthread
-  z
 )
+if(NOT WIN32)
+  target_link_libraries(workflow_backend PRIVATE pthread z)
+else()
+  # MinGW/Windows: uSockets uses winsock and the C runtime provides threads.
+  target_link_libraries(workflow_backend PRIVATE ws2_32)
+endif()
 
 if(ENABLE_NCNN)
   find_package(ncnn REQUIRED)
@@ -123,9 +127,12 @@ target_link_libraries(workflow_test PRIVATE
   gtest_main
   nlohmann_json::nlohmann_json
   uSockets
-  pthread
-  z
 )
+if(NOT WIN32)
+  target_link_libraries(workflow_test PRIVATE pthread z)
+else()
+  target_link_libraries(workflow_test PRIVATE ws2_32)
+endif()
 
 if(ENABLE_NCNN)
   target_link_libraries(workflow_test PRIVATE ncnn)
