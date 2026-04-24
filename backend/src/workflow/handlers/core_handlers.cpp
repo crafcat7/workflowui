@@ -1,4 +1,5 @@
 #include "core_handlers.h"
+#include "condition_expr.h"
 #include "server/security_config.h"
 #include <fstream>
 #include <sstream>
@@ -319,24 +320,25 @@ public:
         auto data_val = ctx.resolve_input(node.id, "input_data", graph);
 
         std::string expr = get_config(node, "expression");
+        std::string err;
+        bool taken = evaluate_condition(expr, data_val, &err);
 
-        // Simple threshold check: "value > N"
-        bool result = false;
-        if (auto* t = std::get_if<TensorData>(&data_val)) {
-            if (!t->empty()) {
-                // Parse simple "value > N" expression
-                float threshold = 0;
-                try { threshold = std::stof(expr); } catch (...) {}
-                result = (*t)[0] > threshold;
-            }
+        // Only the taken branch receives the payload; the other port is
+        // marked dead so every node downstream of it gets pruned by the
+        // executor (see Executor::should_skip).
+        if (taken) {
+            ctx.set_output(node.id, "true_branch", data_val);
+            ctx.mark_dead_output(node.id, "false_branch");
+        } else {
+            ctx.set_output(node.id, "false_branch", data_val);
+            ctx.mark_dead_output(node.id, "true_branch");
         }
 
-        // Store result on both branches
-        ctx.set_output(node.id, "true_branch", data_val);
-        ctx.set_output(node.id, "false_branch", data_val);
-        // The condition result determines which branch is "active"
-        ctx.set_output(node.id, "__condition_result__", result ? 1.0f : 0.0f);
-        return {};
+        json extra;
+        extra["condition"] = taken;
+        extra["expression"] = expr;
+        if (!err.empty()) extra["expression_error"] = err;
+        return extra;
     }
 };
 

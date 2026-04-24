@@ -59,6 +59,7 @@ set(BACKEND_SOURCES
   src/workflow/scheduler.cpp
   src/workflow/debug_controller.cpp
   src/workflow/handlers/core_handlers.cpp
+  src/workflow/handlers/condition_expr.cpp
   src/model/node.cpp
   src/model/workflow_graph.cpp
 )
@@ -107,6 +108,7 @@ set(BACKEND_TEST_SOURCES
   tests/main_test.cpp
   tests/test_executor.cpp
   tests/test_security_config.cpp
+  tests/test_condition.cpp
 )
 
 add_executable(workflow_test ${BACKEND_TEST_SOURCES} ${BACKEND_LIB_SOURCES})

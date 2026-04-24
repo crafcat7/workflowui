@@ -24,6 +24,11 @@ public:
     // Set output value for this node's port
     virtual void set_output(const std::string& node_id, const std::string& port_name, PortValue value) = 0;
 
+    // Mark an output port as "dead" — downstream consumers reachable only
+    // through this port will be skipped by the executor. Used by the
+    // Condition node to prune the un-taken branch.
+    virtual void mark_dead_output(const std::string& node_id, const std::string& port_name) = 0;
+
     // Access to the inference engine
     virtual std::shared_ptr<InferenceEngine> engine() = 0;
 };

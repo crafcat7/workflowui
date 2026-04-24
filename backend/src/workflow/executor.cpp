@@ -20,6 +20,7 @@ void Executor::register_handlers() {
 void Executor::execute(const WorkflowGraph& graph) {
     debug_.reset();
     port_data_.clear();
+    dead_ports_.clear();
 
     auto order = scheduler_.schedule(graph);
 
@@ -28,6 +29,22 @@ void Executor::execute(const WorkflowGraph& graph) {
 
         auto* node = graph.get_node(node_id);
         if (!node) continue;
+
+        // Branch pruning: if every incoming edge's source port is dead,
+        // this node was only reachable through an un-taken Condition
+        // branch. Mark all of its outgoing edges' source ports dead so
+        // the skip propagates, notify the frontend, and move on.
+        if (should_skip(node_id, graph)) {
+            for (const auto& e : graph.edges()) {
+                if (e.source == node_id) {
+                    dead_ports_.insert(node_id + ":" + e.source_handle);
+                }
+            }
+            json extra;
+            extra["reason"] = "branch_pruned";
+            notify_status(node_id, "skipped", extra);
+            continue;
+        }
 
         // Pause if this node carries a breakpoint or we're stepping.
         // Debug-type nodes used to auto-pause implicitly; that special case
@@ -86,6 +103,26 @@ PortValue Executor::resolve_input(const std::string& node_id, const std::string&
 
 void Executor::set_output(const std::string& node_id, const std::string& port_name, PortValue value) {
     port_data_[node_id + ":" + port_name] = std::move(value);
+}
+
+void Executor::mark_dead_output(const std::string& node_id, const std::string& port_name) {
+    dead_ports_.insert(node_id + ":" + port_name);
+}
+
+bool Executor::should_skip(const std::string& node_id, const WorkflowGraph& graph) const {
+    auto inputs = graph.inputs_for(node_id);
+    // Source nodes (no inputs) always run; branch pruning only applies to
+    // nodes that depend on some upstream output.
+    if (inputs.empty()) return false;
+    for (auto* edge : inputs) {
+        std::string key = edge->source + ":" + edge->source_handle;
+        if (dead_ports_.count(key) == 0) {
+            // At least one input port is still alive — this node has data
+            // to work with, so don't skip.
+            return false;
+        }
+    }
+    return true;
 }
 
 void Executor::notify_status(const std::string& node_id, const std::string& status,
