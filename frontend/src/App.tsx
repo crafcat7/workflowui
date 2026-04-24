@@ -37,6 +37,7 @@ import { ReconnectBanner } from './components/ReconnectBanner';
 import { NodeContextMenu, type NodeContextMenuState } from './components/NodeContextMenu';
 import { showToast } from './store/toastStore';
 import { getLayoutedElements, domNodeHeightMeasurer } from './utils/layout';
+import { findCyclicEdges } from './utils/cycles';
 import './App.css';
 
 function AppInner() {
@@ -188,13 +189,16 @@ function AppInner() {
 
   // Memoize decorated arrays to keep ReactFlow's node/edge identities stable
   // across unrelated renders (status ticks, selection changes).
+  const cyclicEdgeIds = useMemo(() => findCyclicEdges(edges), [edges]);
   const styledEdges = useMemo(
     () =>
       edges.map((e) => {
         const dataType =
           (e.data?.dataType as string | undefined) ?? 'generic';
-        const baseStroke =
-          dataType === 'net'
+        const isCyclic = cyclicEdgeIds.has(e.id);
+        const baseStroke = isCyclic
+          ? '#ff4040'
+          : dataType === 'net'
             ? '#c080ff'
             : dataType === 'image'
             ? '#60c090'
@@ -207,12 +211,20 @@ function AppInner() {
           ...e,
           type: 'smoothstep',
           animated: isRunning,
-          style: isRunning
+          className: isCyclic ? 'edge-cyclic' : undefined,
+          // Cyclic edges are visually emphatic regardless of run state
+          // so the user can spot them before hitting Run: thicker
+          // stroke, no opacity fade, and a short dash so the colour
+          // doesn't blend with normal red error indicators elsewhere
+          // in the UI.
+          style: isCyclic
+            ? { stroke: baseStroke, strokeWidth: 3, strokeDasharray: '6 3' }
+            : isRunning
             ? { stroke: baseStroke, strokeWidth: 2.5 }
             : { stroke: baseStroke, strokeWidth: 1.5, opacity: 0.75 },
         };
       }),
-    [edges, isRunning],
+    [edges, isRunning, cyclicEdgeIds],
   );
 
   const styledNodes = useMemo(() => {
