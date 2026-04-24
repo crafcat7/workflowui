@@ -56,7 +56,6 @@ set(BACKEND_SOURCES
   src/server/security_config.cpp
   src/workflow/executor.cpp
   src/workflow/run_session.cpp
-  src/workflow/scheduler.cpp
   src/workflow/debug_controller.cpp
   src/workflow/handlers/core_handlers.cpp
   src/workflow/handlers/condition_expr.cpp

@@ -160,7 +160,11 @@ void Executor::execute(const WorkflowGraph& graph, std::string run_id) {
         return;
     }
 
-    auto order = scheduler_.schedule(graph);
+    // Topological order is the only schedule we need — inputs are
+    // fully resolved from previous iterations by the time a node is
+    // visited, so a single linear pass suffices. Pulled inline from
+    // the old `Scheduler` class, which was a one-line forwarder.
+    auto order = graph.topological_sort();
 
     for (auto& node_id : order) {
         if (debug_.is_stopped()) break;

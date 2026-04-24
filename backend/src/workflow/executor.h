@@ -4,7 +4,6 @@
 #include "../model/workflow_graph.h"
 #include "../model/node.h"
 #include "../vendor/inference_engine.h"
-#include "scheduler.h"
 #include "debug_controller.h"
 #include "handlers/node_handler.h"
 #include <functional>
@@ -104,7 +103,6 @@ private:
     bool validate_graph(const WorkflowGraph& graph);
 
     std::shared_ptr<InferenceEngine> engine_;
-    Scheduler scheduler_;
     DebugController debug_;
 
     StatusCallback status_cb_;
