@@ -28,8 +28,9 @@ public:
     void set_breakpoints(const std::vector<std::string>& node_ids);
     void clear_breakpoints();
 
-    // Called by executor before running a node.
-    // Returns true if execution should pause (breakpoint hit).
+    // Called by executor before running a node. Returns true if the node
+    // should pause — either a breakpoint is armed on `node_id` or the
+    // controller is currently stepping.
     bool should_pause(const std::string& node_id) const;
 
     // Block until resumed

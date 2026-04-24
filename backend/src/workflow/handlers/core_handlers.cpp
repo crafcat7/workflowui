@@ -5,9 +5,6 @@
 #include <sstream>
 #include <numeric>
 #include <algorithm>
-#include <iostream>
-#include <numeric>
-#include <cmath>
 
 namespace workflow {
 namespace handlers {
@@ -18,9 +15,9 @@ static std::string get_config(const NodeDef& node, const std::string& key) {
     return (it != node.config.end()) ? it->second : "";
 }
 
-// Resolve a user-supplied path through the process-wide sandbox. When no
-// sandbox is configured the path is returned unchanged (legacy behavior),
-// so tests and CLI-only setups keep working.
+// Resolve a user-supplied path through the process-wide sandbox. Without a
+// configured sandbox this is a pass-through, which keeps tests and
+// CLI-only setups working.
 static std::filesystem::path resolve_path(const std::string& user_path) {
     return SecurityConfig::instance().resolve_shared_path(user_path);
 }
@@ -103,8 +100,6 @@ public:
         } else {
             throw std::runtime_error("Unknown postprocess op: " + op);
         }
-
-        std::cout << "[PostprocessHandler] Output size: " << output.size() << std::endl;
 
         ctx.set_output(node.id, "output_data", output);
         return {{"output", output}};
@@ -258,16 +253,18 @@ public:
         }
 
         auto result = ctx.engine()->benchmark(handle, input, duration_sec);
-        
-        // Also run a single execute to get the output data so downstream nodes can use it
-        auto final_output = ctx.engine()->execute(handle, input);
-        ctx.set_output(node.id, "benchmark_result", final_output.output);
+
+        // Benchmark already ran the net repeatedly; re-run once to capture a
+        // representative output tensor for downstream nodes. This is not the
+        // winning run — it's a single sample chosen for wiring convenience.
+        auto sample_output = ctx.engine()->execute(handle, input);
+        ctx.set_output(node.id, "benchmark_result", sample_output.output);
 
         json extra;
         extra["runs_count"] = result.runs;
         extra["avg_ms"] = result.avg_ms;
         extra["duration_sec"] = duration_sec;
-        extra["output"] = final_output.output;
+        extra["output"] = sample_output.output;
         return extra;
     }
 };

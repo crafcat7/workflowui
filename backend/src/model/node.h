@@ -1,9 +1,9 @@
 #pragma once
+#include <cstdint>
 #include <string>
 #include <vector>
 #include <unordered_map>
 #include <variant>
-#include <memory>
 
 namespace workflow {
 
@@ -26,14 +26,6 @@ using PortValue = std::variant<
     ImageData,           // image
     int64_t              // handle (net_handle, etc.)
 >;
-
-enum class PortDirection { Input, Output };
-
-struct PortDef {
-    std::string id;
-    std::string label;
-    PortDirection direction;
-};
 
 struct NodeDef {
     std::string id;

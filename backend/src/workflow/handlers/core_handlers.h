@@ -1,6 +1,5 @@
 #pragma once
 #include "node_handler.h"
-#include <vector>
 
 namespace workflow {
 namespace handlers {

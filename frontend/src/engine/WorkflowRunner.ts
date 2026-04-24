@@ -88,12 +88,6 @@ export function initWorkflowRunner() {
         });
         break;
       }
-
-      case 'capabilities': {
-        // TODO: dynamic node registration from backend capabilities
-        console.log('[WorkflowRunner] Received capabilities:', params);
-        break;
-      }
     }
   });
 }

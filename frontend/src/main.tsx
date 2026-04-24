@@ -6,9 +6,7 @@ import { wsClient } from './transport/WsClient.ts'
 import { initWorkflowRunner } from './engine/WorkflowRunner.ts'
 
 // Initialize backend connection
-wsClient.connect().then(() => {
-  console.log('Connected to backend');
-}).catch(() => {
+wsClient.connect().catch(() => {
   console.warn('Backend not available, running in offline mode');
 });
 

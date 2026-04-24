@@ -1,10 +1,6 @@
 #include "executor.h"
 #include "handlers/core_handlers.h"
-#include <chrono>
-#include <fstream>
-#include <sstream>
 #include <stdexcept>
-#include <iostream>
 
 namespace workflow {
 
@@ -46,10 +42,8 @@ void Executor::execute(const WorkflowGraph& graph) {
             continue;
         }
 
-        // Pause if this node carries a breakpoint or we're stepping.
-        // Debug-type nodes used to auto-pause implicitly; that special case
-        // has been removed in favor of explicit per-node breakpoints so
-        // there is a single consistent mental model.
+        // Pause before executing this node if it has a breakpoint set, or
+        // if we are stepping.
         if (debug_.should_pause(node_id)) {
             json data;
             data["node_id"] = node_id;
@@ -131,10 +125,8 @@ void Executor::notify_status(const std::string& node_id, const std::string& stat
     json msg;
     msg["node_id"] = node_id;
     msg["status"] = status;
-    if (!extra.empty()) {
-        for (auto& [k, v] : extra.items()) {
-            msg[k] = v;
-        }
+    for (auto& [k, v] : extra.items()) {
+        msg[k] = v;
     }
     status_cb_(node_id, msg);
 }

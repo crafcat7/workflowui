@@ -93,7 +93,6 @@ export class WsClient {
       }
 
       this.ws.onopen = () => {
-        console.log('[WsClient] Connected to', this.url);
         this._connected = true;
         this._reconnecting = false;
         this._attempt = 0;
@@ -139,7 +138,6 @@ export class WsClient {
     this._reconnecting = true;
     this._attempt += 1;
     this._nextRetryMs = computeBackoff(this._attempt);
-    console.log(`[WsClient] Reconnect attempt ${this._attempt} in ${this._nextRetryMs}ms`);
     this.emitState();
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null;

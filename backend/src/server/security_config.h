@@ -37,8 +37,9 @@ public:
     static SecurityConfig& instance();
 
     // Set the sandbox root. Empty/unset string disables sandboxing.
-    // The path is canonicalized; if the directory does not exist, it is
-    // used as-is (the caller is responsible for creating it first).
+    // The path is canonicalized via weakly_canonical, so it does not need
+    // to exist on disk yet — handlers that write new files still resolve
+    // correctly as long as their targets land under this root.
     void set_shared_dir(const std::string& dir);
     const std::optional<std::filesystem::path>& shared_dir() const { return shared_dir_; }
 

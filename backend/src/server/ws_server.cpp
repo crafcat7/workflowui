@@ -66,7 +66,8 @@ void WsServer::run() {
         }
     });
 
-    // Store loop and publish function for thread-safe broadcasting
+    // uWS::Loop is tied to the calling thread. Capturing it here lets
+    // broadcast() on other threads marshal work back in via `defer`.
     loop_ = (void*)uWS::Loop::get();
 
     publish_fn_ = [&app](std::string msg) {

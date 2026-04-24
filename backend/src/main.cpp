@@ -63,7 +63,6 @@ public:
         };
     }
     NetHandle init_net(const NetConfig&) override {
-        std::cout << "[Stub] init_net called\n";
         return 1;
     }
     void configure(NetHandle, const NetConfig&) override {}
