@@ -17,6 +17,7 @@ future agents must preserve.
 - `nodes.list {}` → `{ nodes: [{ type, label, category, ports: [{ id, direction, dataType }] }] }` sorted by `type`. Source of truth for what this backend build can execute.
 - `workflow.execute { nodes, edges, breakpoints }` → `{ status: "started", run_id }`. Validates params shape; failures throw `InvalidParams` → `-32602`.
 - `workflow.cancel {}` → `{ cancelled: true, run_id }`. Semantically identical to the legacy `workflow.stop` notification but returns the id it interrupted. Mid-node preemption is NOT implemented — cancel is observed at the next node boundary.
+- `workflow.state {}` → `{ run_id, statuses: { node_id → status_string }, paused_at? }`. Snapshot of the executor for reconnect reconciliation (W1). Called by the FE automatically on every WebSocket reopen after the first. See "Reconnect reconciliation" below.
 - `debug.add_breakpoint { node_id }` → `{ ok: true }`
 - `debug.remove_breakpoint { node_id }` → `{ ok: true }`
 
@@ -46,6 +47,14 @@ future agents must preserve.
 - Error kinds: `unknown_node_type | dangling_edge | unknown_port | type_mismatch`.
 - Type compatibility lattice: identical ≡, `generic` wildcard, `image→tensor` implicit coercion, branch-source-asymmetric (branch source → any non-branch target; branch target ← branch source only). Mirrored in `frontend/src/nodes/portSchema.ts`.
 
+## Reconnect reconciliation (W1)
+- Events are NOT buffered server-side. A dropped socket means every push emitted during the outage is gone — without correction a node that finished while offline stays pinned on `running`.
+- `workflow.state` is the reconciliation path. The executor maintains `node_statuses_: unordered_map<string,string>` and `paused_at_: string` under `state_mutex_`, both written from the worker thread (via `notify_status` and the pause block in `execute()`) and read from the RPC thread.
+- `node_statuses_` is cleared at the start of every `execute()`, so the snapshot is scoped to one run. After completion the terminal statuses persist until a new run starts — that's intentional: clients reconnecting *after* a run finishes still need to see `done`/`error`/`skipped`.
+- `notify_status` writes to `node_statuses_` regardless of whether `status_cb_` is wired. This decouples the snapshot (ground truth) from the wire callback (fan-out) so embeds/tests that don't set a callback still reflect reality.
+- FE flow: `WsClient._hadFirstOpen` gates `onReconnect` handlers so they fire only on re-opens. `WorkflowRunner.reconcileFromSnapshot` calls `workflow.state`, realigns `setActiveRunId` with the backend's current run, and merges `statuses` into the store (only for nodes present in `nodesById` — can't touch unknown ids).
+- Pre-W1 backends reply `-32601 Method not found`; the FE swallows this and degrades to the pre-W1 behavior.
+
 ## JSON-RPC error codes
 | Code | When |
 |------|------|
@@ -67,3 +76,4 @@ handler catalog. Graph-level problems go through the
 4. `run_id` format is opaque to clients — never parse it as numbers,
    only compare as strings.
 5. Untagged events must still be accepted by the FE filter.
+6. `workflow.state` reply shape (`run_id`, `statuses`, optional `paused_at`) is stable — FE reconcile depends on it. New optional fields OK.

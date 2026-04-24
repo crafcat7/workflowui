@@ -39,6 +39,7 @@ Client → Server (requests):
 | `nodes.list` | Returns the handler catalog (type, label, category, ports) as the single source of truth for what this backend can execute |
 | `workflow.execute` | Starts workflow execution on a background thread; reply `{ status: "started", run_id }` |
 | `workflow.cancel` | Stops the currently-running workflow at the next node boundary; reply `{ cancelled: true, run_id }` naming the interrupted run |
+| `workflow.state` | Snapshot of the executor for reconnect reconciliation; reply `{ run_id, statuses: { id → status }, paused_at? }`. See "Reconnect reconciliation" below |
 | `debug.add_breakpoint` | Adds a breakpoint on a node |
 | `debug.remove_breakpoint` | Removes a breakpoint |
 
@@ -53,6 +54,14 @@ Each call to `workflow.execute` launches a single background run and returns a `
 Starting a second run with a previous one still active implicitly cancels the first (the worker is stopped at the next node boundary and joined before the new run launches). Clients should treat any event whose `run_id` does not match the most recently returned id as stale and drop it — `frontend/src/engine/WorkflowRunner.ts` does exactly this via `setActiveRunId`. Events missing `run_id` entirely (older backends, tests) are accepted verbatim so the filter is strictly additive.
 
 `workflow.cancel` and `workflow.stop` both interrupt between nodes, not mid-handler: a node running a long inference will finish first, then the cancel takes effect. `workflow.cancel` is a request that returns the interrupted `run_id`; `workflow.stop` is a fire-and-forget notification kept for backward compatibility.
+
+#### Reconnect reconciliation
+
+Push events (`node.status`, `debug.paused`, `workflow.complete`) are not buffered server-side: if the WebSocket drops while a run is in progress, every event emitted during the outage is lost. Without correction, a node that transitioned `running → done` while the client was offline would stay pinned on `running` on the canvas forever.
+
+`workflow.state` closes this hole. The frontend calls it automatically on every reconnect (not on the initial connect) via `WsClient.onReconnect` → `WorkflowRunner.reconcileFromSnapshot`. The reply carries a `statuses` map with the last-known status of every node in the current/most recent run plus an optional `paused_at` naming the node currently blocked on a breakpoint. The client merges these into its local store and realigns its `run_id` filter so any events still in flight from that run match and are processed.
+
+`statuses` is scoped to a single run — it is cleared at the start of every `execute()` — so reconnecting after a completed run still returns that run's terminal statuses until a new run starts. Backends older than this RPC reject it with `-32601`; clients degrade to pre-reconnect behavior.
 
 #### JSON-RPC error codes
 
