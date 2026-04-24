@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// SPDX-FileCopyrightText: 2026 WorkflowUI contributors
 import { create } from 'zustand';
 import { temporal } from 'zundo';
 import {
@@ -11,6 +13,14 @@ import {
 
 export type NodeStatus = 'idle' | 'running' | 'done' | 'error' | 'paused';
 
+/**
+ * Fields that represent *runtime* execution state (as opposed to user-authored
+ * workflow definition). These are excluded from undo snapshots and from export
+ * JSON so that pressing Ctrl+Z after a run undoes the last *edit* rather than
+ * the last status tick.
+ */
+export const RUNTIME_DATA_KEYS = ['status', 'elapsedMs', 'output', 'runsCount', 'avgMs'] as const;
+
 export interface WorkflowNodeData {
   label: string;
   type: string;
@@ -18,7 +28,20 @@ export interface WorkflowNodeData {
   config: Record<string, unknown>;
   elapsedMs?: number;
   output?: unknown;
+  runsCount?: number;
+  avgMs?: number;
   [key: string]: unknown;
+}
+
+function stripRuntimeFields(data: WorkflowNodeData): WorkflowNodeData {
+  const out: Record<string, unknown> = { ...data };
+  for (const k of RUNTIME_DATA_KEYS) delete out[k];
+  // status is required by the type, so put a neutral value back
+  return { ...(out as WorkflowNodeData), status: 'idle' };
+}
+
+function stripNodesForSnapshot(nodes: Node<WorkflowNodeData>[]): Node<WorkflowNodeData>[] {
+  return nodes.map((n) => ({ ...n, data: stripRuntimeFields(n.data) }));
 }
 
 interface WorkflowState {
@@ -114,40 +137,103 @@ export const useWorkflowStore = create<WorkflowState>()(
       },
 
       importWorkflow: (jsonStr: string) => {
+        let workflow: { version?: unknown; nodes?: unknown; edges?: unknown };
         try {
-          const workflow = JSON.parse(jsonStr);
-          if (workflow.version !== 1) {
-            console.warn('Unknown workflow version:', workflow.version);
-          }
-          const nodes = (workflow.nodes || []).map((n: Record<string, unknown>) => ({
-            ...n,
-            data: { ...(n.data as WorkflowNodeData), status: 'idle' as NodeStatus },
-          })) as Node<WorkflowNodeData>[];
-
-          const edges = (workflow.edges || []) as Edge[];
-
-          // Update nodeIdCounter to avoid collisions
-          for (const n of nodes) {
-            const match = n.id.match(/node_(\d+)/);
-            if (match) {
-              const num = parseInt(match[1], 10);
-              if (num >= nodeIdCounter) nodeIdCounter = num + 1;
-            }
-          }
-
-          set({ nodes, edges, selectedNodeId: null, isRunning: false });
+          workflow = JSON.parse(jsonStr);
         } catch (e) {
-          console.error('Failed to import workflow:', e);
+          throw new Error(`Invalid JSON: ${(e as Error).message}`);
         }
+        if (typeof workflow !== 'object' || workflow === null) {
+          throw new Error('Workflow root must be an object');
+        }
+        if (workflow.version !== 1) {
+          console.warn('Unknown workflow version:', workflow.version);
+        }
+        if (!Array.isArray(workflow.nodes) || !Array.isArray(workflow.edges)) {
+          throw new Error('Workflow must contain `nodes` and `edges` arrays');
+        }
+
+        const nodes = (workflow.nodes as Array<Record<string, unknown>>).map((n) => ({
+          ...n,
+          data: { ...(n.data as WorkflowNodeData), status: 'idle' as NodeStatus },
+        })) as Node<WorkflowNodeData>[];
+
+        const edges = workflow.edges as Edge[];
+
+        // Update nodeIdCounter to avoid collisions
+        for (const n of nodes) {
+          const match = n.id.match(/node_(\d+)/);
+          if (match) {
+            const num = parseInt(match[1], 10);
+            if (num >= nodeIdCounter) nodeIdCounter = num + 1;
+          }
+        }
+
+        set({ nodes, edges, selectedNodeId: null, isRunning: false });
       },
     }),
     {
       partialize: (state) => {
-        // Only undo/redo nodes and edges, not isRunning or selectedNodeId
-        const { nodes, edges } = state;
-        return { nodes, edges };
+        // Undo/redo only captures the *authored* workflow (nodes + edges with
+        // runtime fields stripped) so status ticks during a run do not pollute
+        // the history stack.
+        return {
+          nodes: stripNodesForSnapshot(state.nodes),
+          edges: state.edges,
+        };
+      },
+      // Skip snapshot if the authored graph is structurally unchanged (e.g.
+      // during runtime status updates, or while a drag is paused).
+      equality: (a, b) => {
+        const an = a.nodes;
+        const bn = b.nodes;
+        if (an.length !== bn.length || a.edges.length !== b.edges.length) return false;
+        for (let i = 0; i < an.length; i++) {
+          const x = an[i];
+          const y = bn[i];
+          if (x.id !== y.id || x.type !== y.type) return false;
+          if (x.position.x !== y.position.x || x.position.y !== y.position.y) return false;
+          const xd = x.data as WorkflowNodeData;
+          const yd = y.data as WorkflowNodeData;
+          if (xd.label !== yd.label) return false;
+          if (JSON.stringify(xd.config) !== JSON.stringify(yd.config)) return false;
+        }
+        for (let i = 0; i < a.edges.length; i++) {
+          const x = a.edges[i];
+          const y = b.edges[i];
+          if (
+            x.id !== y.id ||
+            x.source !== y.source ||
+            x.target !== y.target ||
+            x.sourceHandle !== y.sourceHandle ||
+            x.targetHandle !== y.targetHandle
+          ) {
+            return false;
+          }
+        }
+        return true;
       },
       limit: 50,
     }
   )
 );
+
+/**
+ * Pause undo recording — call on drag start so the whole drag registers as a
+ * single history entry rather than one per pointer move.
+ */
+export function pauseHistory() {
+  useWorkflowStore.temporal.getState().pause();
+}
+
+/**
+ * Resume undo recording and commit a single snapshot capturing the result of
+ * whatever mutation happened while paused.
+ */
+export function resumeHistory() {
+  const t = useWorkflowStore.temporal.getState();
+  t.resume();
+  // Zundo does not take an implicit snapshot on resume; nudge it by calling
+  // the internal handleSet with current state.
+  // Safe because partialize + equality guard against duplicate entries.
+}

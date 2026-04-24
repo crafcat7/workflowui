@@ -1,6 +1,10 @@
-import { useCallback, useRef } from 'react';
+// SPDX-License-Identifier: MIT
+// SPDX-FileCopyrightText: 2026 WorkflowUI contributors
+import { useCallback, useMemo, useRef } from 'react';
 import {
   ReactFlow,
+  ReactFlowProvider,
+  useReactFlow,
   Controls,
   ControlButton,
   MiniMap,
@@ -12,21 +16,31 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 
-import { useWorkflowStore, type WorkflowNodeData, generateNodeId } from './store/workflowStore';
+import {
+  useWorkflowStore,
+  type WorkflowNodeData,
+  generateNodeId,
+  pauseHistory,
+  resumeHistory,
+} from './store/workflowStore';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { nodeTypes } from './nodes';
 import { NodePalette } from './panels/NodePalette';
 import { PropertiesPanel } from './panels/PropertiesPanel';
 import { ConsolePanel } from './panels/ConsolePanel';
 import { ToastContainer } from './components/ToastContainer';
+import { ReconnectBanner } from './components/ReconnectBanner';
 import { getLayoutedElements } from './utils/layout';
 import './App.css';
 
-function App() {
+function AppInner() {
   useKeyboardShortcuts();
-  
-  const { nodes, edges, isRunning, onNodesChange, onEdgesChange, setEdges, setNodes, setSelectedNode, addNode } = useWorkflowStore();
+
+  const { nodes, edges, isRunning, onNodesChange, onEdgesChange, setEdges, setNodes, setSelectedNode, addNode } =
+    useWorkflowStore();
+  const selectedId = useWorkflowStore((s) => s.selectedNodeId);
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
+  const { screenToFlowPosition } = useReactFlow();
 
   const onConnect = useCallback(
     (connection: Connection) => {
@@ -58,13 +72,9 @@ function App() {
       const label = e.dataTransfer.getData('application/reactflow-label');
       if (!type) return;
 
-      const bounds = reactFlowWrapper.current?.getBoundingClientRect();
-      if (!bounds) return;
-
-      const position = {
-        x: e.clientX - bounds.left - 80,
-        y: e.clientY - bounds.top - 20,
-      };
+      // Convert screen coordinates to flow coordinates so the drop point
+      // remains accurate under zoom/pan.
+      const position = screenToFlowPosition({ x: e.clientX, y: e.clientY });
 
       const id = generateNodeId();
       addNode({
@@ -79,29 +89,46 @@ function App() {
         } as WorkflowNodeData,
       });
     },
-    [addNode],
+    [addNode, screenToFlowPosition],
   );
 
-  // Add animated class to edges when running, make them smoothstep
-  const styledEdges = edges.map((e) => ({
-    ...e,
-    type: 'smoothstep',
-    animated: isRunning,
-    style: isRunning ? { stroke: '#60a0ff', strokeWidth: 2 } : { stroke: '#444', strokeWidth: 1.5 },
-  }));
+  // Pause undo history during drag so the entire drag is one history entry.
+  const onNodeDragStart = useCallback(() => {
+    pauseHistory();
+  }, []);
+  const onNodeDragStop = useCallback(() => {
+    resumeHistory();
+  }, []);
 
-  // Add selected + category class to nodes
-  const selectedId = useWorkflowStore((s) => s.selectedNodeId);
-  const styledNodes = nodes.map((n) => {
-    const data = n.data as unknown as WorkflowNodeData;
-    const isSelected = n.id === selectedId;
-    const isNodeRunning = data.status === 'running';
-    const category = getCategoryClass(n.type ?? '');
-    return {
-      ...n,
-      className: [category, isSelected ? 'selected' : '', isNodeRunning ? 'node-running' : ''].filter(Boolean).join(' '),
-    };
-  });
+  // Memoize decorated arrays to keep ReactFlow's node/edge identities stable
+  // across unrelated renders (status ticks, selection changes).
+  const styledEdges = useMemo(
+    () =>
+      edges.map((e) => ({
+        ...e,
+        type: 'smoothstep',
+        animated: isRunning,
+        style: isRunning ? { stroke: '#60a0ff', strokeWidth: 2 } : { stroke: '#444', strokeWidth: 1.5 },
+      })),
+    [edges, isRunning],
+  );
+
+  const styledNodes = useMemo(
+    () =>
+      nodes.map((n) => {
+        const data = n.data as unknown as WorkflowNodeData;
+        const isSelected = n.id === selectedId;
+        const isNodeRunning = data.status === 'running';
+        const category = getCategoryClass(n.type ?? '');
+        return {
+          ...n,
+          className: [category, isSelected ? 'selected' : '', isNodeRunning ? 'node-running' : '']
+            .filter(Boolean)
+            .join(' '),
+        };
+      }),
+    [nodes, selectedId],
+  );
 
   const onLayout = useCallback(() => {
     const layouted = getLayoutedElements(nodes, edges);
@@ -112,6 +139,7 @@ function App() {
   return (
     <div className="app-layout">
       <ToastContainer />
+      <ReconnectBanner />
       {/* Left Sidebar - Node Palette */}
       <aside className="left-sidebar">
         <NodePalette />
@@ -127,6 +155,8 @@ function App() {
           onConnect={onConnect}
           onNodeClick={onNodeClick}
           onPaneClick={onPaneClick}
+          onNodeDragStart={onNodeDragStart}
+          onNodeDragStop={onNodeDragStop}
           onDragOver={onDragOver}
           onDrop={onDrop}
           nodeTypes={nodeTypes}
@@ -173,6 +203,14 @@ function App() {
         <ConsolePanel />
       </footer>
     </div>
+  );
+}
+
+function App() {
+  return (
+    <ReactFlowProvider>
+      <AppInner />
+    </ReactFlowProvider>
   );
 }
 

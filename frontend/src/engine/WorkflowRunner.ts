@@ -1,11 +1,14 @@
+// SPDX-License-Identifier: MIT
+// SPDX-FileCopyrightText: 2026 WorkflowUI contributors
 /**
  * WorkflowRunner - handles notification events from the backend
  * during workflow execution, updating node states accordingly.
  */
 
 import { wsClient } from '../transport/WsClient';
-import { useWorkflowStore } from '../store/workflowStore';
+import { useWorkflowStore, type NodeStatus } from '../store/workflowStore';
 import { useDebugStore } from '../store/debugStore';
+import { showToast } from '../store/toastStore';
 
 interface NodeStatusUpdate {
   node_id: string;
@@ -22,6 +25,12 @@ interface DebugPausedEvent {
   data: Record<string, unknown>;
 }
 
+const VALID_STATUSES: ReadonlySet<string> = new Set(['idle', 'running', 'done', 'error', 'paused']);
+
+function coerceStatus(raw: string): NodeStatus {
+  return (VALID_STATUSES.has(raw) ? raw : 'idle') as NodeStatus;
+}
+
 /**
  * Initialize notification handlers. Call once at app startup.
  */
@@ -31,24 +40,29 @@ export function initWorkflowRunner() {
       case 'node.status': {
         const update = params as NodeStatusUpdate;
         const store = useWorkflowStore.getState();
-        store.updateNodeStatus(update.node_id, update.status as 'idle' | 'running' | 'done' | 'error');
-        
+        store.updateNodeStatus(update.node_id, coerceStatus(update.status));
+
         const dataUpdate: Record<string, unknown> = {};
         if (update.elapsed_ms !== undefined) dataUpdate.elapsedMs = update.elapsed_ms;
         if (update.output !== undefined) dataUpdate.output = update.output;
         if (update.runs_count !== undefined) dataUpdate.runsCount = update.runs_count;
         if (update.avg_ms !== undefined) dataUpdate.avgMs = update.avg_ms;
-        
+
         if (Object.keys(dataUpdate).length > 0) {
           store.updateNodeData(update.node_id, dataUpdate);
         }
-        
+
         useDebugStore.getState().addLog({
           nodeId: update.node_id,
           message: update.error || `Status: ${update.status}`,
           level: update.error ? 'error' : 'info',
           data: update.output,
         });
+
+        // Surface errors prominently — the bottom console is often collapsed.
+        if (update.error) {
+          showToast(`[${update.node_id}] ${update.error}`, 'error');
+        }
         break;
       }
 

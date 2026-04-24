@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// SPDX-FileCopyrightText: 2026 WorkflowUI contributors
 import { create } from 'zustand';
 
 export interface Breakpoint {
@@ -12,6 +14,9 @@ export interface DebugLogEntry {
   level: 'info' | 'warn' | 'error';
   data?: unknown;
 }
+
+/** Upper bound on retained log entries to prevent memory bloat on long runs. */
+export const MAX_LOG_ENTRIES = 2000;
 
 interface DebugState {
   breakpoints: Breakpoint[];
@@ -57,7 +62,11 @@ export const useDebugStore = create<DebugState>((set, get) => ({
   setInspectData: (data) => set({ inspectData: data }),
 
   addLog: (entry) => {
-    set({ logs: [...get().logs, { ...entry, timestamp: Date.now() }] });
+    const logs = get().logs;
+    const next = logs.length >= MAX_LOG_ENTRIES
+      ? [...logs.slice(logs.length - MAX_LOG_ENTRIES + 1), { ...entry, timestamp: Date.now() }]
+      : [...logs, { ...entry, timestamp: Date.now() }];
+    set({ logs: next });
   },
 
   clearLogs: () => set({ logs: [] }),

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// SPDX-FileCopyrightText: 2026 WorkflowUI contributors
 /**
  * WebSocket JSON-RPC 2.0 Client
  * Handles communication between frontend and backend wrapper.
@@ -28,7 +30,23 @@ interface RpcResponse {
 }
 
 type NotificationHandler = (method: string, params: unknown) => void;
+export interface ConnectionState {
+  connected: boolean;
+  reconnecting: boolean;
+  attempt: number;
+  nextRetryMs: number;
+}
+type ConnectionStateHandler = (state: ConnectionState) => void;
 type ConnectionHandler = (connected: boolean) => void;
+
+const BASE_RETRY_MS = 500;
+const MAX_RETRY_MS = 15000;
+
+function computeBackoff(attempt: number): number {
+  // Exponential backoff with full jitter: delay in [0, min(MAX, base*2^attempt)]
+  const capped = Math.min(MAX_RETRY_MS, BASE_RETRY_MS * Math.pow(2, attempt));
+  return Math.floor(Math.random() * capped);
+}
 
 export class WsClient {
   private ws: WebSocket | null = null;
@@ -36,35 +54,65 @@ export class WsClient {
   private pending = new Map<number, RpcCallback>();
   private notificationHandlers: NotificationHandler[] = [];
   private connectionHandlers: ConnectionHandler[] = [];
+  private connectionStateHandlers: ConnectionStateHandler[] = [];
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private url: string;
   private _connected = false;
+  private _reconnecting = false;
+  private _attempt = 0;
+  private _nextRetryMs = 0;
+  private _stopped = false;
 
   constructor(url?: string) {
     this.url = url ?? (import.meta as unknown as Record<string, Record<string, string>>)?.env?.VITE_WS_URL ?? 'ws://localhost:9090';
   }
 
   connect(): Promise<void> {
+    this._stopped = false;
     return new Promise((resolve, reject) => {
-      this.ws = new WebSocket(this.url);
+      let settled = false;
+      try {
+        this.ws = new WebSocket(this.url);
+      } catch (err) {
+        reject(err);
+        this.scheduleReconnect();
+        return;
+      }
 
       this.ws.onopen = () => {
         console.log('[WsClient] Connected to', this.url);
         this._connected = true;
+        this._reconnecting = false;
+        this._attempt = 0;
+        this._nextRetryMs = 0;
+        this.emitState();
         this.notifyConnection(true);
-        resolve();
+        if (!settled) {
+          settled = true;
+          resolve();
+        }
       };
 
       this.ws.onerror = (err) => {
         console.error('[WsClient] Error:', err);
-        reject(err);
+        if (!settled) {
+          settled = true;
+          reject(err);
+        }
       };
 
       this.ws.onclose = () => {
-        console.log('[WsClient] Disconnected, reconnecting in 3s...');
         this._connected = false;
+        // Reject any pending requests so UI callers can react instead of
+        // hanging until GC.
+        for (const [, cb] of this.pending) {
+          try { cb(undefined, { code: -32000, message: 'WebSocket closed' }); } catch { /* ignore */ }
+        }
+        this.pending.clear();
         this.notifyConnection(false);
-        this.scheduleReconnect();
+        if (!this._stopped) {
+          this.scheduleReconnect();
+        }
       };
 
       this.ws.onmessage = (event) => {
@@ -74,11 +122,16 @@ export class WsClient {
   }
 
   private scheduleReconnect() {
-    if (this.reconnectTimer) return;
+    if (this.reconnectTimer || this._stopped) return;
+    this._reconnecting = true;
+    this._attempt += 1;
+    this._nextRetryMs = computeBackoff(this._attempt);
+    console.log(`[WsClient] Reconnect attempt ${this._attempt} in ${this._nextRetryMs}ms`);
+    this.emitState();
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null;
-      this.connect().catch(() => {});
-    }, 3000);
+      this.connect().catch(() => { /* will reschedule via onclose */ });
+    }, this._nextRetryMs);
   }
 
   private handleMessage(raw: string) {
@@ -144,18 +197,50 @@ export class WsClient {
 
   onConnection(handler: ConnectionHandler) {
     this.connectionHandlers.push(handler);
+    // Emit current state immediately so subscribers don't have to race.
+    handler(this._connected);
     return () => {
       this.connectionHandlers = this.connectionHandlers.filter((h) => h !== handler);
     };
+  }
+
+  /**
+   * Subscribe to rich connection state (connected + reconnect metadata).
+   * Fires immediately with the current state so UI can render without races.
+   */
+  onConnectionState(handler: ConnectionStateHandler) {
+    this.connectionStateHandlers.push(handler);
+    handler(this.snapshotState());
+    return () => {
+      this.connectionStateHandlers = this.connectionStateHandlers.filter((h) => h !== handler);
+    };
+  }
+
+  private snapshotState(): ConnectionState {
+    return {
+      connected: this._connected,
+      reconnecting: this._reconnecting,
+      attempt: this._attempt,
+      nextRetryMs: this._nextRetryMs,
+    };
+  }
+
+  private emitState() {
+    const snap = this.snapshotState();
+    for (const h of this.connectionStateHandlers) {
+      try { h(snap); } catch (e) { console.error('[WsClient] state handler error:', e); }
+    }
   }
 
   private notifyConnection(connected: boolean) {
     for (const handler of this.connectionHandlers) {
       handler(connected);
     }
+    this.emitState();
   }
 
   disconnect() {
+    this._stopped = true;
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
@@ -163,6 +248,8 @@ export class WsClient {
     this.ws?.close();
     this.ws = null;
     this._connected = false;
+    this._reconnecting = false;
+    this.emitState();
   }
 
   get connected() {

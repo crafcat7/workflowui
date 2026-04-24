@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// SPDX-FileCopyrightText: 2026 WorkflowUI contributors
 import { useRef, useEffect, useState } from 'react';
 import { useWorkflowStore, type WorkflowNodeData } from '../store/workflowStore';
 import { useDebugStore } from '../store/debugStore';
@@ -118,10 +120,13 @@ export function ConsolePanel() {
         try {
           importWorkflow(text);
           showToast('Workflow loaded', 'success');
-        } catch {
-          showToast('Failed to load workflow', 'error');
+        } catch (err) {
+          showToast(`Failed to load workflow: ${(err as Error).message}`, 'error');
         }
       }
+    };
+    reader.onerror = () => {
+      showToast('Could not read file', 'error');
     };
     reader.readAsText(file);
     e.target.value = '';
