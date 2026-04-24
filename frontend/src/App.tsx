@@ -27,6 +27,7 @@ import { useDebugStore } from './store/debugStore';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { useWorkflowActions } from './hooks/useWorkflowActions';
 import { nodeTypes } from './nodes';
+import { validateConnection, getPort } from './nodes/portSchema';
 import { NodePalette } from './panels/NodePalette';
 import { PropertiesPanel } from './panels/PropertiesPanel';
 import { ConsolePanel } from './panels/ConsolePanel';
@@ -77,9 +78,49 @@ function AppInner() {
   const actions = useWorkflowActions(triggerLoad);
   useKeyboardShortcuts({ actions, fitView: () => fitView({ duration: 300 }) });
 
+  const lastRejectionRef = useRef<string | null>(null);
+
+  const isValidConnection = useCallback(
+    (c: Connection | { source: string; target: string; sourceHandle?: string | null; targetHandle?: string | null }) => {
+      const conn = {
+        source: c.source,
+        target: c.target,
+        sourceHandle: c.sourceHandle ?? null,
+        targetHandle: c.targetHandle ?? null,
+      };
+      const result = validateConnection(conn, useWorkflowStore.getState().nodes);
+      if (!result.ok) lastRejectionRef.current = result.reason ?? 'invalid connection';
+      return result.ok;
+    },
+    [],
+  );
+
+  const onConnectStart = useCallback(() => {
+    lastRejectionRef.current = null;
+  }, []);
+
+  const onConnectEnd = useCallback(() => {
+    // Fires after both successful and failed drops. Only surface a toast
+    // if the user actually attempted an invalid drop during this gesture.
+    if (lastRejectionRef.current) {
+      showToast(lastRejectionRef.current, 'warn');
+      lastRejectionRef.current = null;
+    }
+  }, []);
+
   const onConnect = useCallback(
     (connection: Connection) => {
-      setEdges((eds) => addEdge(connection, eds));
+      // Tag each edge with its source data type so the stylesheet can color
+      // it (and so backend can route metadata later).
+      const nodes = useWorkflowStore.getState().nodes;
+      const srcNode = nodes.find((n) => n.id === connection.source);
+      const srcPort = getPort(srcNode?.type, connection.sourceHandle);
+      setEdges((eds) =>
+        addEdge(
+          { ...connection, data: { dataType: srcPort?.dataType ?? 'generic' } },
+          eds,
+        ),
+      );
     },
     [setEdges],
   );
@@ -149,12 +190,29 @@ function AppInner() {
   // across unrelated renders (status ticks, selection changes).
   const styledEdges = useMemo(
     () =>
-      edges.map((e) => ({
-        ...e,
-        type: 'smoothstep',
-        animated: isRunning,
-        style: isRunning ? { stroke: '#60a0ff', strokeWidth: 2 } : { stroke: '#444', strokeWidth: 1.5 },
-      })),
+      edges.map((e) => {
+        const dataType =
+          (e.data?.dataType as string | undefined) ?? 'generic';
+        const baseStroke =
+          dataType === 'net'
+            ? '#c080ff'
+            : dataType === 'image'
+            ? '#60c090'
+            : dataType === 'tensor'
+            ? '#60a0ff'
+            : dataType === 'branch'
+            ? '#e0c060'
+            : '#808090';
+        return {
+          ...e,
+          type: 'smoothstep',
+          animated: isRunning,
+          className: `edge-type-${dataType}`,
+          style: isRunning
+            ? { stroke: baseStroke, strokeWidth: 2.5 }
+            : { stroke: baseStroke, strokeWidth: 1.5, opacity: 0.75 },
+        };
+      }),
     [edges, isRunning],
   );
 
@@ -206,6 +264,9 @@ function AppInner() {
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
+          onConnectStart={onConnectStart}
+          onConnectEnd={onConnectEnd}
+          isValidConnection={isValidConnection}
           onNodeClick={onNodeClick}
           onNodeContextMenu={onNodeContextMenu}
           onPaneClick={onPaneClick}
