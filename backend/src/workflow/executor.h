@@ -49,6 +49,21 @@ public:
     // and simple embeds are not required to generate one.
     void execute(const WorkflowGraph& graph, std::string run_id = {});
 
+    // Publish a fresh `run_id` and clear per-node state synchronously
+    // *before* the worker thread starts executing. RunSession calls
+    // this on the WS thread inside `start()` so that a `workflow.state`
+    // RPC arriving in the gap between `start()` returning and the
+    // worker actually entering `execute()` does not return the
+    // *previous* run's id+statuses (which would cause the frontend to
+    // call `setActiveRunId` with a stale id and then drop fresh
+    // `node.status` events as "from a superseded run").
+    //
+    // Idempotent with `execute(graph, run_id)`: if `begin_run` was
+    // called with the same id beforehand, `execute` skips the
+    // re-publish; otherwise it falls back to the legacy in-thread
+    // initialisation for embeds that drive `execute` directly.
+    void begin_run(const std::string& run_id);
+
     // Stop current execution
     void stop();
 

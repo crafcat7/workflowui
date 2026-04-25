@@ -915,3 +915,74 @@ TEST(ExecutorTest, BenchmarkObservesCancelMidLoop) {
         << "benchmark engine never observed the cancel signal";
     EXPECT_GE(engine->benchmark_cancel_polls, 1);
 }
+
+// Race regression: before this fix RunSession::start published the
+// new run_id only on the worker thread (inside Executor::execute),
+// so a workflow.state RPC arriving in the gap between start()
+// returning and the worker entering execute() would observe the
+// previous run's id+statuses. Now begin_run() publishes both
+// synchronously on the caller's thread, so snapshot_state called
+// immediately after begin_run must reflect the new run.
+TEST(ExecutorTest, BeginRunPublishesIdAndClearsStatusesSynchronously) {
+    auto engine = std::make_shared<MockEngine>();
+    auto executor = std::make_shared<Executor>(engine);
+
+    // Simulate a previous run that left some node statuses around
+    // and a stale id. Setting them via execute on a trivial graph is
+    // simpler than reaching into private state.
+    WorkflowGraph g;
+    NodeDef n;
+    n.id = "warm";
+    n.type = "inputTensor";
+    n.config["fillMode"] = "text";
+    n.config["tensorText"] = "1.0";
+    g.add_node(n);
+    executor->execute(g, "run-old");
+
+    // Sanity: prior run id is observable and at least one status was
+    // recorded.
+    auto pre = executor->snapshot_state();
+    ASSERT_EQ(pre["run_id"].get<std::string>(), "run-old");
+    ASSERT_TRUE(pre["statuses"].is_object());
+    ASSERT_FALSE(pre["statuses"].empty());
+
+    // The actual contract under test: begin_run must atomically
+    // publish the new id AND clear the prior run's per-node statuses
+    // so a same-thread snapshot_state never sees a (new id, old
+    // statuses) tuple — that mismatch is exactly what the frontend's
+    // reconcileFromSnapshot would have stamped onto the canvas.
+    executor->begin_run("run-new");
+    auto post = executor->snapshot_state();
+    EXPECT_EQ(post["run_id"].get<std::string>(), "run-new");
+    EXPECT_TRUE(post["statuses"].empty())
+        << "begin_run must clear stale statuses; got: " << post["statuses"].dump();
+}
+
+// Companion to the begin_run contract test: ensure execute() is
+// idempotent when begin_run() already published the same id, i.e.
+// it must not re-clear statuses that the worker has already started
+// updating between begin_run() and the lock acquisition inside
+// execute(). Hard to provoke in a real race, so we drive the path
+// directly: begin_run, then execute with the same id.
+TEST(ExecutorTest, ExecuteDoesNotResetStateWhenBeginRunAlreadyPublished) {
+    auto engine = std::make_shared<MockEngine>();
+    auto executor = std::make_shared<Executor>(engine);
+
+    WorkflowGraph g;
+    NodeDef n;
+    n.id = "only";
+    n.type = "inputTensor";
+    n.config["fillMode"] = "text";
+    n.config["tensorText"] = "1.0";
+    g.add_node(n);
+
+    executor->begin_run("run-A");
+    executor->execute(g, "run-A");
+
+    // After execute completes, current_run_id_ must still be "run-A"
+    // (execute did not reset it to a different value) and the node
+    // status reflects the just-finished run.
+    auto snap = executor->snapshot_state();
+    EXPECT_EQ(snap["run_id"].get<std::string>(), "run-A");
+    EXPECT_TRUE(snap["statuses"].contains("only"));
+}

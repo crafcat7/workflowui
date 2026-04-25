@@ -125,15 +125,33 @@ json Executor::describe_nodes() const {
     return out;
 }
 
+void Executor::begin_run(const std::string& run_id) {
+    std::lock_guard<std::mutex> lk(state_mutex_);
+    current_run_id_ = run_id;
+    // Per-run snapshot reset moves here from execute() so that any
+    // `workflow.state` RPC that lands between RunSession::start
+    // returning and the worker entering execute() observes the new
+    // run id with a cleared status table — never the previous run's
+    // statuses tagged with the new run's id (or vice versa).
+    node_statuses_.clear();
+    paused_at_.clear();
+}
+
 void Executor::execute(const WorkflowGraph& graph, std::string run_id) {
     {
         std::lock_guard<std::mutex> lk(state_mutex_);
-        current_run_id_ = std::move(run_id);
-        // Per-run snapshot: clear stale per-node statuses from whatever
-        // executed before. `paused_at_` is always empty at this point
-        // (prior execute() would have joined by now), but reset defensively.
-        node_statuses_.clear();
-        paused_at_.clear();
+        // RunSession publishes the run_id synchronously via begin_run()
+        // before launching the worker, so by the time we get here
+        // current_run_id_ already matches and node_statuses_ is empty.
+        // For legacy callers that drive execute() directly (tests,
+        // simple embeds) we still need to initialise the run state
+        // here. Detect that case by comparing against the published
+        // id: if it doesn't match, no one called begin_run() for us.
+        if (current_run_id_ != run_id) {
+            current_run_id_ = std::move(run_id);
+            node_statuses_.clear();
+            paused_at_.clear();
+        }
     }
     debug_.reset();
     // Release nets created by the previous run before we drop the port

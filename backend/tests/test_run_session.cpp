@@ -155,3 +155,47 @@ TEST(RunSessionTest, ShutdownWithoutStartIsNoop) {
     }
     SUCCEED();
 }
+
+// Race regression: before this fix the run_id was published only on
+// the worker thread inside Executor::execute, so a workflow.state RPC
+// arriving in the window between start() returning to the WS thread
+// and the worker entering execute() would observe the *previous*
+// run's id+statuses. The frontend would then call setActiveRunId
+// with the stale id and isFreshEvent would discard the new run's
+// node.status events. start() now calls executor->begin_run(id)
+// synchronously before launching the worker, so a snapshot taken
+// immediately after start() must reflect the new run.
+TEST(RunSessionTest, SnapshotAfterStartReflectsNewRunIdImmediately) {
+    auto engine = std::make_shared<MockEngine>();
+    auto executor = std::make_shared<Executor>(engine);
+
+    // Prime the executor with a prior run that uses a *different*
+    // node id so any leakage into the new run is detectable. We
+    // build a one-off graph here rather than reuse make_trivial_graph
+    // (which uses id "only" — same as the second start below).
+    {
+        WorkflowGraph prior;
+        NodeDef n;
+        n.id = "prior_node";
+        n.type = "inputTensor";
+        n.config["fillMode"] = "text";
+        n.config["tensorText"] = "1.0";
+        prior.add_node(n);
+        executor->execute(prior, "run-prior");
+    }
+    ASSERT_EQ(executor->snapshot_state()["run_id"].get<std::string>(), "run-prior");
+
+    RunSession session(executor);
+    std::string id = session.start(make_trivial_graph());
+    // Immediately — before any sleep, before the worker has a
+    // realistic chance to schedule — the snapshot must already show
+    // the new run with the prior run's status keys cleared. Pre-fix
+    // this assertion would have flaked: the snapshot would carry
+    // run-prior's id together with its `prior_node` status until
+    // the worker thread reached the lock inside execute().
+    auto snap = executor->snapshot_state();
+    EXPECT_EQ(snap["run_id"].get<std::string>(), id);
+    EXPECT_FALSE(snap["statuses"].contains("prior_node"))
+        << "snapshot leaked prior run's status keys under new run_id";
+    session.shutdown();
+}

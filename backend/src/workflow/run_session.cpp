@@ -56,6 +56,19 @@ std::string RunSession::start(WorkflowGraph graph) {
     // from its own thread, and we've just proven that thread is gone).
     last_run_id_ = make_run_id();
 
+    // Publish the new run_id (and reset per-node state) into the
+    // executor *before* the worker thread starts. Otherwise a
+    // `workflow.state` RPC arriving in the window between start()
+    // returning and the worker entering execute() would observe the
+    // *previous* run's id and statuses — the frontend would then call
+    // `setActiveRunId` with a stale id and `isFreshEvent` would drop
+    // the fresh run's `node.status` events until the worker finally
+    // got around to overwriting current_run_id_. Doing it here on the
+    // WS thread (under our own mutex) closes the race entirely; the
+    // Executor's matching `state_mutex_` ensures snapshot_state()
+    // sees a consistent (id, statuses) pair.
+    if (executor_) executor_->begin_run(last_run_id_);
+
     // Capture by value (graph already moved into the lambda, executor
     // is a shared_ptr so the worker keeps it alive independently of
     // the RunSession); if the session is destroyed mid-run, shutdown()
