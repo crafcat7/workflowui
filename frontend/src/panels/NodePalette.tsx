@@ -90,7 +90,12 @@ export function NodePalette() {
             >
               <span className="palette-cat-indicator" style={{ background: visual.color }} />
               <span className="palette-cat-label">{visual.label}</span>
-              <span className="palette-cat-toggle">{isCollapsed ? '+' : '-'}</span>
+              {/* Chevron rotates via CSS transform on data-collapsed
+                  to give the accordion an animated open/close cue
+                  without swapping glyphs (the +/- swap was abrupt
+                  and looked unfinished against the rest of the dark-
+                  mode polish). */}
+              <span className="palette-cat-toggle" data-collapsed={isCollapsed} aria-hidden="true">▾</span>
             </div>
             {!isCollapsed && (
               <div className="palette-items">
