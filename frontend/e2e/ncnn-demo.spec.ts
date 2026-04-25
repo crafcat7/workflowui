@@ -166,6 +166,21 @@ test.describe('NCNN demo end-to-end', () => {
     // Backend must still be alive at the end — a regression of the
     // empty_weights crash would silently kill the process here.
     expect(backendProc?.killed ?? true, 'Backend process died mid-run').toBe(false);
+
+    // PNG round-trip witness. img_in decodes demo/NCNN_demo/sample.png
+    // via stb_image and feeds RGBA8 pixels to img_save, which re-encodes
+    // them as PNG to roundtrip.png in the backend's CWD (REPO_ROOT).
+    // We don't byte-compare against the source — stb_image_write's
+    // deflate parameters won't match whatever produced sample.png — but
+    // we DO assert (a) the file exists and (b) it has the canonical
+    // PNG magic header. That catches the prior regression where the
+    // handlers were raw fstream and would happily "round-trip" a .param
+    // text file as if it were an image.
+    const roundtripPath = path.join(REPO_ROOT, 'roundtrip.png');
+    expect(fs.existsSync(roundtripPath), `roundtrip.png missing at ${roundtripPath}`).toBe(true);
+    const head = fs.readFileSync(roundtripPath).subarray(0, 8);
+    const PNG_MAGIC = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    expect(head.equals(PNG_MAGIC), `roundtrip.png is not a PNG (head=${head.toString('hex')})`).toBe(true);
   });
 
   test('View Model opens the inspector drawer for the createNet node', async ({ page }) => {
