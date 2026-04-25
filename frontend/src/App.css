@@ -577,7 +577,11 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 6px 12px;
+  /* Wider padding + taller default height (~40px effective) gives
+     each control a generous 28-30px tap target; the previous 6×12px
+     squeeze made the buttons read as cramped icons rather than a
+     primary control surface. */
+  padding: 8px 16px;
   border-bottom: 1px solid var(--bg-elev-2);
   background: #0d0d1e;
   flex-shrink: 0;
@@ -586,25 +590,34 @@
 .console-toolbar-left {
   display: flex;
   align-items: center;
-  gap: 4px;
+  /* gap=8 so adjacent buttons read as discrete pills, not a connected
+     ribbon. Separator widget below adds another 4+4 around itself. */
+  gap: 8px;
 }
 
 .console-toolbar-right {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
 }
 
 .console-btn {
   border: 1px solid var(--bg-elev-2);
-  border-radius: 3px;
-  padding: 4px 10px;
-  font-size: 9px;
-  letter-spacing: 0.5px;
+  border-radius: 4px;
+  /* Larger padding / type / tracking pushes the bar from "tiny tool
+     row" into "primary control strip". 11px is the smallest size at
+     which uppercase 1px-tracked labels stay readable on dark bg. */
+  padding: 6px 14px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 1px;
   cursor: pointer;
   transition: all 0.15s;
   background: var(--bg-elev-1);
   color: var(--text-faint);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .console-btn:hover:not(:disabled) {
@@ -661,38 +674,69 @@
 }
 
 .console-paused-badge {
-  font-size: 9px;
+  font-size: 10px;
+  font-weight: 600;
   color: var(--accent-amber);
   background: #2a2010;
-  padding: 2px 8px;
+  padding: 3px 10px;
   border-radius: 3px;
   border: 1px solid #4a3a1a;
-  letter-spacing: 0.5px;
+  letter-spacing: 1px;
 }
 
 .console-bp-count {
-  font-size: 8px;
+  font-size: 9px;
   font-family: 'Silkscreen', cursive;
   color: var(--accent-rose);
   background: #2a1010;
-  padding: 2px 6px;
+  padding: 3px 8px;
   border-radius: 3px;
   border: 1px solid var(--status-error-bg);
+  letter-spacing: 1px;
+}
+
+/* Build version tag — sits at the start of the right cluster as a
+   static identity label. Mono face echoes the rest of the numeric
+   surfaces (debug ids, shapes) and visually separates it from the
+   live-state widgets that follow. */
+.console-version {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-dim);
   letter-spacing: 0.5px;
 }
+
+/* Status pair: STATUS label (muted) + RUNNING / PAUSED / READY value
+   (semantic colour). Rendered in the right cluster as a paragraph-
+   style "label: value" pair so the actual state stays scannable
+   while the static word never visually competes with it. */
+.console-status-label {
+  font-size: 9px;
+  color: var(--text-dim);
+  letter-spacing: 1.5px;
+}
+.console-status-value {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+.console-status-value.ready { color: var(--text-secondary); }
+.console-status-value.running { color: var(--accent-green); }
+.console-status-value.paused { color: var(--accent-amber); }
 
 .console-ws-status {
   display: flex;
   align-items: center;
-  gap: 5px;
-  font-size: 8px;
-  color: var(--border-focus);
-  letter-spacing: 1px;
+  gap: 6px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  letter-spacing: 1.5px;
 }
 
 .ws-dot {
-  width: 6px;
-  height: 6px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
   display: inline-block;
 }

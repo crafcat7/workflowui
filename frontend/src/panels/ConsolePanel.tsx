@@ -131,6 +131,19 @@ export function ConsolePanel({ actions }: Props) {
               {armedBpCount} BP
             </span>
           )}
+          {/* Build version pulled from package.json via vite.config
+              `define`. Sits at the start of the right cluster so it
+              reads as a static identity tag, separate from the live
+              connection / pause state that follows. */}
+          <span className="console-version" aria-label="App version">
+            v{import.meta.env.VITE_APP_VERSION}
+          </span>
+          <span className="console-status-label" aria-hidden="true">STATUS</span>
+          <span
+            className={`console-status-value ${isRunning ? 'running' : pausedAtNodeId ? 'paused' : 'ready'}`}
+          >
+            {isRunning && !pausedAtNodeId ? 'RUNNING' : pausedAtNodeId ? 'PAUSED' : 'READY'}
+          </span>
           <div
             className="console-ws-status"
             role="status"
