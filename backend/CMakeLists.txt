@@ -61,6 +61,7 @@ set(BACKEND_SOURCES
   src/workflow/handlers/condition_expr.cpp
   src/model/node.cpp
   src/model/workflow_graph.cpp
+  src/vendor/ncnn/ncnn_inspector.cpp
 )
 
 if(ENABLE_NCNN)
@@ -121,6 +122,7 @@ set(BACKEND_TEST_SOURCES
   tests/test_run_session.cpp
   tests/test_debug_controller.cpp
   tests/test_model_inspector_ir.cpp
+  tests/test_ncnn_inspector.cpp
 )
 
 add_executable(workflow_test ${BACKEND_TEST_SOURCES} ${BACKEND_LIB_SOURCES})
