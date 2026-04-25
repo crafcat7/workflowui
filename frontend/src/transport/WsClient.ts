@@ -7,6 +7,14 @@
 
 type RpcCallback = (result: unknown, error?: RpcError) => void;
 
+interface PendingCall {
+  cb: RpcCallback;
+  // Timer cleared either when the response arrives (handleMessage) or
+  // when the socket closes (onclose). Stored here so timeout-based
+  // expiry can also clear itself out of `pending` atomically.
+  timer: ReturnType<typeof setTimeout> | null;
+}
+
 interface RpcError {
   code: number;
   message: string;
@@ -43,6 +51,21 @@ type ReconnectHandler = () => void;
 const BASE_RETRY_MS = 500;
 const MAX_RETRY_MS = 15000;
 
+// Default per-call timeout. All RPCs in this codebase return synchronously
+// from the backend dispatcher: long-running work (`workflow.execute`,
+// `workflow.benchmark`) replies with an immediate ack and then pushes
+// notifications, so 30 s is a generous ceiling for the *reply* path
+// alone. Without this guard, a backend that crashed or wedged after
+// receiving the request — but before sending the response — would leave
+// the call's promise hanging forever, freezing whichever UI flow was
+// awaiting it (e.g. the Run button stays in "starting…" state).
+//
+// The socket's `onclose` handler already rejects all pending requests
+// with `WebSocket closed`, so this timer only matters for the
+// silent-backend case where the socket is still nominally open but no
+// reply will ever arrive.
+const DEFAULT_CALL_TIMEOUT_MS = 30_000;
+
 function computeBackoff(attempt: number): number {
   // Exponential backoff with full jitter: delay in [0, min(MAX, base*2^attempt)]
   const capped = Math.min(MAX_RETRY_MS, BASE_RETRY_MS * Math.pow(2, attempt));
@@ -52,7 +75,7 @@ function computeBackoff(attempt: number): number {
 export class WsClient {
   private ws: WebSocket | null = null;
   private requestId = 0;
-  private pending = new Map<number, RpcCallback>();
+  private pending = new Map<number, PendingCall>();
   private notificationHandlers: NotificationHandler[] = [];
   private connectionHandlers: ConnectionHandler[] = [];
   private connectionStateHandlers: ConnectionStateHandler[] = [];
@@ -129,9 +152,12 @@ export class WsClient {
       this.ws.onclose = () => {
         this._connected = false;
         // Reject any pending requests so UI callers can react instead of
-        // hanging until GC.
-        for (const [, cb] of this.pending) {
-          try { cb(undefined, { code: -32000, message: 'WebSocket closed' }); } catch { /* ignore */ }
+        // hanging until GC. Timers must be cleared too — otherwise a
+        // late-firing timeout would try to reject a promise that's
+        // already been rejected by this close.
+        for (const [, p] of this.pending) {
+          if (p.timer) clearTimeout(p.timer);
+          try { p.cb(undefined, { code: -32000, message: 'WebSocket closed' }); } catch { /* ignore */ }
         }
         this.pending.clear();
         this.notifyConnection(false);
@@ -177,15 +203,26 @@ export class WsClient {
 
     // Response to a request
     if (msg.id !== undefined) {
-      const cb = this.pending.get(msg.id);
-      if (cb) {
+      const p = this.pending.get(msg.id);
+      if (p) {
+        if (p.timer) clearTimeout(p.timer);
         this.pending.delete(msg.id);
-        cb(msg.result, msg.error ?? undefined);
+        p.cb(msg.result, msg.error ?? undefined);
       }
     }
   }
 
-  call<T = unknown>(method: string, params?: unknown): Promise<T> {
+  /**
+   * Issue a JSON-RPC call.
+   *
+   * `timeoutMs` defaults to {@link DEFAULT_CALL_TIMEOUT_MS}; pass `0`
+   * to disable the timer (useful for tests or for explicitly long
+   * fire-and-forget paths). When a call times out, its pending entry
+   * is removed atomically so a late server reply for the same id is
+   * silently dropped rather than resolving an already-rejected
+   * promise.
+   */
+  call<T = unknown>(method: string, params?: unknown, timeoutMs: number = DEFAULT_CALL_TIMEOUT_MS): Promise<T> {
     return new Promise((resolve, reject) => {
       if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
         reject(new Error('WebSocket not connected'));
@@ -195,14 +232,26 @@ export class WsClient {
       const id = ++this.requestId;
       const request: RpcRequest = { jsonrpc: '2.0', method, id, params };
 
-      this.pending.set(id, (result, error) => {
+      const cb: RpcCallback = (result, error) => {
         if (error) {
           reject(new Error(`${error.code}: ${error.message}`));
         } else {
           resolve(result as T);
         }
-      });
+      };
 
+      let timer: ReturnType<typeof setTimeout> | null = null;
+      if (timeoutMs > 0) {
+        timer = setTimeout(() => {
+          // Remove first so a (very) late server reply for this id is
+          // dropped on the floor in handleMessage rather than calling
+          // a callback the consumer has long since moved past.
+          this.pending.delete(id);
+          reject(new Error(`Timeout after ${timeoutMs}ms: ${method}`));
+        }, timeoutMs);
+      }
+
+      this.pending.set(id, { cb, timer });
       this.ws.send(JSON.stringify(request));
     });
   }
