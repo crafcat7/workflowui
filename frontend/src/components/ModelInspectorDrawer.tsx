@@ -36,6 +36,10 @@ import {
   ReactFlowProvider,
   type Edge,
   type Node,
+  type NodeProps,
+  type NodeTypes,
+  Handle,
+  Position,
   Background,
   Controls,
   MarkerType,
@@ -57,11 +61,79 @@ export interface ModelInspectorDrawerProps {
 // Per-node footprint used by dagre. ReactFlow has no opinion on size;
 // the drawer is 600px wide so we pick a width that fits "<type> · <id>"
 // for typical ncnn names (e.g. "Convolution · conv1") inside that
-// constraint without truncating, paired with a slightly taller box
-// so the 12px label sits comfortably centered. NODE_H growing makes
-// the TB column read more like Netron's vertical layer cards.
-const NODE_W = 140;
-const NODE_H = 48;
+// constraint without truncating, paired with a height tall enough to
+// stack three lines: header (type · id), input shapes, output shapes.
+// Engines that emit no shape hints fall back to dashes so the height
+// stays uniform across layers (uniform rows make TB layout readable).
+const NODE_W = 160;
+const NODE_H = 76;
+
+/** Format `[1, 3, 224, 224]` → `1×3×224×224`. Empty → `?`. */
+function fmtShape(shape: number[]): string {
+  if (!shape || shape.length === 0) return '?';
+  return shape.join('×');
+}
+
+interface LayerNodeData extends Record<string, unknown> {
+  type: string;
+  id: string;
+  inShapes: string[];
+  outShapes: string[];
+  selected: boolean;
+}
+
+/**
+ * Custom layer-node renderer. Default ReactFlow nodes only accept a
+ * `label: string`; we need three stacked lines (header + in shapes +
+ * out shapes), so register a custom node type. Source/Target handles
+ * are placed top/bottom to match the TB rank flow — without them
+ * ReactFlow would still draw edges, but they'd anchor at floating
+ * default positions, undermining the columnar look.
+ */
+function LayerNode({ data }: NodeProps<Node<LayerNodeData>>): ReactElement {
+  const { type, id, inShapes, outShapes, selected } = data;
+  return (
+    <div
+      style={{
+        width: NODE_W,
+        height: NODE_H,
+        background: selected ? '#2a1a3a' : '#1a1a3a',
+        border: `1px solid ${selected ? '#9b59b6' : '#2a2a4a'}`,
+        color: '#d0d0e8',
+        borderRadius: 4,
+        padding: '4px 6px',
+        fontSize: 11,
+        lineHeight: 1.25,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 1,
+        overflow: 'hidden',
+      }}
+    >
+      <Handle type="target" position={Position.Top} style={{ background: '#555' }} />
+      <div
+        style={{
+          fontWeight: 600,
+          whiteSpace: 'nowrap',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+        }}
+        title={`${type} · ${id}`}
+      >
+        {type} · {id}
+      </div>
+      <div style={{ color: '#8a8aa8', fontSize: 10 }} title={inShapes.join('  ')}>
+        in: {inShapes.length === 0 ? '—' : inShapes.join(' ')}
+      </div>
+      <div style={{ color: '#8a8aa8', fontSize: 10 }} title={outShapes.join('  ')}>
+        out: {outShapes.length === 0 ? '—' : outShapes.join(' ')}
+      </div>
+      <Handle type="source" position={Position.Bottom} style={{ background: '#555' }} />
+    </div>
+  );
+}
+
+const nodeTypes: NodeTypes = { layer: LayerNode };
 
 function layoutGraph(graph: ModelGraph): { nodes: Node[]; edges: Edge[] } {
   const g = new dagre.graphlib.Graph();
@@ -107,23 +179,25 @@ function layoutGraph(graph: ModelGraph): { nodes: Node[]; edges: Edge[] } {
 
   dagre.layout(g);
 
+  // Look up shapes by blob name. Indexed once per layoutGraph call
+  // so the per-layer mapping below is O(in+out) and not O(n²).
+  const blobShape = new Map<string, number[]>();
+  for (const b of graph.blobs) blobShape.set(b.name, b.shape);
+
   const nodes: Node[] = graph.layers.map((layer) => {
     const pos = g.node(layer.id);
     // dagre returns the *center* point; ReactFlow wants the top-left.
     return {
       id: layer.id,
+      type: 'layer',
       position: { x: (pos?.x ?? 0) - NODE_W / 2, y: (pos?.y ?? 0) - NODE_H / 2 },
-      data: { label: `${layer.type} · ${layer.id}` },
-      style: {
-        width: NODE_W,
-        height: NODE_H,
-        background: '#1a1a3a',
-        border: '1px solid #2a2a4a',
-        color: '#d0d0e8',
-        fontSize: 12,
-        padding: 4,
-        borderRadius: 4,
-      },
+      data: {
+        type: layer.type,
+        id: layer.id,
+        inShapes: layer.input_blobs.map((n) => fmtShape(blobShape.get(n) ?? [])),
+        outShapes: layer.output_blobs.map((n) => fmtShape(blobShape.get(n) ?? [])),
+        selected: false,
+      } satisfies LayerNodeData,
     };
   });
 
@@ -173,12 +247,15 @@ export function ModelInspectorDrawer({
     return layoutGraph(graph);
   }, [graph]);
 
-  // Highlight the selected layer in the canvas without recomputing layout.
+  // Highlight the selected layer in the canvas without recomputing
+  // layout. Selection is pushed into the custom node's `data.selected`
+  // flag so LayerNode can render the highlighted variant — we no
+  // longer rely on inline style overrides since the node is custom.
   const styledNodes = useMemo(
     () =>
       nodes.map((n) =>
         n.id === selectedLayer
-          ? { ...n, style: { ...n.style, border: '1px solid #9b59b6', background: '#2a1a3a' } }
+          ? { ...n, data: { ...(n.data as LayerNodeData), selected: true } }
           : n,
       ),
     [nodes, selectedLayer],
@@ -236,6 +313,7 @@ export function ModelInspectorDrawer({
               <ReactFlow
                 nodes={styledNodes}
                 edges={edges}
+                nodeTypes={nodeTypes}
                 fitView
                 // Constrain the auto-fit zoom: tall TB graphs (e.g.
                 // shufflenet ~120 layers) otherwise zoom out so far
