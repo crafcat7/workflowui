@@ -33,6 +33,7 @@
 import { useEffect, useMemo, useState, type ReactElement } from 'react';
 import {
   ReactFlow,
+  ReactFlowProvider,
   type Edge,
   type Node,
   Background,
@@ -212,19 +213,29 @@ export function ModelInspectorDrawer({
           </section>
 
           <section className="model-inspector-canvas" data-testid="model-inspector-canvas">
-            <ReactFlow
-              nodes={styledNodes}
-              edges={edges}
-              fitView
-              proOptions={{ hideAttribution: true }}
-              nodesDraggable
-              nodesConnectable={false}
-              edgesFocusable={false}
-              onNodeClick={(_e, n) => setSelectedLayer(n.id)}
-            >
-              <Background />
-              <Controls showInteractive={false} />
-            </ReactFlow>
+            {/*
+              Wrap in our own ReactFlowProvider. Without it the drawer
+              ReactFlow inherits App's outer ReactFlowProvider store
+              and the two canvases stomp each other's nodes / edges /
+              viewport — opening or zooming the drawer would corrupt
+              the main workflow canvas. A dedicated provider gives
+              the inspector an isolated store keyed to this subtree.
+            */}
+            <ReactFlowProvider>
+              <ReactFlow
+                nodes={styledNodes}
+                edges={edges}
+                fitView
+                proOptions={{ hideAttribution: true }}
+                nodesDraggable
+                nodesConnectable={false}
+                edgesFocusable={false}
+                onNodeClick={(_e, n) => setSelectedLayer(n.id)}
+              >
+                <Background />
+                <Controls showInteractive={false} />
+              </ReactFlow>
+            </ReactFlowProvider>
           </section>
 
           <section
