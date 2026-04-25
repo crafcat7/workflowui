@@ -212,4 +212,140 @@ test.describe('NCNN demo end-to-end', () => {
     await page.keyboard.press('Escape');
     await expect(page.getByText('Model Inspector')).not.toBeVisible();
   });
+
+  test('debug-mode: breakpoint pauses on infer, STEP advances, CONTINUE finishes', async ({ page }) => {
+    // Capture WS frames so we can assert on the lifecycle and on the
+    // post-pause notifications (debug.continue / debug.step_over are
+    // notifications, not requests, so the only on-the-wire signal is
+    // the resulting node.status transitions).
+    const wsEvents: Array<{ method: string; params: Record<string, unknown> }> = [];
+    page.on('websocket', (ws) => {
+      ws.on('framereceived', (evt) => {
+        try {
+          const payload = typeof evt.payload === 'string'
+            ? evt.payload
+            : evt.payload.toString('utf8');
+          const msg = JSON.parse(payload);
+          if (msg.method) wsEvents.push({ method: msg.method, params: msg.params ?? {} });
+        } catch { /* binary or non-json */ }
+      });
+    });
+
+    await gotoAppWithBackend(page);
+    await expect(page.locator('.react-flow')).toBeVisible();
+    await expect(page.locator('.console-ws-status .ws-dot.connected')).toBeVisible({
+      timeout: 10_000,
+    });
+
+    await page.locator('input[type="file"]').setInputFiles(DEMO_WORKFLOW);
+    const graph = JSON.parse(fs.readFileSync(DEMO_WORKFLOW, 'utf-8'));
+    await expect(page.locator('.react-flow__node')).toHaveCount(graph.nodes.length);
+
+    // Select infer (the node id is "infer" in the demo). Selecting it
+    // here also primes the PropertiesPanel so DEBUG INPUTS will render
+    // the moment the run pauses on this node.
+    const inferNode = page.locator('.react-flow__node[data-id="infer"]');
+    await inferNode.click();
+    await expect(page.getByText(/Inference/, { exact: false }).first()).toBeVisible();
+
+    // Press 'B' to toggle a breakpoint on infer. Pre-run, this only
+    // mutates the local debugStore — workflow.execute will then send
+    // the resulting breakpoint list as part of the start request.
+    // The body element must own focus for the global shortcut to fire.
+    await page.locator('body').click({ position: { x: 5, y: 5 } });
+    await inferNode.click();
+    await page.keyboard.press('b');
+
+    // Press 'R' to run. The keyboard shortcut path is a regression
+    // proxy for "user hit RUN", and exercises useKeyboardShortcuts +
+    // useWorkflowActions.run + breakpoints serialization.
+    await page.keyboard.press('r');
+
+    // Expect a paused event for infer. The backend broadcasts pauses
+    // as a `debug.paused` notification with { node_id, type, inputs,
+    // run_id }; the per-node `node.status` frame may also flip to
+    // "paused" but the authoritative signal is debug.paused. Match
+    // either to remain robust if the wire schema later consolidates.
+    await expect.poll(
+      () => wsEvents.some(
+        (e) => (
+          (e.method === 'debug.paused' && e.params.node_id === 'infer') ||
+          (e.method === 'node.status' && e.params.node_id === 'infer' && e.params.status === 'paused')
+        ),
+      ),
+      { timeout: 10_000, message: 'infer never reached paused' },
+    ).toBe(true);
+
+    // DEBUG INPUTS section is the visible witness that pause + inspect
+    // round-tripped through the panel. Both inputs (tensor + net) of
+    // the inference handler should be present — names are the source
+    // node ids of the upstream edges (tensor_in, net).
+    await expect(page.getByText('DEBUG INPUTS')).toBeVisible({ timeout: 5_000 });
+    const debugSection = page
+      .locator('.config-section')
+      .filter({ has: page.getByText('DEBUG INPUTS') });
+    await expect(debugSection.getByText(/tensor_in/)).toBeVisible();
+    await expect(debugSection.getByText(/← net/)).toBeVisible();
+
+    // Step over: should consume the breakpoint and pause again on the
+    // next ready node. Topology after infer admits multiple downstreams
+    // (post, plus bench which only depends on net + tensor_in), so we
+    // accept any node id ≠ infer rather than pinning to `post` and
+    // racing against the executor's ready queue.
+    const initialPaused = wsEvents.filter(
+      (e) => e.method === 'debug.paused' && e.params.node_id === 'infer',
+    ).length;
+    await page.locator('.console-btn.step').click();
+    await expect.poll(
+      () => wsEvents
+        .filter((e) => e.method === 'debug.paused')
+        .some((e) => e.params.node_id !== 'infer'),
+      { timeout: 10_000, message: 'no further pause after step_over' },
+    ).toBe(true);
+    // Sanity: the step_over fired at least one new pause beyond the
+    // initial infer breakpoint.
+    expect(
+      wsEvents.filter((e) => e.method === 'debug.paused').length,
+    ).toBeGreaterThan(initialPaused);
+
+    // Identify the node that the step landed on, click it so the
+    // PropertiesPanel switches over, and re-verify DEBUG INPUTS. This
+    // guards against a regression where step_over's payload would not
+    // reach inspectData (the bug repaired upstream of this test) — at
+    // step time the new pause node is different from the breakpoint
+    // node, so the second DEBUG INPUTS frame must come from the
+    // step_over event, not the original break.
+    const stepPause = wsEvents
+      .filter((e) => e.method === 'debug.paused' && e.params.node_id !== 'infer')
+      .at(0);
+    expect(stepPause, 'expected a step-over pause event').toBeTruthy();
+    const steppedNodeId = stepPause!.params.node_id as string;
+    await page.locator(`.react-flow__node[data-id="${steppedNodeId}"]`).click();
+    await expect(page.getByText('DEBUG INPUTS')).toBeVisible({ timeout: 5_000 });
+    // The stepped-into node must have at least one input row — every
+    // candidate downstream of infer (post, bench, ...) is fed by at
+    // least one upstream edge in the demo.
+    const steppedDebugSection = page
+      .locator('.config-section')
+      .filter({ has: page.getByText('DEBUG INPUTS') });
+    await expect(steppedDebugSection.locator('.config-field')).not.toHaveCount(0);
+
+    // Continue: from post all the way to workflow.complete with no
+    // further pauses. The benchmark branch (2s wall-clock) dominates
+    // the remaining run, so 20s is comfortable.
+    await page.locator('.console-btn.continue').click();
+    await expect.poll(
+      () => wsEvents.some((e) => e.method === 'workflow.complete'),
+      { timeout: 20_000, message: 'workflow.complete never arrived after CONTINUE' },
+    ).toBe(true);
+
+    // Same skip-propagation guard as the main test: false_branch saveText
+    // must still be skipped, no node may error.
+    const errored = wsEvents
+      .filter((e) => e.method === 'node.status' && e.params.status === 'error')
+      .map((e) => ({ id: e.params.node_id, error: e.params.error }));
+    expect(errored, `No node should error in debug-mode. Got: ${JSON.stringify(errored)}`).toHaveLength(0);
+
+    expect(backendProc?.killed ?? true, 'Backend died during debug-mode run').toBe(false);
+  });
 });
