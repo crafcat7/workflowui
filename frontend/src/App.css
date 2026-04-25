@@ -1348,3 +1348,19 @@
 .model-inspector-layers tr.selected {
   background: rgba(155, 89, 182, 0.2);
 }
+
+/* ── View Model button ──────────────────────────────────── */
+.view-model-btn {
+  width: 100%;
+  padding: 6px 12px;
+  background: linear-gradient(180deg, #2a1a3a 0%, #1a1030 100%);
+  border: 1px solid #5a3a8a;
+  border-radius: 4px;
+  color: #d0c0f0;
+  font-size: 12px;
+  cursor: pointer;
+}
+.view-model-btn:hover {
+  background: linear-gradient(180deg, #3a2a4a 0%, #2a1a40 100%);
+  border-color: #7a4aaa;
+}

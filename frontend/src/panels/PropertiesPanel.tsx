@@ -17,6 +17,8 @@ import { useState, useEffect } from 'react';
 import { useWorkflowStore, type WorkflowNodeData } from '../store/workflowStore';
 import { useDebugStore } from '../store/debugStore';
 import { wsClient } from '../transport/WsClient';
+import { ModelInspectorDrawer } from '../components/ModelInspectorDrawer';
+import type { ModelInspectRequest } from '../types/modelInspector';
 import {
   NODE_SCHEMAS,
   type ConfigField,
@@ -175,10 +177,23 @@ function PropertiesContent({
   const data = node.data as unknown as WorkflowNodeData;
   const schema = node.type ? NODE_SCHEMAS[node.type] : undefined;
   const config = data.config ?? {};
+  const [inspectorOpen, setInspectorOpen] = useState(false);
 
   const handleConfigChange = (key: string, value: string) => {
     onUpdate(node.id, { config: { ...config, [key]: value } });
   };
+
+  // "View Model" button is offered whenever the node carries a non-empty
+  // paramPath. Vendor is inferred from node.type (must contain 'ncnn');
+  // other vendors will plug in here when their inspector ships.
+  const paramPath = typeof config.paramPath === 'string' ? config.paramPath.trim() : '';
+  const modelPath = typeof config.modelPath === 'string' ? config.modelPath.trim() : '';
+  const nodeType = (node.type ?? '').toLowerCase();
+  const inspectVendor: 'ncnn' | null = nodeType.includes('ncnn') ? 'ncnn' : null;
+  const inspectRequest: ModelInspectRequest | null =
+    paramPath && inspectVendor
+      ? { vendor: inspectVendor, paramPath, modelPath: modelPath || undefined }
+      : null;
 
   return (
     <>
@@ -201,6 +216,19 @@ function PropertiesContent({
         <GenericConfigEditor config={config} onChange={handleConfigChange} />
       )}
 
+      {inspectRequest && (
+        <div className="config-section">
+          <button
+            type="button"
+            className="view-model-btn"
+            onClick={() => setInspectorOpen(true)}
+            data-testid="view-model-btn"
+          >
+            View Model
+          </button>
+        </div>
+      )}
+
       {/* Output preview for terminal output node (preserves prior behaviour) */}
       {node.type === 'output' && data.output !== undefined && (
         <>
@@ -212,6 +240,12 @@ function PropertiesContent({
       )}
 
       <DebugInputsPanel nodeId={node.id} />
+
+      <ModelInspectorDrawer
+        open={inspectorOpen}
+        onClose={() => setInspectorOpen(false)}
+        request={inspectRequest}
+      />
     </>
   );
 }

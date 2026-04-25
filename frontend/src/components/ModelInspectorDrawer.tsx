@@ -177,7 +177,7 @@ export function ModelInspectorDrawer({
       data-testid="model-inspector-drawer"
     >
       <header className="model-inspector-header">
-        <h2>Model</h2>
+        <h2>Model Inspector</h2>
         <button type="button" onClick={onClose} aria-label="Close">×</button>
       </header>
 
