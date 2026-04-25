@@ -373,8 +373,16 @@ function AppInner() {
           </Controls>
           <MiniMap
             nodeColor={(node) => nodeCategory(node.type).miniMapColor}
-            maskColor="rgba(13, 21, 38, 0.8)"
-            style={{ background: '#0d1526', borderRadius: 6, border: '1px solid #2a2a4a' }}
+            nodeStrokeWidth={2}
+            maskColor="rgba(13, 21, 38, 0.78)"
+            pannable
+            zoomable
+            // All visual styling lives in App.css under
+            // `.react-flow__minimap` so the glassmorphism (backdrop
+            // blur, gradient bg, soft border) can be tuned without
+            // round-tripping through inline-style merges. The only
+            // props above are the ones React Flow consumes for
+            // layout/behaviour, not appearance.
           />
           <Background variant={BackgroundVariant.Dots} gap={16} size={1} color="#333" />
           {nodes.length === 0 && (

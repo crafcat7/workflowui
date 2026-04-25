@@ -1254,11 +1254,57 @@
   filter: drop-shadow(0 0 4px rgba(255, 64, 64, 0.6));
 }
 
-/* ── MiniMap dark theme ── */
+/* ── MiniMap (glassmorphism) ──
+ * The minimap floats in the bottom-right of the canvas. Previously
+ * it was a flat #0d1526 panel which read as a separate widget cut
+ * out of the surface. Refit as a frosted-glass card: semi-transparent
+ * gradient, backdrop-blur to pick up the dot-grid background through
+ * it, and a soft glow border so it feels suspended over the canvas.
+ *
+ * Size is also bumped (~30%) to help orientation on dense graphs;
+ * the previous default was hard to read past ~30 nodes. */
 .react-flow__minimap {
-  background: var(--bg-base) !important;
-  border: 1px solid var(--bg-elev-2) !important;
-  border-radius: 4px !important;
+  /* Top-down gradient mimics the elevated surface treatment used on
+     the bottom-toolbar and right-panel cards, just at lower opacity
+     so the canvas dots remain visible as texture. */
+  background: linear-gradient(
+    180deg,
+    rgba(26, 32, 56, 0.72) 0%,
+    rgba(13, 21, 38, 0.78) 100%
+  ) !important;
+  border: 1px solid rgba(120, 140, 200, 0.18) !important;
+  border-radius: 8px !important;
+  /* backdrop-filter is the actual "glass" effect; safari/firefox
+     prefix is no longer needed for any modern target. */
+  backdrop-filter: blur(8px) saturate(1.1);
+  -webkit-backdrop-filter: blur(8px) saturate(1.1);
+  /* Outer glow gives the panel a sense of float; inner highlight
+     mirrors the inset top-light used on the workflow-node cards so
+     the visual language is consistent across the canvas. */
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.05) inset,
+    0 8px 24px rgba(0, 0, 0, 0.4),
+    0 0 0 1px rgba(120, 140, 200, 0.05);
+  width: 220px !important;
+  height: 160px !important;
+  margin: 12px !important;
+}
+
+/* The mask (everything outside the current viewport) renders as an
+   SVG <path>; bumping its rule explicitly so the gradient bg above
+   isn't hidden under the React Flow default. The colour comes from
+   the `maskColor` prop on <MiniMap />. */
+.react-flow__minimap-mask {
+  /* Slightly soften the mask edge so the visible viewport rectangle
+     looks cut from frosted glass rather than stamped through it. */
+  fill-opacity: 0.78;
+}
+
+/* Node dots inside the minimap: a thin lighter stroke makes small
+   nodes still readable on the dim glass bg. */
+.react-flow__minimap-node {
+  stroke: rgba(255, 255, 255, 0.15);
+  stroke-width: 1;
 }
 
 /* ── Node textarea (InputTensor) ── */
