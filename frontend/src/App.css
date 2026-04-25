@@ -1312,7 +1312,10 @@
 }
 .model-inspector-canvas {
   flex: 1 1 auto;
-  min-height: 200px;
+  /* TB layout needs vertical room for ~10+ ranks before scrolling
+     becomes the only option; 320px keeps shufflenet-class graphs
+     fit-viewable on a typical 900px-tall window. */
+  min-height: 320px;
   border-bottom: 1px solid #2a2a4a;
 }
 .model-inspector-layers {

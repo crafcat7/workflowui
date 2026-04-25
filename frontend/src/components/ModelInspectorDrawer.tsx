@@ -55,18 +55,22 @@ export interface ModelInspectorDrawerProps {
 
 // ── layout ──────────────────────────────────────────────────────────
 // Per-node footprint used by dagre. ReactFlow has no opinion on size;
-// we pick a width that fits "<type> <id>" for typical ncnn names
-// without truncating, and a height that lines up with the 14px label.
-const NODE_W = 180;
-const NODE_H = 36;
+// the drawer is 600px wide so we pick a width that fits "<type> · <id>"
+// for typical ncnn names (e.g. "Convolution · conv1") inside that
+// constraint without truncating, paired with a slightly taller box
+// so the 12px label sits comfortably centered. NODE_H growing makes
+// the TB column read more like Netron's vertical layer cards.
+const NODE_W = 140;
+const NODE_H = 48;
 
 function layoutGraph(graph: ModelGraph): { nodes: Node[]; edges: Edge[] } {
   const g = new dagre.graphlib.Graph();
   // TB layout: ranksep separates rows (vertical), nodesep separates
-  // siblings sharing a rank (horizontal). 60px between rows keeps
-  // edge labels readable; 30px between siblings prevents fan-outs
+  // siblings sharing a rank (horizontal). 70px between rows leaves
+  // room for the blob-name edge label that sits midway between
+  // producer and consumer; 60px between siblings stops fan-outs
   // (e.g. Split → multiple consumers) from colliding.
-  g.setGraph({ rankdir: 'TB', nodesep: 30, ranksep: 60, edgesep: 10 });
+  g.setGraph({ rankdir: 'TB', nodesep: 60, ranksep: 70, edgesep: 10 });
   g.setDefaultEdgeLabel(() => ({}));
 
   for (const layer of graph.layers) {
@@ -89,6 +93,13 @@ function layoutGraph(graph: ModelGraph): { nodes: Node[]; edges: Edge[] } {
         source: blob.producer,
         target: consumer,
         label: blob.name,
+        // Pad a dark-themed background behind the blob name so labels
+        // stay legible against both the canvas background and the
+        // edge stroke when fan-outs cluster their labels close.
+        labelStyle: { fill: '#d0d0e8', fontSize: 11 },
+        labelBgStyle: { fill: '#12122a', fillOpacity: 0.9 },
+        labelBgPadding: [4, 2],
+        labelBgBorderRadius: 2,
         markerEnd: { type: MarkerType.ArrowClosed },
       });
     }
@@ -226,6 +237,15 @@ export function ModelInspectorDrawer({
                 nodes={styledNodes}
                 edges={edges}
                 fitView
+                // Constrain the auto-fit zoom: tall TB graphs (e.g.
+                // shufflenet ~120 layers) otherwise zoom out so far
+                // the labels are unreadable; short graphs zoom in
+                // past 1× and look pixel-soft. 0.4–1.5 keeps both
+                // ends acceptable, with 15% padding so nodes never
+                // touch the canvas edge.
+                fitViewOptions={{ padding: 0.15, minZoom: 0.4, maxZoom: 1.5 }}
+                minZoom={0.2}
+                maxZoom={2}
                 proOptions={{ hideAttribution: true }}
                 nodesDraggable
                 nodesConnectable={false}
