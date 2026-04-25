@@ -155,11 +155,60 @@ export function PropertiesPanel() {
     <div className="properties-panel">
       <div className="props-title">PROPERTIES</div>
       <div className="props-body">
-        {!selectedNode ? (
-          <div className="props-empty">Select a node to view its properties</div>
-        ) : (
+        {!selectedNode ? <PropertiesEmptyState /> : (
           <PropertiesContent node={selectedNode} onUpdate={updateNodeData} />
         )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * PropertiesEmptyState — rendered when no node is selected.
+ *
+ * Replaces the previous single sentence with a small icon + headline +
+ * keyboard-hint chips. The SVG is inline (not an icon library) because
+ * we already pull a JetBrains Mono token here and don't want a runtime
+ * dep just for one cursor glyph; the path is a 24-px stylised pointer
+ * that visually echoes the React Flow drag-cursor.
+ *
+ * The kbd chips use the same monospace font + 1 px ridge styling as
+ * the bottom-toolbar status pills so the visual language stays
+ * consistent: any "system speaks to user" surface in the app uses
+ * pixel-precise mono chips.
+ */
+function PropertiesEmptyState() {
+  return (
+    <div className="props-empty" data-testid="props-empty-state">
+      <svg
+        className="props-empty-icon"
+        viewBox="0 0 24 24"
+        width="40"
+        height="40"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+      >
+        {/* Cursor + selection square: a pointer arrow over a dotted
+            rectangle, signalling "click on a node". Two simple shapes
+            keep the icon legible at the small render size. */}
+        <rect x="3" y="3" width="14" height="14" rx="2" strokeDasharray="2 2" />
+        <path d="M11 11 L17 13 L13 14 L12 18 Z" fill="currentColor" stroke="none" />
+      </svg>
+      <div className="props-empty-headline">No node selected</div>
+      <div className="props-empty-hint">
+        Click a node on the canvas to edit its properties, or drag one
+        in from the library on the left.
+      </div>
+      <div className="props-empty-kbds">
+        <span className="kbd-chip">Click</span>
+        <span className="kbd-chip-sep">·</span>
+        <span className="kbd-chip">Drag</span>
+        <span className="kbd-chip-sep">·</span>
+        <span className="kbd-chip">Esc</span>
       </div>
     </div>
   );

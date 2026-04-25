@@ -284,62 +284,135 @@
 }
 
 .props-title {
-  font-size: 10px;
-  color: var(--border-focus);
-  letter-spacing: 2px;
-  padding: 12px 14px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  letter-spacing: 2.5px;
+  padding: 14px 16px 10px;
   border-bottom: 1px solid var(--bg-elev-2);
 }
 
 .props-body {
-  padding: 12px 14px;
+  padding: 14px 16px;
   flex: 1;
   overflow-y: auto;
 }
 
+/* ── Empty state ──
+ * Centred column: icon → headline → hint → kbd chips. The icon uses
+ * stroke=currentColor so a colour change here cascades through to
+ * the SVG without touching markup. */
 .props-empty {
-  color: var(--border-strong);
-  font-size: 11px;
+  color: var(--text-faint);
+  font-size: 12px;
   text-align: center;
-  padding: 40px 10px;
+  padding: 56px 16px 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
 }
 
-.props-node-header {
-  margin-bottom: 10px;
+.props-empty-icon {
+  color: var(--border-default);
+  /* Soft halo gives the icon a sense of presence on the otherwise
+     empty panel; matches the floating-card treatment used on the
+     minimap and node cards. */
+  filter: drop-shadow(0 0 8px rgba(96, 160, 255, 0.18));
+  margin-bottom: 4px;
 }
 
-.props-node-label {
+.props-empty-headline {
   font-size: 13px;
-  color: var(--text-secondary);
   font-weight: 600;
+  color: var(--text-secondary);
+  letter-spacing: 0.3px;
   margin-bottom: 2px;
 }
 
-.props-node-id {
+.props-empty-hint {
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.55;
+  max-width: 220px;
+}
+
+/* Keyboard / interaction chips. Borrows the bottom-toolbar pill
+   styling: small, monospace, ridge-bordered, single tonal step
+   above the panel bg. */
+.props-empty-kbds {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.kbd-chip {
+  font-family: var(--font-mono);
   font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+  background: var(--bg-elev-1);
+  border: 1px solid var(--border-default);
+  border-radius: 3px;
+  padding: 3px 7px;
+  /* 1 px inset top-light for the same "physical key" feel used on
+     toolbar buttons. */
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.05) inset, 0 1px 2px rgba(0, 0, 0, 0.4);
+}
+
+.kbd-chip-sep {
+  color: var(--border-default);
+  font-size: 11px;
+}
+
+/* ── Selected state header / status row ── */
+.props-node-header {
+  margin-bottom: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.props-node-label {
+  font-size: 14px;
+  color: var(--text-primary);
+  font-weight: 600;
+  margin-bottom: 3px;
+  letter-spacing: 0.2px;
+}
+
+.props-node-id {
+  font-size: 10px;
   color: var(--border-strong);
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
+  letter-spacing: 0.3px;
 }
 
 .props-status-row {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 4px;
+  gap: 10px;
+  margin-bottom: 6px;
 }
 
 .props-status-label {
-  font-size: 8px;
-  color: var(--border-focus);
-  letter-spacing: 1px;
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--text-muted);
+  letter-spacing: 1.5px;
 }
 
 .props-status-badge {
-  font-size: 9px;
-  padding: 2px 8px;
-  border-radius: 3px;
+  font-size: 10px;
+  padding: 3px 10px;
+  border-radius: 4px;
   font-family: 'Silkscreen', cursive;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.8px;
+  /* Inset top-light keeps the badge consistent with the kbd chips
+     and toolbar pills — every status pill in the app shares this
+     1 px highlight. */
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.06) inset;
 }
 
 .props-status-badge.idle { background: var(--bg-elev-2); color: var(--text-dim); }
@@ -378,23 +451,26 @@
 }
 
 .config-section-title {
-  font-size: 9px;
-  color: var(--text-dim);
-  letter-spacing: 1.5px;
-  margin-bottom: 8px;
-  padding-bottom: 6px;
-  border-bottom: 1px solid rgba(255,255,255,0.05);
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  letter-spacing: 1.8px;
+  margin-bottom: 10px;
+  padding-bottom: 7px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
 }
 
 .config-field {
-  margin-bottom: 10px;
+  margin-bottom: 12px;
 }
 
 .config-field label {
   font-size: 10px;
+  font-weight: 500;
   color: var(--text-muted);
   display: block;
-  margin-bottom: 4px;
+  margin-bottom: 5px;
+  letter-spacing: 0.3px;
 }
 
 .config-field input[type="text"] {
@@ -403,16 +479,20 @@
   border: 1px solid var(--border-default);
   border-radius: 4px;
   color: var(--text-primary);
-  padding: 6px 10px;
+  padding: 7px 10px;
   font-size: 11px;
-  font-family: 'JetBrains Mono', monospace;
-  transition: border-color 0.15s;
+  font-family: var(--font-mono);
+  transition: border-color 0.15s, box-shadow 0.15s;
+  box-sizing: border-box;
 }
 
 .config-field input[type="text"]:focus {
   outline: none;
   border-color: var(--accent-blue);
   background: #0f0f2a;
+  /* Matches the search-input focus ring used in the node palette so
+     keyboard-focus is visually consistent across every panel. */
+  box-shadow: 0 0 0 2px rgba(96, 160, 255, 0.22);
 }
 
 .config-field input[type="text"]::placeholder {
@@ -496,6 +576,7 @@
   outline: none;
   border-color: var(--accent-blue);
   background: #0f0f2a;
+  box-shadow: 0 0 0 2px rgba(96, 160, 255, 0.22);
 }
 
 /* ── Config number input (same style as text) ── */
@@ -516,6 +597,7 @@
   outline: none;
   border-color: var(--accent-blue);
   background: #0f0f2a;
+  box-shadow: 0 0 0 2px rgba(96, 160, 255, 0.22);
 }
 
 .config-field input[type="number"]::placeholder {
