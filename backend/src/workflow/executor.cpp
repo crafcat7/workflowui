@@ -4,6 +4,7 @@
 #include "handlers/core_handlers.h"
 #include "node_error.h"
 #include <algorithm>
+#include <queue>
 #include <stdexcept>
 
 namespace workflow {
@@ -410,6 +411,78 @@ bool Executor::validate_graph(const WorkflowGraph& graph) {
         if (!edge_id.empty()) e["edge"] = edge_id;
         errors.push_back(std::move(e));
     };
+
+    // Pass 0: cycle detection (Kahn). Without this, topological_sort()
+    // throws std::runtime_error on cycles, which on the worker thread
+    // invokes std::terminate and brings the entire backend down —
+    // including every other client's session. The frontend already
+    // paints cyclic edges red, but the moment the user clicks RUN
+    // that visual guard does nothing without this server-side check.
+    //
+    // Run before the per-node handler check so a cycle reports as
+    // a single dedicated error instead of compounding with type
+    // errors that may be artefacts of the cycle.
+    {
+        std::unordered_map<std::string, int> in_degree;
+        std::unordered_map<std::string, std::vector<std::string>> adj;
+        for (const auto& n : graph.nodes()) {
+            in_degree[n.id] = 0;
+            adj[n.id];
+        }
+        for (const auto& e : graph.edges()) {
+            // Edges with dangling endpoints get separately reported
+            // in pass 2; ignore them here so we don't crash on
+            // unknown ids and so the cycle check stays a pure
+            // structural pass over the *known* node set.
+            if (in_degree.count(e.source) && in_degree.count(e.target)) {
+                adj[e.source].push_back(e.target);
+                in_degree[e.target]++;
+            }
+        }
+        std::queue<std::string> q;
+        for (const auto& [id, deg] : in_degree) {
+            if (deg == 0) q.push(id);
+        }
+        size_t visited = 0;
+        while (!q.empty()) {
+            auto cur = q.front(); q.pop();
+            ++visited;
+            for (const auto& next : adj[cur]) {
+                if (--in_degree[next] == 0) q.push(next);
+            }
+        }
+        if (visited != graph.nodes().size()) {
+            // Surface every node still carrying positive in-degree —
+            // these are the nodes participating in or downstream of
+            // a cycle. The frontend can highlight them; we don't try
+            // to identify the back-edge specifically because the
+            // frontend already runs its own cycle pass for the red
+            // edge styling.
+            for (const auto& [id, deg] : in_degree) {
+                if (deg > 0) {
+                    add_error("cycle",
+                              "Node '" + id + "' is part of (or downstream of) a cycle",
+                              id);
+                }
+            }
+            // If somehow visited != size but every in_degree is 0
+            // (shouldn't happen, defensive), at least surface a
+            // generic error so the frontend learns the run was
+            // refused rather than silently completing empty.
+            if (errors.empty()) {
+                add_error("cycle", "Workflow graph contains a cycle", "");
+            }
+            // Short-circuit: skip the rest of validation. A cyclic
+            // graph's port-type errors are noise.
+            if (status_cb_) {
+                json msg;
+                msg["status"] = "validation_failed";
+                msg["errors"] = std::move(errors);
+                status_cb_("__workflow__", msg);
+            }
+            return false;
+        }
+    }
 
     // Pass 1: nodes — every type must map to a handler; index its port_defs.
     for (const auto& node : graph.nodes()) {

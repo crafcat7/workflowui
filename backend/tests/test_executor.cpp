@@ -575,6 +575,104 @@ TEST(ExecutorTest, ValidationAllowsGenericAndImageToTensor) {
     EXPECT_EQ(sink_msgs.back().at("status"), "done");
 }
 
+// Cycles must be rejected at validate_graph time. Before this guard,
+// `topological_sort` threw `std::runtime_error` from the worker thread,
+// which (with no surrounding try/catch) called `std::terminate` and
+// brought the entire backend down — taking every other connected
+// client's session with it. The frontend already paints cyclic edges
+// red, but a user clicking RUN must NOT be able to crash the server.
+TEST(ExecutorTest, ValidationRejectsCycle) {
+    auto engine = std::make_shared<MockEngine>();
+    Executor executor(engine);
+
+    // Two `inference` nodes wired output→input both ways. `inference`
+    // has both source (output_data:tensor) and target (input_data:tensor)
+    // ports of compatible type, which is the minimum needed to form a
+    // cycle through the typed-port validator.
+    WorkflowGraph graph;
+    NodeDef a;
+    a.id = "a";
+    a.type = "inference";
+    graph.add_node(a);
+    NodeDef b;
+    b.id = "b";
+    b.type = "inference";
+    graph.add_node(b);
+
+    EdgeDef ab;
+    ab.source = "a";
+    ab.source_handle = "output_data";
+    ab.target = "b";
+    ab.target_handle = "input_data";
+    graph.add_edge(ab);
+
+    EdgeDef ba;
+    ba.source = "b";
+    ba.source_handle = "output_data";
+    ba.target = "a";
+    ba.target_handle = "input_data";
+    graph.add_edge(ba);
+
+    std::unordered_map<std::string, std::vector<json>> statuses;
+    executor.set_status_callback(record_statuses(statuses));
+    // The pre-fix behaviour was std::terminate; under the fix this
+    // returns cleanly with a validation_failed event.
+    executor.execute(graph);
+
+    auto* failed = find_workflow_status(statuses, "validation_failed");
+    ASSERT_NE(failed, nullptr) << "expected a validation_failed event for the cycle";
+    ASSERT_TRUE(failed->contains("errors"));
+    const auto& errs = failed->at("errors");
+    ASSERT_FALSE(errs.empty());
+
+    // Every reported error must be a cycle (no port/type noise from
+    // a cyclic graph — pass 0 short-circuits).
+    std::unordered_set<std::string> cycle_nodes;
+    for (const auto& e : errs) {
+        EXPECT_EQ(e.at("kind"), "cycle");
+        if (e.contains("node_id")) cycle_nodes.insert(e.at("node_id").get<std::string>());
+    }
+    EXPECT_TRUE(cycle_nodes.count("a"));
+    EXPECT_TRUE(cycle_nodes.count("b"));
+
+    // Neither node should have produced per-node status events: the
+    // run was refused before scheduling.
+    EXPECT_EQ(statuses.count("a"), 0u);
+    EXPECT_EQ(statuses.count("b"), 0u);
+}
+
+// Self-loop is the degenerate cycle case. Same guarantee: no crash,
+// validation_failed event names the offending node.
+TEST(ExecutorTest, ValidationRejectsSelfLoop) {
+    auto engine = std::make_shared<MockEngine>();
+    Executor executor(engine);
+
+    WorkflowGraph graph;
+    NodeDef n;
+    n.id = "loop";
+    n.type = "inference";
+    graph.add_node(n);
+
+    EdgeDef e;
+    e.source = "loop";
+    e.source_handle = "output_data";
+    e.target = "loop";
+    e.target_handle = "input_data";
+    graph.add_edge(e);
+
+    std::unordered_map<std::string, std::vector<json>> statuses;
+    executor.set_status_callback(record_statuses(statuses));
+    executor.execute(graph);
+
+    auto* failed = find_workflow_status(statuses, "validation_failed");
+    ASSERT_NE(failed, nullptr);
+    const auto& errs = failed->at("errors");
+    ASSERT_FALSE(errs.empty());
+    EXPECT_EQ(errs[0].at("kind"), "cycle");
+    EXPECT_EQ(errs[0].at("node_id"), "loop");
+    EXPECT_EQ(statuses.count("loop"), 0u);
+}
+
 // W1 reconnect reconciliation: snapshot_state() must return a usable
 // shape before any run has happened — empty run_id, empty statuses,
 // no paused_at. The frontend calls this right after a reconnect and
