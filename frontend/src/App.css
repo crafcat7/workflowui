@@ -858,43 +858,82 @@
   outline: none !important;
 }
 
-/* ── Custom node base ── */
+/* ── Custom node base ──
+ * The card is intentionally a single tonal step above the canvas
+ * (--bg-elev-1) so a selected card "lifts" via colour + glow alone
+ * without changing geometry. The 3 px top stripe is painted by a
+ * ::before so the per-category colour rule can target one selector
+ * instead of a wrapper element. */
 .workflow-node {
   background: var(--bg-elev-1);
-  border: 2px solid var(--bg-elev-2);
-  border-radius: 6px;
-  min-width: 170px;
-  min-height: 80px;
+  border: 1px solid var(--bg-elev-2);
+  border-radius: 7px;
+  min-width: 180px;
+  min-height: 86px;
   color: var(--text-secondary);
-  transition: border-color 0.2s, box-shadow 0.2s;
+  transition: border-color 0.18s, box-shadow 0.18s, transform 0.18s;
   position: relative;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+  /* Subtle outer drop + inner top-light gradient. The inner highlight
+     is what gives the card its slight 3D feel without resorting to
+     an actual border-image. */
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.04) inset,
+    0 4px 14px rgba(0, 0, 0, 0.45);
+  overflow: hidden;
+}
+
+/* Top accent stripe — driven by per-category rules below. Sits above
+   the header border so the stripe colour reads first. */
+.workflow-node::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: var(--bg-elev-3);
+  transition: background 0.18s, box-shadow 0.18s;
 }
 
 .react-flow__node.selected > .workflow-node {
   border-color: var(--accent-blue) !important;
-  box-shadow: 0 0 16px rgba(96, 160, 255, 0.25);
+  /* Brighter halo than the previous 0.25 alpha — the design brief
+     calls for a "neon" selected state, and the dimmer glow was
+     barely visible against the dotted background at typical zoom. */
+  box-shadow:
+    0 0 0 1px var(--accent-blue) inset,
+    0 0 22px rgba(96, 160, 255, 0.45),
+    0 6px 18px rgba(0, 0, 0, 0.5);
+  transform: translateY(-1px);
+}
+.react-flow__node.selected > .workflow-node::before {
+  /* Stripe also lights up when selected so the cue is visible even
+     when the card sits behind the right-side properties panel. */
+  box-shadow: 0 0 8px currentColor;
 }
 
 .workflow-node .node-header {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 7px 12px 5px;
+  gap: 8px;
+  padding: 9px 14px 7px;
   font-weight: 600;
-  font-size: 11px;
+  font-size: 12px;
+  /* Silkscreen reads as a heading; we keep it for the type label
+     but bump the size so the brand-y pixel font isn't squinty. */
   font-family: 'Silkscreen', cursive;
-  border-bottom: 1px solid rgba(255,255,255,0.04);
+  letter-spacing: 0.5px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 .workflow-node .node-header .icon {
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .workflow-node .node-body {
-  padding: 6px 36px 8px;
-  font-size: 10px;
-  color: var(--text-faint);
+  padding: 7px 38px 9px;
+  font-size: 11px;
+  color: var(--text-muted);
   text-align: center;
 }
 
@@ -965,31 +1004,91 @@
   vertical-align: middle;
 }
 
-/* ── Category border colors ── */
-.workflow-node.node-input { border-color: #1a6a5f; }
+/* ── Category accent colours ──
+ * Each category exposes its accent through a single custom property
+ * (--node-accent) which the ::before stripe and the selected-state
+ * halo both consume. This avoids the previous duplication where
+ * every category re-stated its colour in three rules. */
+.workflow-node.node-input {
+  --node-accent: var(--accent-green-alt);
+  border-color: #1a4a44;
+}
 .workflow-node.node-input .node-header { color: #5ec4b6; }
 
-.workflow-node.node-inference { border-color: #6a3a7a; }
+.workflow-node.node-inference {
+  --node-accent: var(--accent-purple);
+  border-color: #4a2a5a;
+}
 .workflow-node.node-inference .node-header { color: #c49ee0; }
 
-.workflow-node.node-output { border-color: #1a7a3a; }
+.workflow-node.node-output {
+  --node-accent: var(--accent-green);
+  border-color: #1a5a2a;
+}
 .workflow-node.node-output .node-header { color: #6ee09a; }
 
-.workflow-node.node-control { border-color: #3a4a7a; }
+.workflow-node.node-control {
+  --node-accent: #6080c0;
+  border-color: #2a3a6a;
+}
 .workflow-node.node-control .node-header { color: #8aa8d8; }
 
 .workflow-node.node-debug {
-  border-color: #7a6030;
+  --node-accent: var(--accent-amber);
+  border-color: #5a4a20;
   border-style: dashed;
 }
 .workflow-node.node-debug .node-header { color: var(--accent-amber); }
 
-/* ── Selected node glow per category ── */
-.react-flow__node.selected > .workflow-node.node-input { border-color: var(--accent-green-alt) !important; box-shadow: 0 0 16px rgba(42,157,143,0.2); }
-.react-flow__node.selected > .workflow-node.node-inference { border-color: var(--accent-purple) !important; box-shadow: 0 0 16px rgba(155,89,182,0.2); }
-.react-flow__node.selected > .workflow-node.node-output { border-color: var(--accent-green) !important; box-shadow: 0 0 16px rgba(46,204,113,0.2); }
-.react-flow__node.selected > .workflow-node.node-control { border-color: #6080c0 !important; box-shadow: 0 0 16px rgba(96,128,192,0.2); }
-.react-flow__node.selected > .workflow-node.node-debug { border-color: var(--accent-amber) !important; box-shadow: 0 0 16px rgba(224,192,128,0.2); }
+/* Drive the 3 px top stripe from the category accent. Done in a
+   single rule so adding a category in the future only needs the
+   --node-accent declaration above. */
+.workflow-node[class*='node-']::before {
+  background: var(--node-accent, var(--bg-elev-3));
+  /* `color` is what `currentColor` on the selected-state ::before
+     glow resolves to. */
+  color: var(--node-accent, transparent);
+}
+
+/* ── Selected node halo per category ──
+ * Border colour follows the category accent; the surrounding glow
+ * is a colour-mixed soft shadow plus an inset 1 px brand line so
+ * the card edge stays crisp at 100% zoom. */
+.react-flow__node.selected > .workflow-node.node-input {
+  border-color: var(--accent-green-alt) !important;
+  box-shadow:
+    0 0 0 1px var(--accent-green-alt) inset,
+    0 0 22px rgba(42, 157, 143, 0.45),
+    0 6px 18px rgba(0, 0, 0, 0.5);
+}
+.react-flow__node.selected > .workflow-node.node-inference {
+  border-color: var(--accent-purple) !important;
+  box-shadow:
+    0 0 0 1px var(--accent-purple) inset,
+    0 0 22px rgba(155, 89, 182, 0.45),
+    0 6px 18px rgba(0, 0, 0, 0.5);
+}
+.react-flow__node.selected > .workflow-node.node-output {
+  border-color: var(--accent-green) !important;
+  box-shadow:
+    0 0 0 1px var(--accent-green) inset,
+    0 0 22px rgba(46, 204, 113, 0.45),
+    0 6px 18px rgba(0, 0, 0, 0.5);
+}
+.react-flow__node.selected > .workflow-node.node-control {
+  border-color: #6080c0 !important;
+  box-shadow:
+    0 0 0 1px #6080c0 inset,
+    0 0 22px rgba(96, 128, 192, 0.45),
+    0 6px 18px rgba(0, 0, 0, 0.5);
+}
+.react-flow__node.selected > .workflow-node.node-debug {
+  border-color: var(--accent-amber) !important;
+  box-shadow:
+    0 0 0 1px var(--accent-amber) inset,
+    0 0 22px rgba(224, 192, 128, 0.45),
+    0 6px 18px rgba(0, 0, 0, 0.5);
+}
 
 /* ── Running node border animation ── */
 .workflow-node.node-running {
@@ -1001,38 +1100,54 @@
   50% { box-shadow: 0 0 14px rgba(96,160,255,0.3); }
 }
 
-/* ── Handle / Port styling ── */
+/* ── Handle / Port styling ──
+ * Handles are the primary affordance for connecting nodes, so they
+ * need to feel "clickable" without dominating the card. 10×10 hits
+ * the sweet spot at default zoom; the 1.6× hover scale plus a
+ * coloured ring make the active drop target obvious. */
 .react-flow__handle {
-  width: 8px !important;
-  height: 8px !important;
-  border: 2px solid var(--border-default) !important;
+  width: 10px !important;
+  height: 10px !important;
+  border: 2px solid var(--bg-elev-3) !important;
   border-radius: 50% !important;
-  transition: all 0.15s;
+  transition: transform 0.15s, box-shadow 0.15s;
 }
 
 .react-flow__handle:hover {
-  transform: scale(1.4);
+  transform: scale(1.6);
+  /* Soft halo in the handle's own colour so the user can see which
+     port their cursor is over even on cards behind a connection
+     preview line. */
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.08), 0 0 8px currentColor;
 }
 
+/* `currentColor` resolution for the hover glow above. We set
+   `color:` per data-type so a single shared box-shadow rule above
+   picks up the right tint. */
 .react-flow__handle.handle-tensor {
   background: #3498db !important;
-  border-color: #2980b9 !important;
+  border-color: #5dade2 !important;
+  color: #3498db;
 }
 .react-flow__handle.handle-image {
   background: var(--accent-green) !important;
-  border-color: #27ae60 !important;
+  border-color: #58d68d !important;
+  color: var(--accent-green);
 }
 .react-flow__handle.handle-net {
   background: var(--accent-amber-alt) !important;
-  border-color: #d35400 !important;
+  border-color: #f39c12 !important;
+  color: var(--accent-amber-alt);
 }
 .react-flow__handle.handle-generic {
   background: #7f8c8d !important;
-  border-color: #6a7a7b !important;
+  border-color: #95a5a6 !important;
+  color: #7f8c8d;
 }
 .react-flow__handle.handle-branch {
   background: var(--accent-purple) !important;
-  border-color: #8e44ad !important;
+  border-color: #af7ac5 !important;
+  color: var(--accent-purple);
 }
 
 /* ── Labeled handle wrapper (positions handle + label as a pair) ── */
@@ -1069,11 +1184,12 @@
 }
 
 .handle-label {
-  font-size: 7px;
-  color: var(--border-focus);
-  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
   white-space: nowrap;
   pointer-events: none;
+  letter-spacing: 0.3px;
 }
 
 .handle-label-left {
