@@ -61,10 +61,10 @@ describe('layoutGraph', () => {
     expect(nodes).toHaveLength(2);
     const ids = nodes.map((n) => n.id).sort();
     expect(ids).toEqual(['data', 'relu']);
-    // dagre LR places later layers to the right of earlier ones.
-    const dataX = nodes.find((n) => n.id === 'data')!.position.x;
-    const reluX = nodes.find((n) => n.id === 'relu')!.position.x;
-    expect(reluX).toBeGreaterThan(dataX);
+    // dagre TB places later layers below earlier ones.
+    const dataY = nodes.find((n) => n.id === 'data')!.position.y;
+    const reluY = nodes.find((n) => n.id === 'relu')!.position.y;
+    expect(reluY).toBeGreaterThan(dataY);
   });
 
   it('emits one edge per (producer, consumer, blob) triple with the blob as label', () => {

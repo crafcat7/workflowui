@@ -10,9 +10,10 @@
  *      blob names, layer/blob counts.
  *   2. Middle ReactFlow mini-canvas: each ModelLayer becomes a node;
  *      every (producer, output_blob → consumer) triple becomes an
- *      edge labeled with the blob name. Layout is dagre LR — that
- *      mirrors how inference graphs are conventionally read
- *      (input on left, output on right).
+ *      edge labeled with the blob name. Layout is dagre TB — top-
+ *      down mirrors how Netron and most ncnn / ONNX visualizers
+ *      render inference graphs (input at top, output at bottom),
+ *      and reads naturally inside a tall right-side drawer.
  *   3. Bottom layer list: virtualization not used here; the largest
  *      ncnn model we ship in demos has 120 layers, comfortably
  *      under the threshold where naive rendering hurts.
@@ -60,7 +61,11 @@ const NODE_H = 36;
 
 function layoutGraph(graph: ModelGraph): { nodes: Node[]; edges: Edge[] } {
   const g = new dagre.graphlib.Graph();
-  g.setGraph({ rankdir: 'LR', nodesep: 20, ranksep: 60, edgesep: 10 });
+  // TB layout: ranksep separates rows (vertical), nodesep separates
+  // siblings sharing a rank (horizontal). 60px between rows keeps
+  // edge labels readable; 30px between siblings prevents fan-outs
+  // (e.g. Split → multiple consumers) from colliding.
+  g.setGraph({ rankdir: 'TB', nodesep: 30, ranksep: 60, edgesep: 10 });
   g.setDefaultEdgeLabel(() => ({}));
 
   for (const layer of graph.layers) {
