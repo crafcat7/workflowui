@@ -20,6 +20,7 @@ future agents must preserve.
 - `workflow.state {}` → `{ run_id, statuses: { node_id → status_string }, paused_at? }`. Snapshot of the executor for reconnect reconciliation (W1). Called by the FE automatically on every WebSocket reopen after the first. See "Reconnect reconciliation" below.
 - `debug.add_breakpoint { node_id }` → `{ ok: true }`
 - `debug.remove_breakpoint { node_id }` → `{ ok: true }`
+- `model.inspect { vendor, param_path, model_path? }` → `ModelGraph` (see "Model inspector" below). Synchronous on the WS thread — the parser is pure stdlib, sub-millisecond on typical models. Errors: `-32602` for missing/empty `vendor`/`param_path` or unknown vendor; `-32000` (`ModelInspectError`) for parse failures (bad magic, malformed line, declared blob count mismatch, missing file). NOTE: paths are NOT sandboxed — same trust model as `workflow.execute`.
 
 ### Notifications (no reply)
 - `workflow.stop {}` — legacy alias of `workflow.cancel`; kept for backward compat.
@@ -78,3 +79,23 @@ handler catalog. Graph-level problems go through the
    only compare as strings.
 5. Untagged events must still be accepted by the FE filter.
 6. `workflow.state` reply shape (`run_id`, `statuses`, optional `paused_at`) is stable — FE reconcile depends on it. New optional fields OK.
+
+## Model inspector
+
+- Method: `model.inspect`. Vendor-keyed structural read of a model file; does NOT load weights or allocate runtime tensors. Available regardless of `ENABLE_NCNN` (parser is pure stdlib, no `ncnn::Net` dep).
+- Vendor dispatch: `params.vendor == "ncnn"` → `NcnnInspector`. Other vendors return `-32602`. Future onnx/torchscript plug in by implementing the `ModelInspector` interface in `backend/src/vendor/model_inspector.h`.
+- Result shape (`ModelGraph`):
+  - `vendor: string` — echo of the vendor that produced this graph.
+  - `format_version: string` — e.g. `"ncnn-7767517"`.
+  - `layers: [{ id, type, input_blobs[], output_blobs[], params: { key→string|number|number[] } }]` — `id` is the layer's name, unique within the file.
+  - `blobs: [{ name, shape: number[], producer, consumers[] }]` — `producer` is the layer id that emits the blob (empty string for graph inputs); `consumers` is the set of layer ids reading it. `shape` may be empty `[]` when the file omits a hint.
+  - `param_bytes: number`, `bin_bytes: number` — file sizes; `bin_bytes` is 0 when `model_path` not supplied.
+  - `input_blob_names: string[]`, `output_blob_names: string[]` — derived: inputs come from `Input` layer outputs; outputs are blobs with a producer but no consumers.
+  - `editable: boolean` — currently always `false`. Reserved for in-place edits; flipping it later does not require a schema bump.
+- ncnn `.param` parsing rules (mirrored in tests):
+  - Line 1 must equal magic `7767517`. Line 2 is `<layer_count> <blob_count>` and is cross-checked against the actual blob set after parsing.
+  - Per-layer line: `<type> <name> <in_count> <out_count> <in_blobs...> <out_blobs...> <k=v|k=arr>...`. `name` becomes the layer `id`.
+  - Param key `-23330` is reserved: its array is `[count, dims, d0, d1, ...]` repeated per output blob. The IR surfaces only the inner shape (drops both `count` and `dims`), so a `-23330=4,3,224,224,3` hint surfaces as `[224,224,3]` on the first output blob.
+  - Other `k=v` values are typed as int or float when parseable, else string. `k=a,b,c` becomes a number array (or string array if any element fails numeric parse).
+  - Layer type `Input` declares a graph input; its single output is added to `input_blob_names`.
+- Wire conventions: backend params are snake_case (`param_path`, `model_path`); FE hook (`useModelInspect`) accepts an ergonomic camelCase shape (`paramPath`, `modelPath`) and translates at the call site.
