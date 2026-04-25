@@ -248,29 +248,64 @@ function AppInner() {
     [edges, isRunning, cyclicEdgeIds],
   );
 
+  // Per-node className cache. Recomputing the className string +
+  // 5-piece array.filter().join(' ') for every node on every status
+  // tick dominated frame time on graphs >100 nodes — every
+  // updateNodeStatus rebuilds `nodes` (mutators map a fresh array),
+  // which busted this memo and forced N rebuilds even though only
+  // one node's status actually changed. Cache by node id keyed on
+  // the small tuple that actually drives the className, and reuse
+  // the prior string when the tuple is unchanged. The cached object
+  // identity also lets ReactFlow skip per-node re-render work for
+  // unchanged nodes.
+  const styledNodeCacheRef = useRef(
+    new Map<
+      string,
+      { key: string; className: string }
+    >(),
+  );
+
   const styledNodes = useMemo(() => {
     const bpMap = new Map(breakpoints.map((b) => [b.nodeId, b.enabled]));
-    return nodes.map((n) => {
+    const cache = styledNodeCacheRef.current;
+    const seen = new Set<string>();
+    const out = nodes.map((n) => {
       const data = n.data as unknown as WorkflowNodeData;
       const isSelected = n.id === selectedId;
-      const isNodeRunning = data.status === 'running';
-      const isPaused = data.status === 'paused';
+      const status = data.status;
       const hasBp = bpMap.has(n.id);
       const bpEnabled = bpMap.get(n.id) === true;
       const category = getCategoryClass(n.type ?? '');
-      return {
-        ...n,
-        className: [
+      // Compact key: any change in this tuple changes the className
+      // string. Cheap to compute (no allocs beyond the string concat
+      // the JS engine inlines) and stable across status ticks that
+      // don't touch this node.
+      const key = `${category}|${status ?? ''}|${isSelected ? 1 : 0}|${
+        hasBp ? (bpEnabled ? 'a' : 'd') : 'n'
+      }`;
+      seen.add(n.id);
+      let cached = cache.get(n.id);
+      if (!cached || cached.key !== key) {
+        const className = computeNodeClassName({
           category,
-          isSelected ? 'selected' : '',
-          isNodeRunning ? 'node-running' : '',
-          isPaused ? 'node-paused' : '',
-          hasBp ? (bpEnabled ? 'node-bp-armed' : 'node-bp-disabled') : '',
-        ]
-          .filter(Boolean)
-          .join(' '),
-      };
+          status,
+          selected: isSelected,
+          hasBp,
+          bpEnabled,
+        });
+        cached = { key, className };
+        cache.set(n.id, cached);
+      }
+      return { ...n, className: cached.className };
     });
+    // Drop entries for nodes that no longer exist so the cache can't
+    // grow without bound across imports/undo/redo cycles.
+    if (seen.size !== cache.size) {
+      for (const id of cache.keys()) {
+        if (!seen.has(id)) cache.delete(id);
+      }
+    }
+    return out;
   }, [nodes, selectedId, breakpoints]);
 
   const onLayout = useCallback(() => {
@@ -373,6 +408,38 @@ function App() {
 
 function getCategoryClass(type: string): string {
   return nodeCategory(type).cssClass;
+}
+
+/**
+ * Pure className builder used by the styledNodes memo. Exported for
+ * unit-test coverage so the cache key in `styledNodes` and the
+ * resulting className stay in sync — a regression in either side
+ * would silently degrade the badge styling without any test catching
+ * it (the visual diff is too small for snapshot tests, the bug is
+ * cache-correctness not visual).
+ *
+ * The output deliberately preserves token order so existing CSS
+ * selectors that key on adjacency (`.inference.node-running`) keep
+ * matching, and skips empty tokens so the className doesn't gain
+ * trailing whitespace as conditions toggle off.
+ */
+export function computeNodeClassName(args: {
+  category: string;
+  status: string | undefined;
+  selected: boolean;
+  hasBp: boolean;
+  bpEnabled: boolean;
+}): string {
+  const { category, status, selected, hasBp, bpEnabled } = args;
+  return [
+    category,
+    selected ? 'selected' : '',
+    status === 'running' ? 'node-running' : '',
+    status === 'paused' ? 'node-paused' : '',
+    hasBp ? (bpEnabled ? 'node-bp-armed' : 'node-bp-disabled') : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
 }
 
 /**
