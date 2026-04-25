@@ -79,6 +79,26 @@ describe('PropertiesPanel · View Model button', () => {
     expect(screen.getByTestId('view-model-btn')).toBeInTheDocument();
   });
 
+  it('renders the button on createNet nodes whose config.vendor=="ncnn"', () => {
+    // createNet is the demo's vendor-schema node — its type does not
+    // contain 'ncnn', so vendor inference must consult config.vendor.
+    seedNode({
+      type: 'createNet',
+      config: { vendor: 'ncnn', paramPath: '/x.param' },
+    });
+    render(<PropertiesPanel />);
+    expect(screen.getByTestId('view-model-btn')).toBeInTheDocument();
+  });
+
+  it('does not render the button on createNet with an unknown vendor', () => {
+    seedNode({
+      type: 'createNet',
+      config: { vendor: 'onnx', paramPath: '/x.param' },
+    });
+    render(<PropertiesPanel />);
+    expect(screen.queryByTestId('view-model-btn')).toBeNull();
+  });
+
   it('treats whitespace-only paramPath as empty (button not shown)', () => {
     seedNode({ type: 'ncnnInfer', config: { paramPath: '   ' } });
     render(<PropertiesPanel />);

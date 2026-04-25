@@ -184,12 +184,16 @@ function PropertiesContent({
   };
 
   // "View Model" button is offered whenever the node carries a non-empty
-  // paramPath. Vendor is inferred from node.type (must contain 'ncnn');
-  // other vendors will plug in here when their inspector ships.
+  // paramPath. Vendor is taken from config.vendor when explicitly set
+  // (createNet stores it there) and otherwise inferred from a node.type
+  // discriminator that contains 'ncnn'. Other vendors will plug in here
+  // when their inspector ships.
   const paramPath = typeof config.paramPath === 'string' ? config.paramPath.trim() : '';
   const modelPath = typeof config.modelPath === 'string' ? config.modelPath.trim() : '';
+  const explicitVendor = typeof config.vendor === 'string' ? config.vendor.trim().toLowerCase() : '';
   const nodeType = (node.type ?? '').toLowerCase();
-  const inspectVendor: 'ncnn' | null = nodeType.includes('ncnn') ? 'ncnn' : null;
+  const inspectVendor: 'ncnn' | null =
+    explicitVendor === 'ncnn' || nodeType.includes('ncnn') ? 'ncnn' : null;
   const inspectRequest: ModelInspectRequest | null =
     paramPath && inspectVendor
       ? { vendor: inspectVendor, paramPath, modelPath: modelPath || undefined }
