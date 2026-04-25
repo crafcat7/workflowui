@@ -4,12 +4,6 @@
 
 interface ImportMetaEnv {
   readonly VITE_WS_URL?: string;
-  /**
-   * App version surfaced into the bottom toolbar status strip.
-   * Injected at build time from package.json via vite.config.ts'
-   * `define` block; always present.
-   */
-  readonly VITE_APP_VERSION: string;
 }
 
 interface ImportMeta {

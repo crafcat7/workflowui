@@ -805,17 +805,6 @@
   letter-spacing: 1px;
 }
 
-/* Build version tag — sits at the start of the right cluster as a
-   static identity label. Mono face echoes the rest of the numeric
-   surfaces (debug ids, shapes) and visually separates it from the
-   live-state widgets that follow. */
-.console-version {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  color: var(--text-dim);
-  letter-spacing: 0.5px;
-}
-
 /* Status pair: STATUS label (muted) + RUNNING / PAUSED / READY value
    (semantic colour). Rendered in the right cluster as a paragraph-
    style "label: value" pair so the actual state stays scannable
