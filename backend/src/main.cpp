@@ -8,6 +8,7 @@
 #include "workflow/run_session.h"
 #include "model/workflow_graph.h"
 #include "vendor/inference_engine.h"
+#include "vendor/ncnn/ncnn_inspector.h"
 
 #ifdef ENABLE_NCNN
 #include "vendor/ncnn/ncnn_engine.h"
@@ -329,6 +330,60 @@ int main(int argc, char* argv[]) {
         executor->debug_controller().remove_breakpoint(params["node_id"]);
         return {{"ok", true}};
     });
+
+    // model.inspect: read-only structural view of an inference model.
+    //
+    // Wire shape:
+    //   params: {
+    //     vendor: "ncnn",                   // required, dispatches inspector
+    //     param_path: "<abs path>",         // required, the .param file
+    //     model_path: "<abs path>" | "" | absent  // optional, the .bin
+    //   }
+    //   result: ModelGraph (see vendor/model_inspector.h to_json shape)
+    //
+    // We deliberately keep this synchronous on the WS thread: the
+    // parser is pure stdlib over a small text file (shufflenet.param
+    // is ~6 KB, parsing < 1ms), and the existing RPC dispatch is
+    // already serialized per connection. Adding a worker pool would
+    // be premature here.
+    //
+    // Path policy: paths are not sandboxed. The desktop shell and CLI
+    // already trust the user's filesystem (workflows reference
+    // .param/.bin paths directly), and the inspector is strictly
+    // read-only — no path leak surface beyond what `workflow.execute`
+    // already exposes. If we ever ship a multi-tenant server, this
+    // method must gain the same SecurityConfig::is_path_allowed gate
+    // the rest of the file-touching handlers will need.
+    rpc.register_method("model.inspect", [&](const json& params) -> json {
+        if (!params.is_object()) {
+            throw InvalidParams("params must be an object");
+        }
+        if (!params.contains("vendor") || !params["vendor"].is_string()) {
+            throw InvalidParams("params.vendor must be a string");
+        }
+        if (!params.contains("param_path") || !params["param_path"].is_string() ||
+            params["param_path"].get<std::string>().empty()) {
+            throw InvalidParams("params.param_path must be a non-empty string");
+        }
+        const std::string vendor = params["vendor"].get<std::string>();
+
+        ModelInspectRequest req;
+        req.param_path = params["param_path"].get<std::string>();
+        if (params.contains("model_path") && params["model_path"].is_string()) {
+            req.model_path = params["model_path"].get<std::string>();
+        }
+
+        // Vendor dispatch. Today only "ncnn"; future "onnx" /
+        // "torchscript" plug in here. We instantiate per call so the
+        // inspector remains stateless — no caching footgun if a user
+        // edits the .param on disk between inspects.
+        if (vendor == "ncnn") {
+            NcnnInspector inspector;
+            return to_json(inspector.inspect(req));
+        }
+        throw InvalidParams("params.vendor '" + vendor + "' is not a known inspector");
+    });
+
 
     // ── WebSocket Server ──
     WsServer server(port, rpc);

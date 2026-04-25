@@ -123,6 +123,7 @@ set(BACKEND_TEST_SOURCES
   tests/test_debug_controller.cpp
   tests/test_model_inspector_ir.cpp
   tests/test_ncnn_inspector.cpp
+  tests/test_model_inspect_rpc.cpp
 )
 
 add_executable(workflow_test ${BACKEND_TEST_SOURCES} ${BACKEND_LIB_SOURCES})
