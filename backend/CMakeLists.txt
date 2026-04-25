@@ -120,6 +120,7 @@ set(BACKEND_TEST_SOURCES
   tests/test_rpc_handler.cpp
   tests/test_run_session.cpp
   tests/test_debug_controller.cpp
+  tests/test_model_inspector_ir.cpp
 )
 
 add_executable(workflow_test ${BACKEND_TEST_SOURCES} ${BACKEND_LIB_SOURCES})
