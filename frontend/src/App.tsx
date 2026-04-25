@@ -41,8 +41,29 @@ import { findCyclicEdges } from './utils/cycles';
 import './App.css';
 
 function AppInner() {
-  const { nodes, edges, isRunning, onNodesChange, onEdgesChange, setEdges, setNodes, setSelectedNode, addNode, importWorkflow } =
-    useWorkflowStore();
+  // Subscribe with atomic selectors instead of destructuring the whole
+  // store. The previous form (`useWorkflowStore()` returning the entire
+  // state object) re-rendered AppInner on EVERY store mutation —
+  // status ticks during a run, every cursor-drag node-position update,
+  // every log line append elsewhere — causing ReactFlow to receive
+  // newly-built `styledNodes`/`styledEdges` arrays even when nothing
+  // visible changed. Per-field selectors limit re-renders to the
+  // exact fields this component actually reads.
+  //
+  // Action references (onNodesChange, setEdges, ...) are stable across
+  // renders because they're created once inside zustand's `create()`
+  // factory; selecting them individually is cheap and avoids the
+  // identity churn of returning a fresh `{...}` per render.
+  const nodes = useWorkflowStore((s) => s.nodes);
+  const edges = useWorkflowStore((s) => s.edges);
+  const isRunning = useWorkflowStore((s) => s.isRunning);
+  const onNodesChange = useWorkflowStore((s) => s.onNodesChange);
+  const onEdgesChange = useWorkflowStore((s) => s.onEdgesChange);
+  const setEdges = useWorkflowStore((s) => s.setEdges);
+  const setNodes = useWorkflowStore((s) => s.setNodes);
+  const setSelectedNode = useWorkflowStore((s) => s.setSelectedNode);
+  const addNode = useWorkflowStore((s) => s.addNode);
+  const importWorkflow = useWorkflowStore((s) => s.importWorkflow);
   const selectedId = useWorkflowStore((s) => s.selectedNodeId);
   const breakpoints = useDebugStore((s) => s.breakpoints);
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
