@@ -279,6 +279,39 @@ export const useWorkflowStore = create<WorkflowState>()(
   )
 );
 
+// Keep `nodesById` consistent with `nodes` across *every* store write,
+// including paths that bypass our mutators. The relevant offender is
+// zundo's undo/redo: it `userSet(nextState)` with the partialized
+// snapshot `{nodes, edges}`, so the id-keyed cache that mutators
+// normally rebuild stays frozen at the pre-undo state. The fallout is
+// silent: `getNodeById` (used by `validateConnection`, the keyboard
+// shortcut copy/paste path, `WorkflowRunner.handleValidationFailed`
+// and `reconcileFromSnapshot`) returns phantom nodes, while real ones
+// look "missing" — no exception, no warning, just wrong answers.
+//
+// Re-syncing in a subscriber is cheaper than wiring a custom zundo
+// `handleSet` for restoration (zundo only exposes `handleSet` for the
+// *save* phase) and is robust against any future `setState` caller
+// that forgets the cache. The cost is one identity check per write
+// and an O(N) rebuild only when the `nodes` array reference changed
+// without going through `rebuildNodesById`.
+useWorkflowStore.subscribe((state, prev) => {
+  if (state.nodes === prev.nodes) return;
+  // Same array reference would have been kept across snapshots; a
+  // changed reference means either a mutator already rebuilt the
+  // cache (size + first-id will agree) or zundo restored a partialized
+  // snapshot (cache is stale). Comparing length + a sampled id avoids
+  // a full rebuild on the common mutator path.
+  const cache = state.nodesById;
+  const sample = state.nodes[0];
+  const consistent =
+    cache.size === state.nodes.length &&
+    (sample === undefined || cache.get(sample.id) === sample);
+  if (!consistent) {
+    useWorkflowStore.setState({ nodesById: rebuildNodesById(state.nodes) });
+  }
+});
+
 /**
  * Pause undo recording — call on drag start so the whole drag registers as a
  * single history entry rather than one per pointer move.

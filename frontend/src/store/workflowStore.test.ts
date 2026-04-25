@@ -233,3 +233,61 @@ describe('workflowStore nodesById cache', () => {
     expect(s.nodesById.size).toBe(1);
   });
 });
+
+// Regression: zundo's undo/redo bypasses our mutators by calling the
+// raw zustand `setState` with a partialized `{nodes, edges}`. Without
+// the rehydration subscriber the id-keyed cache gets stuck at the
+// pre-undo state and `getNodeById` returns phantom or missing nodes
+// silently. Each test seeds an authored mutation (so zundo records
+// it) then exercises the undo/redo paths and checks both `nodes`
+// and `nodesById` agree.
+describe('workflowStore undo/redo nodesById sync', () => {
+  beforeEach(resetStore);
+
+  function pushNode(id: string) {
+    useWorkflowStore.getState().addNode({
+      id,
+      type: 'debug',
+      position: { x: 0, y: 0 },
+      data: { label: id, type: 'debug', status: 'idle', config: {} },
+    });
+  }
+
+  it('rebuilds nodesById after undo of an addNode', () => {
+    pushNode('a');
+    pushNode('b');
+    expect(useWorkflowStore.getState().nodesById.size).toBe(2);
+
+    useWorkflowStore.temporal.getState().undo();
+
+    const s = useWorkflowStore.getState();
+    expect(s.nodes.map((n) => n.id)).toEqual(['a']);
+    expect(s.nodesById.size).toBe(1);
+    expect(s.getNodeById('a')?.id).toBe('a');
+    // The phantom-node bug: pre-fix `nodesById` still held 'b' from
+    // before the undo, so `getNodeById('b')` would resurrect it.
+    expect(s.getNodeById('b')).toBeUndefined();
+  });
+
+  it('rebuilds nodesById after redo restores a removed node', () => {
+    pushNode('a');
+    pushNode('b');
+    useWorkflowStore.temporal.getState().undo(); // back to just 'a'
+    useWorkflowStore.temporal.getState().redo(); // forward to 'a','b'
+
+    const s = useWorkflowStore.getState();
+    expect(s.nodes.map((n) => n.id)).toEqual(['a', 'b']);
+    expect(s.nodesById.size).toBe(2);
+    expect(s.getNodeById('b')?.id).toBe('b');
+  });
+
+  it('does not rebuild on no-op writes that share the nodes reference', () => {
+    pushNode('a');
+    const before = useWorkflowStore.getState().nodesById;
+    // A write that doesn't touch `nodes` (e.g. selection) must not
+    // burn cycles rebuilding the cache, since the subscriber's
+    // identity check should short-circuit.
+    useWorkflowStore.getState().setSelectedNode('a');
+    expect(useWorkflowStore.getState().nodesById).toBe(before);
+  });
+});
