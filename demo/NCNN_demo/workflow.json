@@ -6,9 +6,9 @@
       "type": "inputImage",
       "position": { "x": -800, "y": -250 },
       "data": {
-        "label": "Input Image (round-trip test)",
+        "label": "Input Image (PNG round-trip)",
         "config": {
-          "filePath": "demo/NCNN_demo/shufflenet.param"
+          "filePath": "demo/NCNN_demo/sample.png"
         },
         "status": "idle"
       }
@@ -18,9 +18,9 @@
       "type": "saveImage",
       "position": { "x": -480, "y": -250 },
       "data": {
-        "label": "Save Image",
+        "label": "Save Image (PNG round-trip)",
         "config": {
-          "filePath": "roundtrip.bin"
+          "filePath": "roundtrip.png"
         },
         "status": "idle"
       }
