@@ -93,6 +93,12 @@ pass. Evidence cited as `file:line`. Research-only snapshot.
 - Drift already present: `inputImage` FE schema has only `filePath`
   but `ImageData` carries width/height/channels; `read_image` is in
   `CapabilityRegistry` but handler key is `inputImage`.
+  - **Image-decode part of this drift fixed 2026-04**: `inputImage`
+    handler now decodes PNG/JPG via vendored stb_image and populates
+    `ImageData.width/height/channels`; `saveImage` re-encodes RGBA8
+    to PNG/JPG by extension (see commit "feat backend: decode/encode
+    inputImage/saveImage via stb_image"). The schema/registry drift
+    around `read_image` vs `inputImage` is still open.
 - Fix: single declarative node manifest; handler self-registration
   with ports + config schema; expose via `nodes.list` RPC; FE
   consumes manifest. *Effort: L*.
