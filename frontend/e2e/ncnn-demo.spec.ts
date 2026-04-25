@@ -117,24 +117,30 @@ test.describe('NCNN demo end-to-end', () => {
     const runBtn = page.locator('button').filter({ hasText: /^\s*▶?\s*RUN\s*$/i }).first();
     await runBtn.click();
 
-    // The demo contains a benchmark node with duration=30s. The stub
-    // engine returns immediately (runs=1000, avg=1ms), but the
-    // BenchmarkHandler still honors the requested wall-clock, so the
-    // real lower bound is ~30s + scheduling overhead. 45s gives a
-    // small cushion; set E2E_SLOW=1 to extend further for slow CI.
-    const completeTimeoutMs = process.env.E2E_SLOW ? 90_000 : 45_000;
+    // The demo benchmark node runs for 2 wall-clock seconds. Stub engine
+    // is sub-millisecond per call, so total run is dominated by that 2s
+    // bound. 20s is comfortable on slow CI; E2E_SLOW=1 doubles it.
+    const completeTimeoutMs = process.env.E2E_SLOW ? 60_000 : 20_000;
     await expect.poll(
       () => wsEvents.some((e) => e.method === 'workflow.complete'),
       { timeout: completeTimeoutMs, message: 'workflow.complete never arrived' },
     ).toBe(true);
 
-    // Every node from the demo should have reached status=done (or an
-    // equivalent terminal). We pull the unique node_ids that emitted a
-    // 'done' event and compare against the demo graph.
+    // Partition expected terminals: the false_branch consumer (save_text)
+    // is the deliberate skipped target — condition expr "> 0.4" against
+    // the topk output of an all-0.5 tensor takes the true branch, so the
+    // save_text node must be reported skipped with reason=branch_pruned
+    // and never produce a 'done'. Every other node must terminate as
+    // done. This is a regression guard for the entire skip-propagation
+    // path (Executor::mark_dead_output → branch_pruned skipped event).
+    const SKIPPED_IDS = new Set(['save_text']);
     const doneIds = new Set(
       wsEvents
         .filter((e) => e.method === 'node.status' && e.params.status === 'done')
         .map((e) => e.params.node_id as string),
+    );
+    const skippedEvents = wsEvents.filter(
+      (e) => e.method === 'node.status' && e.params.status === 'skipped',
     );
     const errored = wsEvents
       .filter((e) => e.method === 'node.status' && e.params.status === 'error')
@@ -144,7 +150,17 @@ test.describe('NCNN demo end-to-end', () => {
 
     const expectedIds = new Set<string>(graph.nodes.map((n: { id: string }) => n.id));
     for (const id of expectedIds) {
-      expect(doneIds, `node ${id} never reached done`).toContain(id);
+      if (SKIPPED_IDS.has(id)) {
+        expect(doneIds, `node ${id} should NOT reach done (must be skipped)`).not.toContain(id);
+        const skipForId = skippedEvents.find((e) => e.params.node_id === id);
+        expect(skipForId, `node ${id} should emit a skipped event`).toBeTruthy();
+        expect(
+          skipForId?.params.reason,
+          `node ${id} skipped reason should be branch_pruned`,
+        ).toBe('branch_pruned');
+      } else {
+        expect(doneIds, `node ${id} never reached done`).toContain(id);
+      }
     }
 
     // Backend must still be alive at the end — a regression of the
@@ -168,9 +184,12 @@ test.describe('NCNN demo end-to-end', () => {
     const graph = JSON.parse(fs.readFileSync(DEMO_WORKFLOW, 'utf-8'));
     await expect(page.locator('.react-flow__node')).toHaveCount(graph.nodes.length);
 
-    // Select the createNet node — it carries the demo's paramPath
-    // (demo/NCNN_demo/shufflenet.param) plus config.vendor === 'ncnn'.
-    await page.locator('.react-flow__node').filter({ hasText: 'ShuffleNet' }).first().click();
+    // Select the createNet node by its stable data-id="net" (set in
+    // demo/NCNN_demo/workflow.json). Filtering by visible label is
+    // brittle now that the upgraded demo also has an inputImage node
+    // whose configured filePath ('shufflenet.param') renders inside
+    // the node body.
+    await page.locator('.react-flow__node[data-id="net"]').click();
 
     // The View Model button should now be visible in the properties panel.
     const viewBtn = page.getByTestId('view-model-btn');

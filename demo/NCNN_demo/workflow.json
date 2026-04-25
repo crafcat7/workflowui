@@ -2,12 +2,47 @@
   "version": 1,
   "nodes": [
     {
-      "id": "net1",
+      "id": "img_in",
+      "type": "inputImage",
+      "position": { "x": -800, "y": -250 },
+      "data": {
+        "label": "Input Image (round-trip test)",
+        "config": {
+          "filePath": "demo/NCNN_demo/shufflenet.param"
+        },
+        "status": "idle"
+      }
+    },
+    {
+      "id": "img_save",
+      "type": "saveImage",
+      "position": { "x": -480, "y": -250 },
+      "data": {
+        "label": "Save Image",
+        "config": {
+          "filePath": "roundtrip.bin"
+        },
+        "status": "idle"
+      }
+    },
+    {
+      "id": "tensor_in",
+      "type": "inputTensor",
+      "position": { "x": -800, "y": 100 },
+      "data": {
+        "label": "Input 3x224x224 (fill 0.5)",
+        "config": {
+          "fillMode": "auto",
+          "shape": "3, 224, 224",
+          "fillValue": "0.5"
+        },
+        "status": "idle"
+      }
+    },
+    {
+      "id": "net",
       "type": "createNet",
-      "position": {
-        "x": -228.69336143308746,
-        "y": -158.10326659641728
-      },
+      "position": { "x": -800, "y": 350 },
       "data": {
         "label": "ShuffleNet (empty weights)",
         "config": {
@@ -22,130 +57,110 @@
           "inputC": "3",
           "numThreads": "2"
         },
-        "status": "idle",
-        "elapsedMs": 15.391351
-      }
-    },
-    {
-      "id": "input1",
-      "type": "inputTensor",
-      "position": {
-        "x": -526.1694124589885,
-        "y": 352.95303185786696
-      },
-      "data": {
-        "label": "Input 224x224x3",
-        "config": {
-          "fillMode": "auto",
-          "shape": "3, 224, 224",
-          "fillValue": "0.5"
-        },
         "status": "idle"
       }
     },
     {
-      "id": "infer1",
+      "id": "infer",
       "type": "inference",
-      "position": {
-        "x": 428.4193888303477,
-        "y": 64.74183350895677
-      },
+      "position": { "x": -440, "y": 220 },
       "data": {
         "label": "Inference",
         "config": {},
-        "status": "idle",
-        "elapsedMs": 2
+        "status": "idle"
       }
     },
     {
-      "id": "out1",
-      "type": "output",
-      "position": {
-        "x": 751.8335089567967,
-        "y": -69.17808219178083
-      },
+      "id": "bench",
+      "type": "benchmark",
+      "position": { "x": -440, "y": 480 },
       "data": {
-        "label": "Output",
+        "label": "Benchmark",
+        "config": {
+          "duration": "2"
+        },
+        "status": "idle"
+      }
+    },
+    {
+      "id": "post",
+      "type": "postprocess",
+      "position": { "x": -120, "y": 220 },
+      "data": {
+        "label": "Top-K (k=3)",
+        "config": {
+          "op": "topk",
+          "k": "3"
+        },
+        "status": "idle"
+      }
+    },
+    {
+      "id": "cond",
+      "type": "condition",
+      "position": { "x": 200, "y": 220 },
+      "data": {
+        "label": "max > 0.4 ?",
+        "config": {
+          "expression": "max > 0.4"
+        },
+        "status": "idle"
+      }
+    },
+    {
+      "id": "inspect",
+      "type": "debug",
+      "position": { "x": 540, "y": 80 },
+      "data": {
+        "label": "Inspect (true branch)",
         "config": {},
         "status": "idle"
       }
     },
     {
-      "id": "save1",
-      "type": "saveText",
-      "position": {
-        "x": 750,
-        "y": 250
-      },
+      "id": "out_main",
+      "type": "output",
+      "position": { "x": 870, "y": 80 },
       "data": {
-        "label": "Save Results",
+        "label": "Main Output",
+        "config": {},
+        "status": "idle"
+      }
+    },
+    {
+      "id": "save_text",
+      "type": "saveText",
+      "position": { "x": 540, "y": 360 },
+      "data": {
+        "label": "Save Text (false branch, expect skipped)",
         "config": {
-          "filePath": "results.txt"
+          "filePath": "false_branch.txt"
         },
         "status": "idle"
       }
     },
     {
-      "id": "node_2",
-      "type": "benchmark",
-      "position": {
-        "x": 424.7428872497365,
-        "y": 344.0495258166491
-      },
+      "id": "out_bench",
+      "type": "output",
+      "position": { "x": 200, "y": 480 },
       "data": {
-        "label": "Benchmark",
-        "type": "benchmark",
-        "status": "idle",
-        "config": {
-          "duration": "30"
-        },
-        "runsCount": 6191,
-        "avgMs": 0.7635277015021806
+        "label": "Benchmark Output",
+        "config": {},
+        "status": "idle"
       }
     }
   ],
   "edges": [
-    {
-      "id": "e1",
-      "source": "net1",
-      "sourceHandle": "net_handle",
-      "target": "infer1",
-      "targetHandle": "net_handle"
-    },
-    {
-      "id": "e2",
-      "source": "infer1",
-      "sourceHandle": "output_data",
-      "target": "out1",
-      "targetHandle": "data"
-    },
-    {
-      "id": "e3",
-      "source": "infer1",
-      "sourceHandle": "output_data",
-      "target": "save1",
-      "targetHandle": "data"
-    },
-    {
-      "id": "e4",
-      "source": "net1",
-      "sourceHandle": "net_handle",
-      "target": "node_2",
-      "targetHandle": "net_handle"
-    },
-    {
-      "source": "input1",
-      "sourceHandle": "tensor_data",
-      "target": "infer1",
-      "targetHandle": "input_data",
-      "id": "e5"
-    },
-    {
-      "source": "input1",
-      "sourceHandle": "tensor_data",
-      "target": "node_2",
-      "targetHandle": "input_data",
-      "id": "e6"
-    }
+    { "id": "e_img",        "source": "img_in",    "sourceHandle": "image_data",       "target": "img_save", "targetHandle": "image_data" },
+    { "id": "e_net_infer",  "source": "net",       "sourceHandle": "net_handle",       "target": "infer",    "targetHandle": "net_handle" },
+    { "id": "e_net_bench",  "source": "net",       "sourceHandle": "net_handle",       "target": "bench",    "targetHandle": "net_handle" },
+    { "id": "e_t_infer",    "source": "tensor_in", "sourceHandle": "tensor_data",      "target": "infer",    "targetHandle": "input_data" },
+    { "id": "e_t_bench",    "source": "tensor_in", "sourceHandle": "tensor_data",      "target": "bench",    "targetHandle": "input_data" },
+    { "id": "e_infer_post", "source": "infer",     "sourceHandle": "output_data",      "target": "post",     "targetHandle": "input_data" },
+    { "id": "e_post_cond",  "source": "post",      "sourceHandle": "output_data",      "target": "cond",     "targetHandle": "input_data" },
+    { "id": "e_true",       "source": "cond",      "sourceHandle": "true_branch",      "target": "inspect",  "targetHandle": "data_in" },
+    { "id": "e_inspect",    "source": "inspect",   "sourceHandle": "data_out",         "target": "out_main", "targetHandle": "data" },
+    { "id": "e_false",      "source": "cond",      "sourceHandle": "false_branch",     "target": "save_text", "targetHandle": "data" },
+    { "id": "e_bench",      "source": "bench",     "sourceHandle": "benchmark_result", "target": "out_bench", "targetHandle": "data" }
   ]
 }

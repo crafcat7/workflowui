@@ -34,6 +34,9 @@ backend/compile_commands.json
 
 # Demo and temp files
 results.txt
+# saveText / saveImage outputs produced when running the demo workflow
+false_branch.txt
+roundtrip.bin
 
 # Tauri
 frontend/src-tauri/target/
