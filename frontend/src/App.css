@@ -1220,9 +1220,38 @@
   transform: translateY(-50%);
 }
 
-/* ── Edge styling ── */
+/* ── Edge styling ──
+ * Stroke colour and width are computed per-edge in App.tsx (data-type
+ * dependent). The CSS layer adds two cross-cutting concerns: a
+ * full-opacity highlight when the edge is selected, and a soft
+ * drop-shadow glow when the workflow is running, so the moving dash
+ * pattern feels like an active signal rather than a decoration. */
 .react-flow__edge-path {
-  transition: stroke 0.3s;
+  transition: stroke 0.3s, stroke-width 0.18s, filter 0.18s;
+}
+
+/* Selected edge: bright white-ish overlay + 1.5× stroke. Using a
+   currentColor-relative bump would be cleaner but React Flow's
+   inline `style.stroke` wins the cascade, so we just opt out of
+   opacity and rely on the user clicking to draw their own focus. */
+.react-flow__edge.selected .react-flow__edge-path {
+  stroke-width: 3 !important;
+  /* drop-shadow on filter (rather than box-shadow which is invalid
+     on SVG paths) creates a tight halo that reads as "active". */
+  filter: drop-shadow(0 0 4px var(--accent-blue));
+}
+
+/* When the workflow is running, every edge already animates its
+   dashes via React Flow's `animated` prop. Add a subtle stroke
+   glow so the path feels energised instead of just dashed. */
+.react-flow__edge.animated .react-flow__edge-path {
+  filter: drop-shadow(0 0 3px currentColor);
+}
+
+/* Cyclic edges already get a dashed bright-red stroke from the
+   inline style; mirror the warning into the marker. */
+.react-flow__edge.edge-cyclic .react-flow__edge-path {
+  filter: drop-shadow(0 0 4px rgba(255, 64, 64, 0.6));
 }
 
 /* ── MiniMap dark theme ── */

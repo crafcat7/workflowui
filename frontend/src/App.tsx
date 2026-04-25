@@ -11,6 +11,7 @@ import {
   Background,
   BackgroundVariant,
   addEdge,
+  MarkerType,
   type Connection,
   type Node,
 } from '@xyflow/react';
@@ -243,6 +244,19 @@ function AppInner() {
             : isRunning
             ? { stroke: baseStroke, strokeWidth: 2.5 }
             : { stroke: baseStroke, strokeWidth: 1.5, opacity: 0.75 },
+          // Arrow heads make data-flow direction unambiguous —
+          // smoothstep paths can otherwise look bidirectional at a
+          // glance, especially on tight loops. Colour matches the
+          // stroke so the marker reads as a continuation of the
+          // line, not a separate decoration. Slightly larger when
+          // the run is in flight so the moving arrow is the eye's
+          // first stop.
+          markerEnd: {
+            type: MarkerType.ArrowClosed,
+            color: baseStroke,
+            width: isRunning ? 18 : 14,
+            height: isRunning ? 18 : 14,
+          },
         };
       }),
     [edges, isRunning, cyclicEdgeIds],
