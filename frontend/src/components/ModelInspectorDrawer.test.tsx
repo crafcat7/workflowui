@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 // SPDX-FileCopyrightText: 2026 WorkflowUI contributors
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import {
   ModelInspectorDrawer,
   __layoutGraphForTest,
@@ -232,7 +232,11 @@ describe('ModelInspectorDrawer', () => {
       />,
     );
     await waitFor(() => screen.getByTestId('model-inspector-layers'));
-    const reluRow = screen.getByText('relu').closest('tr')!;
+    // Scope to the layers table — the LayerNode ReactFlow renderer
+    // also surfaces the id text, so a global getByText would match
+    // multiple elements after the custom-node refactor.
+    const layersSection = screen.getByTestId('model-inspector-layers');
+    const reluRow = within(layersSection).getByText('relu').closest('tr')!;
     fireEvent.click(reluRow);
     expect(reluRow.className).toContain('selected');
   });

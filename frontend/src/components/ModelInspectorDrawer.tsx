@@ -30,10 +30,11 @@
  * canvas, not the underlying ModelGraph.
  */
 
-import { useEffect, useMemo, useState, type ReactElement } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
 import {
   ReactFlow,
   ReactFlowProvider,
+  useReactFlow,
   type Edge,
   type Node,
   type NodeProps,
@@ -59,74 +60,237 @@ export interface ModelInspectorDrawerProps {
 
 // ── layout ──────────────────────────────────────────────────────────
 // Per-node footprint used by dagre. ReactFlow has no opinion on size;
-// the drawer is 600px wide so we pick a width that fits "<type> · <id>"
-// for typical ncnn names (e.g. "Convolution · conv1") inside that
-// constraint without truncating, paired with a height tall enough to
-// stack three lines: header (type · id), input shapes, output shapes.
-// Engines that emit no shape hints fall back to dashes so the height
-// stays uniform across layers (uniform rows make TB layout readable).
-const NODE_W = 160;
-const NODE_H = 76;
+// the drawer is 600px wide. The custom LayerNode below stacks four
+// rows: a coloured type header, an id sub-header, an optional key-
+// param strip, and the output shape with axis names. We size for
+// the worst case so dagre's row spacing stays uniform — Conv layers
+// with key-params look identical in height to ReLU layers without.
+const NODE_W = 190;
+const NODE_H = 96;
 
-/** Format `[1, 3, 224, 224]` → `1×3×224×224`. Empty → `?`. */
+/**
+ * Format a numeric shape with axis names when the rank matches a
+ * standard layout. ncnn / ONNX inference graphs are overwhelmingly
+ * NCHW for 4-D activations and CHW for the rare 3-D blob, so we
+ * label those cases. Other ranks (1-D bias, 5-D for video models)
+ * fall back to a plain "a×b" so we never mislabel.
+ */
 function fmtShape(shape: number[]): string {
   if (!shape || shape.length === 0) return '?';
+  if (shape.length === 4) {
+    const [n, c, h, w] = shape;
+    return `N${n}·C${c}·H${h}·W${w}`;
+  }
+  if (shape.length === 3) {
+    const [c, h, w] = shape;
+    return `C${c}·H${h}·W${w}`;
+  }
   return shape.join('×');
+}
+
+/**
+ * Background colour by layer family. Grouping the ~20 ncnn layer
+ * types we care about into 5 visual buckets gives the user a
+ * skimming aid on tall graphs (find all activations / find all
+ * pools) without devolving into a confetti of distinct colours.
+ * Anything outside the bucket list lands on the neutral default.
+ */
+function headerBgFor(type: string): string {
+  if (type === 'Input') return '#1a3a3a'; // teal — graph entry
+  if (
+    type === 'Convolution' ||
+    type === 'ConvolutionDepthWise' ||
+    type === 'InnerProduct' ||
+    type === 'Deconvolution'
+  ) {
+    return '#2a3a5a'; // blue — weighted compute
+  }
+  if (
+    type === 'ReLU' ||
+    type === 'Sigmoid' ||
+    type === 'PReLU' ||
+    type === 'HardSwish' ||
+    type === 'Mish' ||
+    type === 'Swish'
+  ) {
+    return '#3a2a4a'; // purple — activations
+  }
+  if (type === 'Pooling' || type === 'PoolingV2' || type === 'GlobalPooling') {
+    return '#2a4a3a'; // green — spatial reduction
+  }
+  if (
+    type === 'BatchNorm' ||
+    type === 'Scale' ||
+    type === 'Concat' ||
+    type === 'Split' ||
+    type === 'Eltwise' ||
+    type === 'Reshape' ||
+    type === 'Permute' ||
+    type === 'Crop' ||
+    type === 'Flatten'
+  ) {
+    return '#3a3a2a'; // amber — shape / fusion plumbing
+  }
+  return '#1a1a3a'; // neutral fallback
+}
+
+/**
+ * Pull the few highest-signal params out of a layer's free-form
+ * params bag. ncnn keys are stringified ints (e.g. Convolution: "0"
+ * = num_output, "1" = kernel_w, "3" = stride_w); we hand-decode the
+ * subset that drives a model's behaviour (kernel / stride / dilation
+ * / padding / groups for Conv-like, kernel / stride for Pooling,
+ * num_output for InnerProduct). Other layer types contribute no
+ * row — better an empty strip than a wall of "0=…  1=…" gibberish.
+ */
+function fmtKeyParams(type: string, params: Record<string, unknown>): string {
+  const num = (key: string): number | undefined => {
+    const v = params[key];
+    if (typeof v === 'number') return v;
+    if (typeof v === 'string' && /^-?\d+$/.test(v)) return Number(v);
+    return undefined;
+  };
+  if (
+    type === 'Convolution' ||
+    type === 'ConvolutionDepthWise' ||
+    type === 'Deconvolution'
+  ) {
+    const out = num('0');
+    const k = num('1');
+    const s = num('3');
+    const p = num('4');
+    const g = num('7');
+    const parts: string[] = [];
+    if (out !== undefined) parts.push(`out=${out}`);
+    if (k !== undefined) parts.push(`k=${k}`);
+    if (s !== undefined && s !== 1) parts.push(`s=${s}`);
+    if (p !== undefined && p !== 0) parts.push(`p=${p}`);
+    if (g !== undefined && g !== 1) parts.push(`g=${g}`);
+    return parts.join(' ');
+  }
+  if (type === 'Pooling' || type === 'PoolingV2') {
+    const k = num('1');
+    const s = num('2');
+    const op = num('0');
+    const parts: string[] = [];
+    if (op === 0) parts.push('max');
+    else if (op === 1) parts.push('avg');
+    if (k !== undefined) parts.push(`k=${k}`);
+    if (s !== undefined && s !== 1) parts.push(`s=${s}`);
+    return parts.join(' ');
+  }
+  if (type === 'InnerProduct') {
+    const out = num('0');
+    return out !== undefined ? `out=${out}` : '';
+  }
+  return '';
 }
 
 interface LayerNodeData extends Record<string, unknown> {
   type: string;
   id: string;
-  inShapes: string[];
-  outShapes: string[];
+  /** Pre-formatted output shape string (axis-named when 3- or 4-D). */
+  outShape: string;
+  /** Optional key-param summary; empty string when not Conv/Pool/IP. */
+  keyParams: string;
+  /** Background colour for the type header bar. */
+  headerBg: string;
   selected: boolean;
 }
 
 /**
  * Custom layer-node renderer. Default ReactFlow nodes only accept a
- * `label: string`; we need three stacked lines (header + in shapes +
- * out shapes), so register a custom node type. Source/Target handles
- * are placed top/bottom to match the TB rank flow — without them
- * ReactFlow would still draw edges, but they'd anchor at floating
- * default positions, undermining the columnar look.
+ * `label: string`; we need a four-row layout (type bar, id, key-
+ * params, output shape) so we register a custom node type. Input
+ * shape is intentionally omitted because in a TB graph the upstream
+ * node sits directly above and its output_shape *is* this node's
+ * input — duplicating it doubles the noise. Source/Target handles
+ * pin to top/bottom so edges anchor at the rank boundary.
  */
 function LayerNode({ data }: NodeProps<Node<LayerNodeData>>): ReactElement {
-  const { type, id, inShapes, outShapes, selected } = data;
+  const { type, id, outShape, keyParams, headerBg, selected } = data;
   return (
     <div
       style={{
         width: NODE_W,
         height: NODE_H,
-        background: selected ? '#2a1a3a' : '#1a1a3a',
-        border: `1px solid ${selected ? '#9b59b6' : '#2a2a4a'}`,
+        background: '#0e0e22',
+        border: `1px solid ${selected ? '#c39be0' : '#2a2a4a'}`,
+        boxShadow: selected ? '0 0 0 2px rgba(155, 89, 182, 0.35)' : 'none',
         color: '#d0d0e8',
-        borderRadius: 4,
-        padding: '4px 6px',
+        borderRadius: 5,
         fontSize: 11,
         lineHeight: 1.25,
         display: 'flex',
         flexDirection: 'column',
-        gap: 1,
         overflow: 'hidden',
       }}
     >
       <Handle type="target" position={Position.Top} style={{ background: '#555' }} />
+      {/* Header bar: bold type name on a category-coloured background.
+          Acts as the visual anchor when scanning a tall graph. */}
       <div
         style={{
-          fontWeight: 600,
+          background: headerBg,
+          padding: '4px 8px',
+          fontWeight: 700,
+          fontSize: 12,
           whiteSpace: 'nowrap',
           overflow: 'hidden',
           textOverflow: 'ellipsis',
         }}
-        title={`${type} · ${id}`}
+        title={type}
       >
-        {type} · {id}
+        {type}
       </div>
-      <div style={{ color: '#8a8aa8', fontSize: 10 }} title={inShapes.join('  ')}>
-        in: {inShapes.length === 0 ? '—' : inShapes.join(' ')}
+      {/* ID row: dimmer secondary identifier so the type stays the
+          primary read. */}
+      <div
+        style={{
+          padding: '2px 8px',
+          color: '#9090b0',
+          fontSize: 10,
+          whiteSpace: 'nowrap',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+        }}
+        title={id}
+      >
+        {id}
       </div>
-      <div style={{ color: '#8a8aa8', fontSize: 10 }} title={outShapes.join('  ')}>
-        out: {outShapes.length === 0 ? '—' : outShapes.join(' ')}
+      {/* Key-params row: blank for layers without high-signal params,
+          rendered as a non-breaking space so the row still reserves
+          the same vertical pixels (uniform NODE_H across the graph). */}
+      <div
+        style={{
+          padding: '2px 8px',
+          color: '#a0a0c0',
+          fontSize: 10,
+          whiteSpace: 'nowrap',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          fontFamily: 'monospace',
+        }}
+        title={keyParams || undefined}
+      >
+        {keyParams || '\u00A0'}
+      </div>
+      {/* Output shape row: arrow prefix evokes "produces"; the blue
+          tint distinguishes it from the muted id / params rows. */}
+      <div
+        style={{
+          padding: '2px 8px',
+          color: '#7ab8ff',
+          fontSize: 11,
+          fontFamily: 'monospace',
+          whiteSpace: 'nowrap',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          marginTop: 'auto',
+        }}
+        title={outShape}
+      >
+        ↓ {outShape}
       </div>
       <Handle type="source" position={Position.Bottom} style={{ background: '#555' }} />
     </div>
@@ -134,6 +298,69 @@ function LayerNode({ data }: NodeProps<Node<LayerNodeData>>): ReactElement {
 }
 
 const nodeTypes: NodeTypes = { layer: LayerNode };
+
+/**
+ * Inner ReactFlow host — must live inside <ReactFlowProvider> so
+ * `useReactFlow` resolves to the *drawer's* store rather than the
+ * main App canvas store. Centring on selection change is delegated
+ * here because doing it from the parent would require either
+ * lifting the ReactFlow instance ref or duplicating the provider
+ * lookup; both are uglier than this small inner component.
+ */
+function InspectorCanvas({
+  styledNodes,
+  edges,
+  selectedLayer,
+  onSelect,
+}: {
+  styledNodes: Node[];
+  edges: Edge[];
+  selectedLayer: string | null;
+  onSelect: (id: string) => void;
+}): ReactElement {
+  const rf = useReactFlow();
+  // When selection changes (from either node click or table row
+  // click), recentre the viewport on the selected node so it's
+  // never stranded off-screen on tall graphs. We *don't* refit on
+  // every render — only when the selected id transitions — to
+  // preserve the user's manual pan/zoom between selections.
+  useEffect(() => {
+    if (!selectedLayer) return;
+    const n = styledNodes.find((node) => node.id === selectedLayer);
+    if (!n) return;
+    // setCenter takes a graph-space point; node.position is the top-
+    // left, so we offset by half the node size for a visual centre.
+    rf.setCenter(n.position.x + NODE_W / 2, n.position.y + NODE_H / 2, {
+      zoom: rf.getZoom(),
+      duration: 250,
+    });
+  }, [selectedLayer, styledNodes, rf]);
+
+  return (
+    <ReactFlow
+      nodes={styledNodes}
+      edges={edges}
+      nodeTypes={nodeTypes}
+      fitView
+      // Constrain the auto-fit zoom: tall TB graphs (e.g. shufflenet
+      // ~120 layers) otherwise zoom out so far the labels are
+      // unreadable; short graphs zoom in past 1× and look pixel-soft.
+      // 0.4–1.5 keeps both ends acceptable, 15% padding so nodes
+      // never touch the canvas edge.
+      fitViewOptions={{ padding: 0.15, minZoom: 0.4, maxZoom: 1.5 }}
+      minZoom={0.2}
+      maxZoom={2}
+      proOptions={{ hideAttribution: true }}
+      nodesDraggable
+      nodesConnectable={false}
+      edgesFocusable={false}
+      onNodeClick={(_e, n) => onSelect(n.id)}
+    >
+      <Background />
+      <Controls showInteractive={false} />
+    </ReactFlow>
+  );
+}
 
 function layoutGraph(graph: ModelGraph): { nodes: Node[]; edges: Edge[] } {
   const g = new dagre.graphlib.Graph();
@@ -180,12 +407,18 @@ function layoutGraph(graph: ModelGraph): { nodes: Node[]; edges: Edge[] } {
   dagre.layout(g);
 
   // Look up shapes by blob name. Indexed once per layoutGraph call
-  // so the per-layer mapping below is O(in+out) and not O(n²).
+  // so the per-layer mapping below is O(out) and not O(n²).
   const blobShape = new Map<string, number[]>();
   for (const b of graph.blobs) blobShape.set(b.name, b.shape);
 
   const nodes: Node[] = graph.layers.map((layer) => {
     const pos = g.node(layer.id);
+    // Use the first output blob's shape as the node's display shape.
+    // Multi-output layers (Split, Slice) are rare in the inference
+    // graphs we render, and their fan-out edges already disambiguate
+    // per-branch shapes via their target nodes.
+    const firstOut = layer.output_blobs[0];
+    const outShape = fmtShape(firstOut ? (blobShape.get(firstOut) ?? []) : []);
     // dagre returns the *center* point; ReactFlow wants the top-left.
     return {
       id: layer.id,
@@ -194,8 +427,9 @@ function layoutGraph(graph: ModelGraph): { nodes: Node[]; edges: Edge[] } {
       data: {
         type: layer.type,
         id: layer.id,
-        inShapes: layer.input_blobs.map((n) => fmtShape(blobShape.get(n) ?? [])),
-        outShapes: layer.output_blobs.map((n) => fmtShape(blobShape.get(n) ?? [])),
+        outShape,
+        keyParams: fmtKeyParams(layer.type, layer.params),
+        headerBg: headerBgFor(layer.type),
         selected: false,
       } satisfies LayerNodeData,
     };
@@ -212,6 +446,11 @@ export function ModelInspectorDrawer({
 }: ModelInspectorDrawerProps): ReactElement | null {
   const { graph, loading, error, inspect, reset } = useModelInspect();
   const [selectedLayer, setSelectedLayer] = useState<string | null>(null);
+  // Per-layer-id row refs so a selection from the canvas can scroll
+  // the matching row into view. Keyed Map (not array) survives
+  // re-orderings and avoids stale numeric indexes if `graph.layers`
+  // ever changes between renders.
+  const rowRefs = useRef(new Map<string, HTMLTableRowElement | null>());
 
   // Auto-fire when the drawer opens with a valid request. We don't
   // refetch on every render — only when (open, request) flips into
@@ -260,6 +499,20 @@ export function ModelInspectorDrawer({
       ),
     [nodes, selectedLayer],
   );
+
+  // Scroll the selected row into view inside the layers list. We
+  // use `nearest` block alignment so an already-visible row doesn't
+  // jump, and only re-trigger when the id transitions — without
+  // this guard typing into the canvas would also retrigger the
+  // smooth-scroll on every render. The typeof check keeps jsdom
+  // (which omits scrollIntoView) from blowing up unit tests.
+  useEffect(() => {
+    if (!selectedLayer) return;
+    const row = rowRefs.current.get(selectedLayer);
+    if (row && typeof row.scrollIntoView === 'function') {
+      row.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }
+  }, [selectedLayer]);
 
   if (!open) return null;
 
@@ -310,29 +563,12 @@ export function ModelInspectorDrawer({
               the inspector an isolated store keyed to this subtree.
             */}
             <ReactFlowProvider>
-              <ReactFlow
-                nodes={styledNodes}
+              <InspectorCanvas
+                styledNodes={styledNodes}
                 edges={edges}
-                nodeTypes={nodeTypes}
-                fitView
-                // Constrain the auto-fit zoom: tall TB graphs (e.g.
-                // shufflenet ~120 layers) otherwise zoom out so far
-                // the labels are unreadable; short graphs zoom in
-                // past 1× and look pixel-soft. 0.4–1.5 keeps both
-                // ends acceptable, with 15% padding so nodes never
-                // touch the canvas edge.
-                fitViewOptions={{ padding: 0.15, minZoom: 0.4, maxZoom: 1.5 }}
-                minZoom={0.2}
-                maxZoom={2}
-                proOptions={{ hideAttribution: true }}
-                nodesDraggable
-                nodesConnectable={false}
-                edgesFocusable={false}
-                onNodeClick={(_e, n) => setSelectedLayer(n.id)}
-              >
-                <Background />
-                <Controls showInteractive={false} />
-              </ReactFlow>
+                selectedLayer={selectedLayer}
+                onSelect={setSelectedLayer}
+              />
             </ReactFlowProvider>
           </section>
 
@@ -342,12 +578,39 @@ export function ModelInspectorDrawer({
           >
             <table>
               <thead>
-                <tr><th>#</th><th>Type</th><th>Name</th><th>In</th><th>Out</th></tr>
+                {/* Column meanings:
+                    #In / #Out — count of input/output blobs (graph
+                      degree). Most layers in sequential nets are
+                      1/1; Split fans out (1/N), Eltwise/Concat fan
+                      in (N/1).
+                    Output shape — first output blob's NCHW (or CHW)
+                      dimensions. Mirrors the canvas node footer so
+                      the table reads consistently with the graph. */}
+                <tr><th>#</th><th>Type</th><th>Name</th><th>#In</th><th>#Out</th><th>Output shape</th></tr>
               </thead>
               <tbody>
-                {graph.layers.map((l, i) => (
+                {graph.layers.map((l, i) => {
+                  // Resolve the first output blob's shape for the
+                  // table cell. The same lookup happens in
+                  // layoutGraph; duplicating it here is cheaper
+                  // than threading the formatted string through
+                  // node.data and back out for the table render.
+                  const firstOut = l.output_blobs[0];
+                  const blob = firstOut
+                    ? graph.blobs.find((b) => b.name === firstOut)
+                    : undefined;
+                  const outShape = fmtShape(blob?.shape ?? []);
+                  return (
                   <tr
                     key={l.id}
+                    ref={(el) => {
+                      // Register/deregister row ref so the
+                      // selectedLayer effect can scroll it into
+                      // view. We must set null on unmount to avoid
+                      // pinning detached DOM in the Map.
+                      if (el) rowRefs.current.set(l.id, el);
+                      else rowRefs.current.delete(l.id);
+                    }}
                     className={l.id === selectedLayer ? 'selected' : undefined}
                     onClick={() => setSelectedLayer(l.id)}
                   >
@@ -356,8 +619,10 @@ export function ModelInspectorDrawer({
                     <td>{l.id}</td>
                     <td>{l.input_blobs.length}</td>
                     <td>{l.output_blobs.length}</td>
+                    <td style={{ fontFamily: 'monospace', color: '#7ab8ff' }}>{outShape}</td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </section>
