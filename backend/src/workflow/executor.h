@@ -77,6 +77,7 @@ public:
     void set_output(const std::string& node_id, const std::string& port_name, PortValue value) override;
     void mark_dead_output(const std::string& node_id, const std::string& port_name) override;
     std::shared_ptr<InferenceEngine> engine() override { return engine_; }
+    bool is_cancelled() const override { return debug_.is_stopped(); }
 
 private:
     void notify_status(const std::string& node_id, const std::string& status, const json& extra = {});

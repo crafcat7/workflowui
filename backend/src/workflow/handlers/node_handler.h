@@ -46,6 +46,14 @@ public:
 
     // Access to the inference engine
     virtual std::shared_ptr<InferenceEngine> engine() = 0;
+
+    // True when the run has been asked to stop (Stop button, session
+    // shutdown). Long-running handlers — currently only Benchmark, which
+    // can spin for the full configured `duration_sec` — should poll this
+    // between iterations and return early; the executor's between-node
+    // poll alone is too coarse-grained to cancel a 60 s benchmark in
+    // useful time.
+    virtual bool is_cancelled() const = 0;
 };
 
 /**

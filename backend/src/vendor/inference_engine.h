@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 #include <chrono>
+#include <functional>
 #include <nlohmann/json.hpp>
 #include "../model/node.h"
 
@@ -85,7 +86,15 @@ public:
     virtual NetHandle init_net(const NetConfig& config) = 0;
     virtual void configure(NetHandle handle, const NetConfig& config) = 0;
     virtual InferResult execute(NetHandle handle, const TensorData& input) = 0;
-    virtual BenchmarkResult benchmark(NetHandle handle, const TensorData& input, int duration_sec = 10) = 0;
+    // `should_cancel`, if non-null, is polled between iterations of the
+    // benchmark loop; when it returns true the benchmark exits early
+    // and reports whatever runs it has accumulated so far. This lets
+    // the executor honor a Stop request without waiting up to
+    // `duration_sec` for the loop to expire on its own. nullptr keeps
+    // the historical behaviour for callers that don't need cancellation.
+    virtual BenchmarkResult benchmark(NetHandle handle, const TensorData& input,
+                                      int duration_sec = 10,
+                                      std::function<bool()> should_cancel = {}) = 0;
     virtual void destroy_net(NetHandle handle) = 0;
 };
 

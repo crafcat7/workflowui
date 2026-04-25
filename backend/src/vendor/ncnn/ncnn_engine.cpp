@@ -197,7 +197,9 @@ InferResult NcnnEngine::execute(NetHandle handle, const TensorData& input) {
     return r;
 }
 
-BenchmarkResult NcnnEngine::benchmark(NetHandle handle, const TensorData& input, int duration_sec) {
+BenchmarkResult NcnnEngine::benchmark(NetHandle handle, const TensorData& input,
+                                      int duration_sec,
+                                      std::function<bool()> should_cancel) {
     auto entry = get(handle);
     if (!entry) throw std::runtime_error("NcnnEngine::benchmark: unknown handle");
     if (duration_sec <= 0) duration_sec = 10;
@@ -211,6 +213,14 @@ BenchmarkResult NcnnEngine::benchmark(NetHandle handle, const TensorData& input,
 
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(duration_sec);
     while (std::chrono::steady_clock::now() < deadline) {
+        // Cancellation poll between iterations: a Stop request from the
+        // executor can otherwise wait up to `duration_sec` for the
+        // benchmark to finish on its own (default 10 s, configurable up
+        // to 60 s in the UI). Mid-iteration cancel would require ncnn
+        // Extractor support we don't have, so the loop quantum is
+        // bounded by a single net forward — fine for typical
+        // sub-second models.
+        if (should_cancel && should_cancel()) break;
         ncnn::Mat out;
         auto t0 = std::chrono::steady_clock::now();
         {

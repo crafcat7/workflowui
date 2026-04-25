@@ -28,7 +28,9 @@ public:
     NetHandle init_net(const NetConfig& config) override;
     void configure(NetHandle handle, const NetConfig& config) override;
     InferResult execute(NetHandle handle, const TensorData& input) override;
-    BenchmarkResult benchmark(NetHandle handle, const TensorData& input, int duration_sec) override;
+    BenchmarkResult benchmark(NetHandle handle, const TensorData& input,
+                              int duration_sec,
+                              std::function<bool()> should_cancel) override;
     void destroy_net(NetHandle handle) override;
 
 private:

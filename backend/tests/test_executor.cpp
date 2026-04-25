@@ -857,3 +857,61 @@ TEST(ExecutorTest, CancelAfterHandlerThrowsSuppressesErrorEvent) {
     ASSERT_EQ(statuses_for_bad.size(), 1u);
     EXPECT_EQ(statuses_for_bad[0], "running");
 }
+
+// Benchmark cancellation: a `benchmark` handler that hits `Stop` mid-
+// loop must exit promptly. Pre-fix, NcnnEngine::benchmark only checked
+// the deadline (up to 60 s in the UI) so a Stop request was effectively
+// ignored until the loop expired on its own. The fix threads the
+// executor's stopped flag down through the engine; this test verifies
+// the handler→engine wiring without needing ncnn (MockEngine simulates
+// the iteration loop with a configurable target run count and records
+// the cancel-poll behaviour for assertion).
+TEST(ExecutorTest, BenchmarkObservesCancelMidLoop) {
+    auto engine = std::make_shared<MockEngine>();
+    // Many iterations so we don't accidentally complete before stop()
+    // takes effect; the executor calls stop() from the status callback
+    // on the first 'running' event for the benchmark node.
+    engine->benchmark_target_runs = 1000;
+    Executor executor(engine);
+
+    // Graph: createNet (emptyWeights) → benchmark.input_data fed by an
+    // inputTensor source (tensors are stub-routed by MockEngine::execute).
+    WorkflowGraph g;
+    NodeDef cn; cn.id = "cn"; cn.type = "createNet";
+    cn.config["emptyWeights"] = "true";
+    g.add_node(cn);
+
+    NodeDef in; in.id = "in"; in.type = "inputTensor";
+    in.config["fillMode"] = "text";
+    in.config["tensorText"] = "1";
+    g.add_node(in);
+
+    NodeDef bm; bm.id = "bm"; bm.type = "benchmark";
+    bm.config["duration"] = "60"; // would be 60 s without cancel
+    g.add_node(bm);
+
+    EdgeDef e1; e1.source = "cn"; e1.source_handle = "net_handle";
+    e1.target = "bm"; e1.target_handle = "net_handle";
+    g.add_edge(e1);
+    EdgeDef e2; e2.source = "in"; e2.source_handle = "tensor_data";
+    e2.target = "bm"; e2.target_handle = "input_data";
+    g.add_edge(e2);
+
+    executor.set_status_callback([&](const std::string& id, const json& s) {
+        if (id == "bm" && s.value("status", "") == "running") {
+            executor.stop();
+        }
+    });
+
+    std::thread runner([&] { executor.execute(g, "run-bm-cancel"); });
+    runner.join();
+
+    // The benchmark loop must have polled the cancel callback and
+    // observed it true, exiting before completing all 1000 simulated
+    // iterations. Without the fix `benchmark_cancelled` would be false
+    // (the engine never received the callback) and we'd have run the
+    // full target.
+    EXPECT_TRUE(engine->benchmark_cancelled)
+        << "benchmark engine never observed the cancel signal";
+    EXPECT_GE(engine->benchmark_cancel_polls, 1);
+}

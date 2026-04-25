@@ -72,7 +72,7 @@ public:
         // Echo input as output with 1ms fake latency
         return InferResult{input, std::chrono::milliseconds(1)};
     }
-    BenchmarkResult benchmark(NetHandle, const TensorData&, int) override {
+    BenchmarkResult benchmark(NetHandle, const TensorData&, int, std::function<bool()>) override {
         return BenchmarkResult{1000, 1.0, 0.5, 1.5};
     }
     void destroy_net(NetHandle) override {}

@@ -296,7 +296,8 @@ public:
             } catch (...) { /* fallback */ }
         }
 
-        auto result = ctx.engine()->benchmark(handle, input, duration_sec);
+        auto result = ctx.engine()->benchmark(handle, input, duration_sec,
+                                              [&ctx]() { return ctx.is_cancelled(); });
 
         // Benchmark already ran the net repeatedly; re-run once to capture a
         // representative output tensor for downstream nodes. This is not the
