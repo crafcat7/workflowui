@@ -151,4 +151,46 @@ test.describe('NCNN demo end-to-end', () => {
     // empty_weights crash would silently kill the process here.
     expect(backendProc?.killed ?? true, 'Backend process died mid-run').toBe(false);
   });
+
+  test('View Model opens the inspector drawer for the createNet node', async ({ page }) => {
+    // Verifies the full Model Inspector chain end-to-end: PropertiesPanel
+    // surfaces the button on a vendor=ncnn node, clicking it issues
+    // model.inspect over the same WS that runs the workflow, and the
+    // drawer renders the parsed metadata strip + layer table without
+    // touching the run path.
+    await gotoAppWithBackend(page);
+    await expect(page.locator('.react-flow')).toBeVisible();
+    await expect(page.locator('.console-ws-status .ws-dot.connected')).toBeVisible({
+      timeout: 10_000,
+    });
+
+    await page.locator('input[type="file"]').setInputFiles(DEMO_WORKFLOW);
+    const graph = JSON.parse(fs.readFileSync(DEMO_WORKFLOW, 'utf-8'));
+    await expect(page.locator('.react-flow__node')).toHaveCount(graph.nodes.length);
+
+    // Select the createNet node — it carries the demo's paramPath
+    // (demo/NCNN_demo/shufflenet.param) plus config.vendor === 'ncnn'.
+    await page.locator('.react-flow__node').filter({ hasText: 'ShuffleNet' }).first().click();
+
+    // The View Model button should now be visible in the properties panel.
+    const viewBtn = page.getByTestId('view-model-btn');
+    await expect(viewBtn).toBeVisible();
+    await viewBtn.click();
+
+    // Drawer header is the unique anchor for an open inspector.
+    await expect(page.getByText('Model Inspector')).toBeVisible();
+
+    // Metadata strip shows the parser-reported format + a non-zero layer
+    // count from shufflenet.param. The exact magic string is part of the
+    // wire contract — pin it so a parser regression surfaces here.
+    await expect(page.getByText('ncnn-7767517')).toBeVisible({ timeout: 5_000 });
+
+    // The layer table renders one row per layer; shufflenet has 120
+    // layers but we only need to verify rows exist.
+    await expect(page.locator('[data-testid="model-inspector-layers"] tbody tr')).not.toHaveCount(0);
+
+    // Escape closes the drawer.
+    await page.keyboard.press('Escape');
+    await expect(page.getByText('Model Inspector')).not.toBeVisible();
+  });
 });
