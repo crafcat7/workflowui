@@ -36,7 +36,7 @@ backend/compile_commands.json
 results.txt
 # saveText / saveImage outputs produced when running the demo workflow
 false_branch.txt
-roundtrip.bin
+roundtrip.png
 
 # Tauri
 frontend/src-tauri/target/
@@ -45,6 +45,9 @@ frontend/src-tauri/target/
 /ncnn/
 backend/third_party/*/
 !backend/third_party/CMakeLists.txt
+# Vendored single-header libs are checked in (MIT/PD), unlike fetched
+# repos like ncnn above. Allowlist the stb directory explicitly.
+!backend/third_party/stb/
 
 # IDE and Editors
 .idea/

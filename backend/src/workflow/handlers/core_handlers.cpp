@@ -4,10 +4,13 @@
 #include "condition_expr.h"
 #include "../node_error.h"
 #include "server/security_config.h"
+#include "stb_image.h"
+#include "stb_image_write.h"
 #include <fstream>
 #include <sstream>
 #include <numeric>
 #include <algorithm>
+#include <cctype>
 
 namespace workflow {
 namespace handlers {
@@ -128,12 +131,31 @@ public:
     json execute(const NodeDef& node, const WorkflowGraph& graph, ExecutionContext& ctx) override {
         std::string path = get_config(node, "filePath");
         auto resolved = resolve_path(path);
-        std::ifstream f(resolved, std::ios::binary);
-        if (!f) throw NodeError(NodeError::Kind::Runtime, "Cannot open image: " + path);
-        std::vector<uint8_t> data((std::istreambuf_iterator<char>(f)),
-                                   std::istreambuf_iterator<char>());
+
+        // Decode PNG/JPG via stb_image. We force 4 channels (RGBA) so
+        // every downstream consumer (and the round-trip encoder below)
+        // sees a uniform pixel layout regardless of the source's alpha
+        // channel. Width/height/source-channel-count are still recorded
+        // on ImageData for inspectors; consumers that care about the
+        // original channel count can read `channels` (1/3/4) — the
+        // pixel buffer is always tightly packed RGBA8.
+        int w = 0, h = 0, src_channels = 0;
+        unsigned char* decoded = stbi_load(
+            resolved.string().c_str(), &w, &h, &src_channels, /*desired*/ 4);
+        if (!decoded) {
+            const char* reason = stbi_failure_reason();
+            throw NodeError(NodeError::Kind::Runtime,
+                std::string("Cannot decode image: ") + path +
+                (reason ? std::string(" (") + reason + ")" : ""));
+        }
         ImageData img;
-        img.pixels = std::move(data);
+        const std::size_t byte_count =
+            static_cast<std::size_t>(w) * static_cast<std::size_t>(h) * 4u;
+        img.pixels.assign(decoded, decoded + byte_count);
+        img.width = w;
+        img.height = h;
+        img.channels = src_channels;  // semantic source count, not buffer stride
+        stbi_image_free(decoded);
         ctx.set_output(node.id, "image_data", std::move(img));
         return {};
     }
@@ -356,10 +378,56 @@ public:
         if (path.empty()) path = "output.png";
         auto resolved = resolve_path(path);
 
-        if (auto* img = std::get_if<ImageData>(&data_val)) {
-            std::ofstream f(resolved, std::ios::binary);
-            if (!f.is_open()) throw NodeError(NodeError::Kind::Runtime, "Failed to open image file for writing: " + path);
-            f.write(reinterpret_cast<const char*>(img->pixels.data()), img->pixels.size());
+        auto* img = std::get_if<ImageData>(&data_val);
+        if (!img) {
+            // Be explicit instead of silently no-op'ing: a saveImage
+            // node fed something that isn't an image is a workflow
+            // wiring bug the operator should hear about.
+            throw NodeError(NodeError::Kind::Runtime,
+                "saveImage: input is not ImageData");
+        }
+        if (img->width <= 0 || img->height <= 0) {
+            throw NodeError(NodeError::Kind::Runtime,
+                "saveImage: ImageData has zero width/height; "
+                "did upstream actually decode?");
+        }
+        // Pixel buffer is always tightly-packed RGBA8 (see
+        // InputImageHandler). Writers all take stride_in_bytes = w*4.
+        const int w = img->width, h = img->height;
+        const int stride = w * 4;
+        const std::size_t expected = static_cast<std::size_t>(stride) * h;
+        if (img->pixels.size() != expected) {
+            throw NodeError(NodeError::Kind::Runtime,
+                "saveImage: pixel buffer size mismatch (expected " +
+                std::to_string(expected) + ", got " +
+                std::to_string(img->pixels.size()) + ")");
+        }
+
+        // Pick encoder by extension. Default to PNG when the path has
+        // no extension or one we don't recognise — gives the operator
+        // a lossless round-trip in the common case.
+        std::string ext;
+        auto dot = path.find_last_of('.');
+        if (dot != std::string::npos) {
+            ext = path.substr(dot + 1);
+            std::transform(ext.begin(), ext.end(), ext.begin(),
+                [](unsigned char c) { return std::tolower(c); });
+        }
+
+        int rc = 0;
+        const auto resolved_str = resolved.string();
+        if (ext == "jpg" || ext == "jpeg") {
+            // Quality 90 — visually lossless for sanity round-trips
+            // without bloating fixtures.
+            rc = stbi_write_jpg(resolved_str.c_str(), w, h, 4,
+                                img->pixels.data(), 90);
+        } else {
+            rc = stbi_write_png(resolved_str.c_str(), w, h, 4,
+                                img->pixels.data(), stride);
+        }
+        if (!rc) {
+            throw NodeError(NodeError::Kind::Runtime,
+                "saveImage: encode/write failed for " + path);
         }
         return {};
     }

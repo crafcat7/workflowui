@@ -62,6 +62,7 @@ set(BACKEND_SOURCES
   src/model/node.cpp
   src/model/workflow_graph.cpp
   src/vendor/ncnn/ncnn_inspector.cpp
+  third_party/stb/stb_impl.cpp
 )
 
 if(ENABLE_NCNN)
@@ -78,6 +79,7 @@ endif()
 
 target_include_directories(workflow_backend PRIVATE
   src
+  third_party/stb
   "${uwebsockets_SOURCE_DIR}/src"
   "${usockets_SOURCE_DIR}/src"
 )
@@ -130,6 +132,7 @@ add_executable(workflow_test ${BACKEND_TEST_SOURCES} ${BACKEND_LIB_SOURCES})
 
 target_include_directories(workflow_test PRIVATE
   src
+  third_party/stb
   "${uwebsockets_SOURCE_DIR}/src"
   "${usockets_SOURCE_DIR}/src"
 )
