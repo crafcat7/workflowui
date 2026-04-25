@@ -6,11 +6,13 @@ A visual, programmable workbench for orchestrating inference pipelines. Build pi
 
 ## Features
 
-- **Node-graph driven development.** Compose pipelines of data loading, inference, post-processing and output nodes on a React Flow canvas powered by `@xyflow/react`.
-- **Full-stack debugging.** Set breakpoints on Debug nodes; the backend scheduler pauses execution and streams node status / paused frames back to the UI over WebSocket for inspection.
+- **Node-graph driven development.** Compose pipelines of data loading, inference, post-processing and output nodes on a React Flow canvas powered by `@xyflow/react`. The palette has incremental search and collapsible categories; the canvas highlights cyclic edges before you ever press RUN.
+- **Full-stack debugging.** Set breakpoints on any node (not just Debug); the backend scheduler pauses execution and streams `node.status` / `debug.paused` frames back to the UI over WebSocket. The properties panel surfaces the paused node's live inputs so you can inspect tensors before resuming.
+- **Model Inspector.** Vendor-aware nodes (currently `createNet` with `vendor: ncnn`) expose a *View Model* button that opens a side drawer parsing the actual `.param` file: format magic, layer count, layer table, input/output shapes, and a bidirectional canvas/table sync — all read-only and over a separate `model.inspect` RPC that never touches the run path.
 - **Browser + desktop.** Runs as a Vite dev server in the browser or as a Tauri v2 native desktop application sharing the same frontend.
 - **Pluggable inference vendor layer.** The backend defines an abstract `InferenceEngine` interface in `backend/src/vendor/`. An NCNN implementation is shipped; a built-in `StubEngine` (echo) is used when NCNN is disabled at build time so the rest of the system remains fully exercised.
-- **Undo / redo, console, properties & palette panels.** The frontend ships NodePalette, PropertiesPanel, and ConsolePanel (which hosts the toolbar controls and debug log), with Zustand + `zundo` for time-travel.
+- **Reconnect-safe execution.** Every event carries a `run_id`; the frontend filters stale frames after a re-launch and reconciles canvas state from a `workflow.state` snapshot whenever the WebSocket recovers mid-run.
+- **Undo / redo, console, properties & palette panels.** Zustand + `zundo` for time-travel; Toasts surface validation errors and runtime faults inline. Keyboard shortcuts cover the common loop (R run, Esc cancel, B toggle breakpoint, Ctrl/⌘+Z undo, …).
 
 ## Architecture
 
@@ -37,6 +39,7 @@ Client → Server (requests):
 |---|---|
 | `vendor.getConfigSchema` | Returns config fields supported by a vendor |
 | `nodes.list` | Returns the handler catalog (type, label, category, ports) as the single source of truth for what this backend can execute |
+| `model.inspect` | Read-only structural preview of a vendor model (format magic, layers, ports). Decoupled from the run path — invoked from the *View Model* drawer |
 | `workflow.execute` | Starts workflow execution on a background thread; reply `{ status: "started", run_id }` |
 | `workflow.cancel` | Stops the currently-running workflow at the next node boundary; reply `{ cancelled: true, run_id }` naming the interrupted run |
 | `workflow.state` | Snapshot of the executor for reconnect reconciliation; reply `{ run_id, statuses: { id → status }, paused_at? }`. See "Reconnect reconciliation" below |
@@ -223,9 +226,21 @@ The frontend palette (`frontend/src/nodes/index.ts`) exposes 11 node components:
 
 ## Debugging
 
-- Attach a Debug node anywhere in the graph and toggle its breakpoint.
-- When execution reaches the breakpoint, the backend emits `debug.paused`, the UI surfaces the node's inputs/outputs.
-- Resume with **Continue** or advance one node with **Step Over** (sent as `debug.continue` / `debug.step_over` notifications).
+- Select any node and press **B** (or use the right-click context menu) to toggle a breakpoint — this is no longer limited to Debug nodes.
+- When execution reaches the breakpoint, the backend emits `debug.paused`, the properties panel surfaces the node's *live* inputs (the actual upstream tensors / images that will feed the handler), and the Toast row lights up with the paused-at id.
+- Resume with **Continue** or advance one node with **Step Over** (sent as `debug.continue` / `debug.step_over` notifications). The breakpoint stays armed; clear it from the same B / context-menu toggle.
+- A separate Debug node is still available for inserting an unconditional inspection point that does not require selecting an existing node.
+
+### Keyboard shortcuts
+
+| Key | Action |
+|---|---|
+| `R` | Run the workflow |
+| `Esc` | Cancel the running workflow / close drawers |
+| `B` | Toggle breakpoint on the selected node |
+| `F` | Fit the canvas to the current graph |
+| `Ctrl/⌘ + Z` / `Ctrl/⌘ + Shift + Z` | Undo / redo |
+| `Delete` / `Backspace` | Delete selected nodes / edges |
 
 ## Testing
 
@@ -253,7 +268,7 @@ npm run test:e2e          # headless
 npm run test:e2e:headed   # headed
 ```
 
-The E2E suite in `frontend/e2e/workflow.spec.ts` contains 11 tests across Canvas, Node CRUD, Workflow execution, Save/Load, and WebSocket disconnection scenarios. It runs against a mock WebSocket backend at `frontend/e2e/mock-backend.mjs`, so no C++ build is required. A second spec, `ncnn-demo.spec.ts`, boots the real C++ backend (if `backend/build/workflow_backend` exists) and replays the bundled NCNN demo workflow end-to-end.
+The E2E suite spans two specs. `frontend/e2e/workflow.spec.ts` contains 11 tests across Canvas, Node CRUD, Workflow execution, Save/Load, and WebSocket disconnection scenarios — it runs against a mock WebSocket backend at `frontend/e2e/mock-backend.mjs`, so no C++ build is required. `frontend/e2e/ncnn-demo.spec.ts` adds 3 end-to-end tests that boot the real C++ backend (if `backend/build/workflow_backend` exists) and replay the bundled NCNN demo workflow: a full-graph run with PNG round-trip assertion, the *View Model* drawer round-trip on a `createNet` node, and a debug-mode breakpoint / step-over round-trip on `infer`.
 
 ### Integration test
 
