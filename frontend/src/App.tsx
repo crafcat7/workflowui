@@ -362,6 +362,11 @@ function AppInner() {
           onDrop={onDrop}
           nodeTypes={nodeTypes}
           fitView
+          /* React Flow shows an "React Flow" attribution badge in the
+             bottom-right corner by default. proOptions.hideAttribution
+             suppresses it; the project is MIT-licensed and the badge
+             added visual noise on top of our minimap card. */
+          proOptions={{ hideAttribution: true }}
           colorMode="dark"
         >
           <Controls position="bottom-left">
