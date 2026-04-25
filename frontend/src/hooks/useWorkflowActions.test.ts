@@ -6,6 +6,7 @@ import type { Node } from '@xyflow/react';
 import { useWorkflowActions } from './useWorkflowActions';
 import { useWorkflowStore, type WorkflowNodeData } from '../store/workflowStore';
 import { useDebugStore } from '../store/debugStore';
+import { wsClient } from '../transport/WsClient';
 
 vi.mock('../transport/WsClient', () => ({
   wsClient: {
@@ -78,6 +79,37 @@ describe('useWorkflowActions', () => {
     expect(useDebugStore.getState().breakpoints).toHaveLength(1);
     act(() => result.current.toggleBreakpointOnSelected());
     expect(useDebugStore.getState().breakpoints).toHaveLength(0);
+  });
+
+  // Regression: backend registers debug.add_breakpoint /
+  // debug.remove_breakpoint as request/response methods (not
+  // notifications) and validates `params.node_id`. The original
+  // implementation used `wsClient.notify` with a camelCase `nodeId`,
+  // which the RpcHandler silently dropped (no notifier registered)
+  // — mid-run breakpoint toggles never reached the executor. Pin the
+  // wire shape so a future refactor can't reintroduce either bug.
+  it('toggleBreakpointOnSelected sends debug.add_breakpoint via call() with snake_case node_id mid-run', () => {
+    const callMock = vi.mocked(wsClient.call);
+    const notifyMock = vi.mocked(wsClient.notify);
+    callMock.mockClear();
+    notifyMock.mockClear();
+    seed([makeNode('a')], { selectedNodeId: 'a', isRunning: true });
+    const { result } = renderHook(() => useWorkflowActions());
+    act(() => result.current.toggleBreakpointOnSelected());
+    expect(callMock).toHaveBeenCalledWith('debug.add_breakpoint', { node_id: 'a' });
+    expect(notifyMock).not.toHaveBeenCalled();
+    act(() => result.current.toggleBreakpointOnSelected());
+    expect(callMock).toHaveBeenCalledWith('debug.remove_breakpoint', { node_id: 'a' });
+  });
+
+  it('toggleBreakpointOnSelected does not hit the wire when not running', () => {
+    const callMock = vi.mocked(wsClient.call);
+    callMock.mockClear();
+    seed([makeNode('a')], { selectedNodeId: 'a', isRunning: false });
+    const { result } = renderHook(() => useWorkflowActions());
+    act(() => result.current.toggleBreakpointOnSelected());
+    expect(callMock).not.toHaveBeenCalled();
+    expect(useDebugStore.getState().breakpoints).toHaveLength(1);
   });
 
   it('deselect clears selectedNodeId', () => {

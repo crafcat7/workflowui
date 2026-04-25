@@ -179,15 +179,27 @@ export function useWorkflowActions(triggerLoad?: () => void): WorkflowActions {
     const { breakpoints, addBreakpoint, removeBreakpoint } =
       useDebugStore.getState();
     const existing = breakpoints.find((b) => b.nodeId === selectedNodeId);
+    // Mid-run breakpoint sync: backend registers `debug.add_breakpoint`
+    // and `debug.remove_breakpoint` via `register_method` (request/response,
+    // see backend/src/main.cpp:315/324), and validates `params.node_id`
+    // — *not* `nodeId`. Earlier code used `wsClient.notify({ nodeId })`,
+    // which was a double bug: (a) RpcHandler routes id-less messages to
+    // `notifiers_` and silently drops anything not registered there, so
+    // the call never reached the executor; (b) even after switching to
+    // `call`, the backend would have rejected the camelCase key with
+    // -32602. Use `call` so a future params/method regression surfaces
+    // as a rejected promise instead of vanishing on the wire. We don't
+    // await — toggling a breakpoint is a fire-and-forget UX gesture and
+    // the optimistic local store update has already happened.
     if (existing) {
       removeBreakpoint(selectedNodeId);
       if (isRunning) {
-        wsClient.notify('debug.remove_breakpoint', { nodeId: selectedNodeId });
+        void wsClient.call('debug.remove_breakpoint', { node_id: selectedNodeId });
       }
     } else {
       addBreakpoint(selectedNodeId);
       if (isRunning) {
-        wsClient.notify('debug.add_breakpoint', { nodeId: selectedNodeId });
+        void wsClient.call('debug.add_breakpoint', { node_id: selectedNodeId });
       }
     }
   }, []);
