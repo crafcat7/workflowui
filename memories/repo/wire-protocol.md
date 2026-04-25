@@ -33,7 +33,9 @@ future agents must preserve.
   - `kind`: `missing_input|invalid_config|runtime|upstream_failed`
   - `reason` (status=`skipped`): `branch_pruned|upstream_failed`
 - `workflow.complete { run_id? }`
-- `debug.paused { node_id, run_id?, inputs: [{ handle, source, value: {type, ...} }] }`
+- `debug.paused { node_id, type, run_id?, inputs: [{ handle, source, value: {type, ...} }] }`
+  - Payload is **flat** — `type`, `inputs` and `run_id` live on the root, not under a nested `data` key. `WorkflowRunner.ts` accepts both flat and a legacy nested shape (`{ node_id, data: {…}, run_id? }`) so the contract can later tighten in either direction without breaking the inspector.
+  - `type` is the node-type discriminator (e.g. `inference`, `condition`) — same string as `node.status.type` would carry, useful for client-side rendering decisions.
   - Tensor preview values are truncated to ≤ 16 floats.
 
 ## run_id contract (R1)
