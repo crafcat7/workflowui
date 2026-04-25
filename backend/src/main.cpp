@@ -333,10 +333,32 @@ int main(int argc, char* argv[]) {
     // ── WebSocket Server ──
     WsServer server(port, rpc);
 
-    // Wire executor callbacks to broadcast via WS
+    // Wire executor callbacks to broadcast via WS.
+    //
+    // The executor uses the synthetic node id `__workflow__` for two
+    // very different kinds of event:
+    //   - `status=complete`: end-of-run signal (also fires for
+    //     refused runs so the FE's `isRunning` flag clears).
+    //   - `status=validation_failed`: per-graph validation errors
+    //     surfaced before any node runs; carries an `errors[]` array
+    //     the FE renders inline against the offending node/edge.
+    //
+    // The frontend's WorkflowRunner switches on the WS *method* name,
+    // and its `validation_failed` branch lives inside the `node.status`
+    // case (because it carries node-shaped fields). Routing every
+    // `__workflow__` event over `workflow.complete` would silently
+    // drop validation errors — the user sees a green "complete" with
+    // no nodes painted red, no console error, no toast. Send
+    // `validation_failed` over `node.status` to match the FE switch
+    // and reserve `workflow.complete` for actual run completion.
     executor->set_status_callback([&server](const std::string& node_id, const json& data) {
         if (node_id == "__workflow__") {
-            server.broadcast("workflow.complete", data);
+            const std::string status = data.value("status", "");
+            if (status == "validation_failed") {
+                server.broadcast("node.status", data);
+            } else {
+                server.broadcast("workflow.complete", data);
+            }
         } else {
             server.broadcast("node.status", data);
         }

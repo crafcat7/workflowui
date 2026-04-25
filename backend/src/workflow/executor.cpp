@@ -476,6 +476,7 @@ bool Executor::validate_graph(const WorkflowGraph& graph) {
             // graph's port-type errors are noise.
             if (status_cb_) {
                 json msg;
+                msg["node_id"] = "__workflow__";
                 msg["status"] = "validation_failed";
                 msg["errors"] = std::move(errors);
                 status_cb_("__workflow__", msg);
@@ -580,6 +581,14 @@ bool Executor::validate_graph(const WorkflowGraph& graph) {
 
     if (status_cb_) {
         json msg;
+        // Include node_id explicitly so this event matches the same
+        // wire shape as per-node status updates. The frontend
+        // WorkflowRunner switches on `node.status` and checks
+        // `update.node_id === '__workflow__'` to dispatch to the
+        // validation-error handler; without this field the synthetic
+        // event would slip past the dispatcher even after the wire
+        // method routing is correct.
+        msg["node_id"] = "__workflow__";
         msg["status"] = "validation_failed";
         msg["errors"] = std::move(errors);
         status_cb_("__workflow__", msg);
