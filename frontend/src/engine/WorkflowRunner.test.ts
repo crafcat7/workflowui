@@ -86,6 +86,37 @@ describe('WorkflowRunner run_id filter', () => {
     emit('debug.paused', { node_id: 'n1', data: {}, run_id: 'run-42-100' });
     expect(useWorkflowStore.getState().nodes[0].data.status).toBe('idle');
   });
+
+  it('captures flat debug.paused payload as inspectData', () => {
+    // Regression: backend executor.cpp broadcasts the pause metadata
+    // (type, inputs, run_id) flat on the root rather than nested under
+    // a `data` key. Without this branch, DebugInputsPanel never sees
+    // the inputs and silently renders nothing while the node label
+    // says "PAUSED".
+    setActiveRunId('run-7-1');
+    const inputs = [
+      { handle: 'input_data', source: 'n_src:output_data', value: { type: 'tensor', length: 3, preview: [0.1, 0.2, 0.3] } },
+    ];
+    emit('debug.paused', {
+      node_id: 'n1',
+      type: 'inference',
+      inputs,
+      run_id: 'run-7-1',
+    });
+    expect(useDebugStore.getState().pausedAtNodeId).toBe('n1');
+    const insp = useDebugStore.getState().inspectData;
+    expect(insp).toBeTruthy();
+    expect((insp as { inputs?: unknown[] }).inputs).toEqual(inputs);
+  });
+
+  it('still accepts legacy nested debug.paused payload', () => {
+    // Forward-compat: if the wire schema later wraps everything under
+    // a `data` key, the runner should still light up DebugInputsPanel.
+    setActiveRunId('run-8-2');
+    const nested = { type: 'inference', inputs: [{ handle: 'x', source: 'a:b', value: { type: 'empty' } }] };
+    emit('debug.paused', { node_id: 'n1', data: nested, run_id: 'run-8-2' });
+    expect(useDebugStore.getState().inspectData).toEqual(nested);
+  });
 });
 
 describe('WorkflowRunner reconcileFromSnapshot', () => {

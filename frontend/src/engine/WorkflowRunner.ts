@@ -44,9 +44,13 @@ interface ValidationError {
 
 interface DebugPausedEvent {
   node_id: string;
-  data: Record<string, unknown>;
+  /** Optional legacy nesting; flat `inputs`/`type` may also live on the root. */
+  data?: Record<string, unknown>;
   /** Mirrors NodeStatusUpdate.run_id — same filtering rule applies to paused events. */
   run_id?: string;
+  /** Flat fields the backend actually emits today (executor.cpp). */
+  type?: string;
+  inputs?: unknown[];
 }
 
 /**
@@ -271,7 +275,16 @@ export function initWorkflowRunner() {
         // a run that no longer exists.
         if (!isFreshEvent(event.run_id)) break;
         useDebugStore.getState().setPausedAt(event.node_id);
-        useDebugStore.getState().setInspectData(event.data);
+        // The backend (executor.cpp) emits a FLAT payload — node_id,
+        // type, inputs, run_id all on the root. An older draft of the
+        // contract nested the metadata under a `data` key; we accept
+        // both so the UI keeps working if the wire schema is later
+        // tightened. DebugInputsPanel reads `.inputs` off whatever
+        // record we hand it, so prefer the nested copy when present.
+        const inspect = (event.data && typeof event.data === 'object')
+          ? event.data
+          : (params as Record<string, unknown>);
+        useDebugStore.getState().setInspectData(inspect);
         useWorkflowStore.getState().updateNodeStatus(event.node_id, 'paused');
         useDebugStore.getState().addLog({
           nodeId: event.node_id,
