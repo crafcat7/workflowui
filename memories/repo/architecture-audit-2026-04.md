@@ -10,7 +10,7 @@ pass. Evidence cited as `file:line`. Research-only snapshot.
 | 1 | Detached-thread run model with unsynchronized shared Executor state | Critical | M |
 | 2 | `WsServer::loop_` / `publish_fn_` cross-thread access without synchronization | Critical | S |
 | 3 | Node extensibility requires coordinated edits across 7+ files | High | L |
-| 4 | `CapabilityRegistry` is decorative; not a source of truth | High | S–M |
+| 4 | `CapabilityRegistry` is decorative; not a source of truth (✅ closed 2026-04, deleted) | High | S–M |
 | 5 | Ad-hoc stringly-typed error model end-to-end | High | M |
 | 6 | RPC layer lacks cancellation, versioning, input validation, per-run isolation | High | M |
 | 7 | No backend enforcement of port types; FE-only `portSchema.ts` | High | M |
@@ -88,22 +88,31 @@ pass. Evidence cited as `file:line`. Research-only snapshot.
 - `portSchema.ts:33-63` — `NODE_PORTS`.
 - `configSchemas.ts:54-223` — `NODE_SCHEMAS`.
 - `App.tsx:349-360` — `NODE_CATEGORIES` coloring.
-- `main.cpp:169-176` — `CapabilityRegistry` manual entries.
 - Plus the `.tsx` component.
 - Drift already present: `inputImage` FE schema has only `filePath`
-  but `ImageData` carries width/height/channels; `read_image` is in
-  `CapabilityRegistry` but handler key is `inputImage`.
+  but `ImageData` carries width/height/channels.
   - **Image-decode part of this drift fixed 2026-04**: `inputImage`
     handler now decodes PNG/JPG via vendored stb_image and populates
     `ImageData.width/height/channels`; `saveImage` re-encodes RGBA8
     to PNG/JPG by extension (see commit "feat backend: decode/encode
-    inputImage/saveImage via stb_image"). The schema/registry drift
-    around `read_image` vs `inputImage` is still open.
+    inputImage/saveImage via stb_image").
+  - **Registry leg of this drift closed 2026-04**: the
+    `CapabilityRegistry` and the `read_image` / `inputImage`
+    naming mismatch were resolved by deleting the registry entirely
+    (see X2 closure below).
 - Fix: single declarative node manifest; handler self-registration
   with ports + config schema; expose via `nodes.list` RPC; FE
   consumes manifest. *Effort: L*.
 
-### X2. `CapabilityRegistry` is decorative — High
+### X2. `CapabilityRegistry` is decorative — High (✅ closed 2026-04)
+
+**Closure note (2026-04):** the registry and its lone consumer
+(`capabilities` RPC) were both deleted. Backend `grep -n
+"CapabilityRegistry\|capabilities" backend/src` and
+`grep -n "read_image" backend/src` now yield zero hits; FE
+removed its capabilities consumer in Batch 2. The original
+findings are preserved below for traceability.
+
 - `capability/registry.cpp:15-30` — hand-populated.
 - `main.cpp:184-186` — registration.
 - `grep -r capabilities frontend/src` → 0 consumers.

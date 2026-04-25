@@ -220,7 +220,7 @@ Research-only snapshot; not a code-quality review.
 | Variable inspector | `setInspectData` written (`WorkflowRunner.ts:72`), no reader | started, never finished |
 | File browse dialog | Comment "future: add a 'browse' button…" (`PropertiesPanel.tsx:265-266`) | documented future |
 | GPU selector | `NetConfig::use_gpu` removed (`review-findings.md:45`) | abandoned |
-| `capabilities` RPC | FE handler removed Batch 2; backend still serves (`main.cpp:184`) | half-removed |
+| `capabilities` RPC | FE handler removed Batch 2; backend method + `CapabilityRegistry` deleted 2026-04 | ✅ removed |
 | `SHARED_DIR` env | Docs removed Batch 10 (`review-findings.md:113`) | scoped down |
 | `Scheduler` class | One-line wrapper (`scheduler.cpp:7`); inlining deferred (`review-findings.md:121`) | stub |
 | Postprocess fallback | `if (op.empty()) op = "nms"` (`core_handlers.cpp:50`) | implies more planned |
