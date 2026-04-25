@@ -1009,7 +1009,10 @@
 }
 
 .workflow-node.node-output .node-body {
-  padding: 6px 12px 8px;
+  /* Reserve ~32 px on the left for the "data" handle label so the
+     "Waiting for data..." placeholder doesn't visually collide
+     with it; the LabeledHandle sits at left:0 + ~6 px gap + label. */
+  padding: 6px 12px 8px 36px;
   text-align: left;
 }
 
