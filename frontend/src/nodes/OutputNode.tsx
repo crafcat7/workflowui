@@ -3,11 +3,12 @@
 import { Position, type Node, type NodeProps } from '@xyflow/react';
 import { LabeledHandle } from '../components/LabeledHandle';
 import type { WorkflowNodeData } from '../store/workflowStore';
+import { OutputIcon } from './NodeIcons';
 
 export function OutputNode({ data: d }: NodeProps<Node<WorkflowNodeData>>) {
   return (
     <div className="workflow-node node-output">
-      <div className="node-header"><span className="icon">📤</span> Output</div>
+      <div className="node-header"><span className="icon"><OutputIcon /></span> Output</div>
       <div className="node-body">
         {d.output !== undefined ? (
           <div className="output-summary-box">

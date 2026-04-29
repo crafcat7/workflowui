@@ -9,8 +9,8 @@ html, body, #root {
   height: 100%;
   font-family: 'JetBrains Mono', 'Fira Code', monospace;
   font-size: 13px;
-  color: #c0c0e0;
-  background: #0a0a1a;
+  color: var(--text-secondary, #c8d4e8);
+  background: var(--bg-base, #080c14);
 }
 
 #root {
@@ -18,55 +18,45 @@ html, body, #root {
   flex-direction: column;
 }
 
-/* Pixel font for headings/labels */
+/* Pixel font for branding titles only */
 .pixel-font,
 .palette-title,
-.props-title,
-.config-section-title,
-.palette-cat-label,
-.console-btn,
-.props-status-label,
-.top-k-title,
-.console-paused-badge,
-.console-ws-status,
-.empty-state h2 {
+.props-title {
   font-family: 'Silkscreen', cursive;
 }
 
 /* ── Toast notifications ── */
 .toast-container {
   position: fixed;
-  top: 16px;
+  top: var(--space-4, 16px);
   left: 50%;
   transform: translateX(-50%);
   z-index: 10000;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--space-2, 8px);
   pointer-events: none;
 }
 
 .toast {
-  padding: 8px 16px;
-  border-radius: 4px;
-  font-size: 11px;
-  font-family: 'Silkscreen', cursive;
+  padding: var(--space-2, 8px) var(--space-4, 16px);
+  border-radius: var(--radius-sm, 4px);
+  font-size: var(--text-sm, 11px);
+  font-family: var(--font-mono, monospace);
   pointer-events: auto;
-  animation: toast-in 0.3s ease-out;
+  animation: toast-in 0.3s cubic-bezier(0.16, 1, 0.3, 1);
   max-width: 400px;
-  box-shadow: 0 4px 16px rgba(0,0,0,0.6);
-  /* Grid layout reserves a fixed slot for the dismiss button so
-     longer messages never shove it off-screen. */
+  box-shadow: var(--shadow-lg, 0 8px 24px rgba(0, 0, 0, 0.5));
   display: grid;
   grid-template-columns: 1fr auto;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2, 8px);
+  letter-spacing: 0.5px;
 }
 
 .toast-message {
-  /* Allow wrapping for multi-line error messages but keep them
-     inside the max-width. */
   word-break: break-word;
+  line-height: 1.4;
 }
 
 .toast-dismiss {
@@ -76,9 +66,10 @@ html, body, #root {
   cursor: pointer;
   font-size: 16px;
   line-height: 1;
-  padding: 2px 6px;
-  border-radius: 2px;
+  padding: var(--space-1, 4px);
+  border-radius: var(--radius-sm, 4px);
   opacity: 0.7;
+  transition: opacity var(--transition-fast, 0.15s ease);
 }
 
 .toast-dismiss:hover,
@@ -88,12 +79,39 @@ html, body, #root {
   outline-offset: 1px;
 }
 
-.toast.info { background: #1a3a5a; border: 1px solid #2a5a7a; color: #80c0ff; }
-.toast.warn { background: #4a3a1a; border: 1px solid #6a5a2a; color: #e0c080; }
-.toast.error { background: #4a1a1a; border: 1px solid #6a2a2a; color: #e08080; }
-.toast.success { background: #1a4a2e; border: 1px solid #2a6a3e; color: #80e0a0; }
+/* Toast variants */
+.toast.info {
+  background: rgba(74, 154, 255, 0.12);
+  border: 1px solid rgba(74, 154, 255, 0.3);
+  color: var(--accent-blue, #4a9aff);
+}
 
+.toast.warn {
+  background: rgba(255, 176, 64, 0.12);
+  border: 1px solid rgba(255, 176, 64, 0.3);
+  color: var(--accent-amber, #ffb040);
+}
+
+.toast.error {
+  background: rgba(255, 90, 90, 0.12);
+  border: 1px solid rgba(255, 90, 90, 0.3);
+  color: var(--accent-red, #ff5a5a);
+}
+
+.toast.success {
+  background: rgba(52, 217, 138, 0.12);
+  border: 1px solid rgba(52, 217, 138, 0.3);
+  color: var(--accent-green, #34d98a);
+}
+
+/* Toast enter animation */
 @keyframes toast-in {
-  from { opacity: 0; transform: translateY(-10px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(-16px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }

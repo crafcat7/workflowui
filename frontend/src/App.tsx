@@ -27,6 +27,7 @@ import {
 import { useDebugStore } from './store/debugStore';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { useWorkflowActions } from './hooks/useWorkflowActions';
+import { useResizable } from './hooks/useResizable';
 import { nodeTypes } from './nodes';
 import { validateConnection, getPort } from './nodes/portSchema';
 import { CATEGORY_VISUALS, getManifestEntry } from './nodes/manifest';
@@ -35,10 +36,13 @@ import { PropertiesPanel } from './panels/PropertiesPanel';
 import { ConsolePanel } from './panels/ConsolePanel';
 import { ToastContainer } from './components/ToastContainer';
 import { ReconnectBanner } from './components/ReconnectBanner';
+import { Resizer } from './components/Resizer';
+import { ThemeSwitcher } from './components/ThemeSwitcher';
 import { NodeContextMenu, type NodeContextMenuState } from './components/NodeContextMenu';
 import { showToast } from './store/toastStore';
 import { getLayoutedElements, domNodeHeightMeasurer } from './utils/layout';
 import { findCyclicEdges } from './utils/cycles';
+import { useTheme } from './hooks/useTheme';
 import './App.css';
 
 function AppInner() {
@@ -67,10 +71,36 @@ function AppInner() {
   const importWorkflow = useWorkflowStore((s) => s.importWorkflow);
   const selectedId = useWorkflowStore((s) => s.selectedNodeId);
   const breakpoints = useDebugStore((s) => s.breakpoints);
+  const theme = useTheme();
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { screenToFlowPosition, fitView } = useReactFlow();
   const [contextMenu, setContextMenu] = useState<NodeContextMenuState | null>(null);
+
+  // Resizable panels
+  const leftSidebar = useResizable({
+    direction: 'horizontal',
+    minSize: 180,
+    maxSize: 400,
+    initialSize: 200,
+    storageKey: 'workflowui-left-sidebar-width',
+  });
+
+  const rightSidebar = useResizable({
+    direction: 'horizontal',
+    minSize: 240,
+    maxSize: 500,
+    initialSize: 280,
+    storageKey: 'workflowui-right-sidebar-width',
+  });
+
+  const bottomConsole = useResizable({
+    direction: 'vertical',
+    minSize: 120,
+    maxSize: 400,
+    initialSize: 160,
+    storageKey: 'workflowui-bottom-console-height',
+  });
 
   // Hidden file input shared by toolbar Load button and Cmd+O shortcut.
   const triggerLoad = useCallback(() => {
@@ -219,16 +249,16 @@ function AppInner() {
           (e.data?.dataType as string | undefined) ?? 'generic';
         const isCyclic = cyclicEdgeIds.has(e.id);
         const baseStroke = isCyclic
-          ? '#ff4040'
+          ? 'var(--edge-cyclic)'
           : dataType === 'net'
-            ? '#c080ff'
+            ? 'var(--edge-net)'
             : dataType === 'image'
-            ? '#60c090'
+            ? 'var(--edge-image)'
             : dataType === 'tensor'
-            ? '#60a0ff'
+            ? 'var(--edge-tensor)'
             : dataType === 'branch'
-            ? '#e0c060'
-            : '#808090';
+            ? 'var(--edge-branch)'
+            : 'var(--edge-generic)';
         return {
           ...e,
           type: 'smoothstep',
@@ -334,13 +364,25 @@ function AppInner() {
   }, [nodes, edges, setNodes, setEdges]);
 
   return (
-    <div className="app-layout">
+    <div
+      className="app-layout"
+      style={{
+        gridTemplateColumns: `${leftSidebar.size}px 1fr ${rightSidebar.size}px`,
+        gridTemplateRows: `1fr ${bottomConsole.size}px`,
+      }}
+    >
       <ToastContainer />
       <ReconnectBanner />
+      <ThemeSwitcher />
       {/* Left Sidebar - Node Palette */}
       <aside className="left-sidebar">
         <NodePalette />
       </aside>
+      <Resizer
+        direction="horizontal"
+        onMouseDown={leftSidebar.resizerProps.onMouseDown}
+        isResizing={leftSidebar.isResizing}
+      />
 
       {/* Center - ReactFlow Canvas */}
       <main className="canvas-area" ref={reactFlowWrapper}>
@@ -367,7 +409,7 @@ function AppInner() {
              suppresses it; the project is MIT-licensed and the badge
              added visual noise on top of our minimap card. */
           proOptions={{ hideAttribution: true }}
-          colorMode="dark"
+          colorMode={theme}
         >
           <Controls position="bottom-left">
             <ControlButton onClick={onLayout} title="Auto Layout">
@@ -379,17 +421,11 @@ function AppInner() {
           <MiniMap
             nodeColor={(node) => nodeCategory(node.type).miniMapColor}
             nodeStrokeWidth={2}
-            maskColor="rgba(13, 21, 38, 0.78)"
+            maskColor={theme === 'light' ? 'rgba(240, 240, 245, 0.7)' : 'rgba(13, 21, 38, 0.78)'}
             pannable
             zoomable
-            // All visual styling lives in App.css under
-            // `.react-flow__minimap` so the glassmorphism (backdrop
-            // blur, gradient bg, soft border) can be tuned without
-            // round-tripping through inline-style merges. The only
-            // props above are the ones React Flow consumes for
-            // layout/behaviour, not appearance.
           />
-          <Background variant={BackgroundVariant.Dots} gap={16} size={1} color="#333" />
+          <Background variant={BackgroundVariant.Dots} gap={16} size={1} color={theme === 'light' ? '#d0d0d5' : '#333'} />
           {nodes.length === 0 && (
             <div className="empty-state">
               <h2>Workflow Canvas</h2>
@@ -398,6 +434,11 @@ function AppInner() {
           )}
         </ReactFlow>
       </main>
+      <Resizer
+        direction="horizontal"
+        onMouseDown={rightSidebar.resizerProps.onMouseDown}
+        isResizing={rightSidebar.isResizing}
+      />
 
       {/* Right Sidebar - Properties */}
       <aside className="right-sidebar">
@@ -405,6 +446,11 @@ function AppInner() {
       </aside>
 
       {/* Bottom - Console */}
+      <Resizer
+        direction="vertical"
+        onMouseDown={bottomConsole.resizerProps.onMouseDown}
+        isResizing={bottomConsole.isResizing}
+      />
       <footer className="bottom-console">
         <ConsolePanel actions={actions} />
       </footer>

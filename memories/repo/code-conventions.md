@@ -1,7 +1,7 @@
 # Code Conventions
 
 Quick reference for contributors and future agents. Verified against
-current `main` as of Phase 5 completion (commit ab267d3).
+current `main` as of UI optimization pass (2026-04-29).
 
 ## File header
 
@@ -44,6 +44,11 @@ Enforced by the `commit-format-standard` skill. Types used so far:
   duplicate action logic in UI components.
 - Node types are registered in `src/nodes/index.ts` (the `nodeTypes`
   map + `nodeTypeList` palette entries).
+- Node icons are SVG components in `src/nodes/NodeIcons.tsx` (24×24,
+  stroke-based, `currentColor`). The manifest (`src/nodes/manifest.tsx`)
+  references them as JSX. **Do NOT use emoji characters as icons.**
+- `manifest.tsx` is a `.tsx` file because it contains JSX for icon
+  components. Keep it as `.tsx` when adding new node types.
 - Node config editor fields are declared in `src/nodes/configSchemas.ts`;
   adding a new node type's config is a schema entry, not a PropertiesPanel
   edit.
@@ -78,9 +83,23 @@ Enforced by the `commit-format-standard` skill. Types used so far:
 
 ## Test counts (verify before/after any non-trivial change)
 
-- Frontend: `cd frontend && npx vitest run` → 44 tests across 7 files
-  (as of Phase 5). `npx tsc -b --noEmit` must be clean; `npx vite build`
+- Frontend: `cd frontend && npx vitest run` → 161 tests across 21 files
+  (as of 2026-04-29). `npx tsc -b --noEmit` must be clean; `npx vite build`
   must succeed.
 - Backend: `cmake -DENABLE_NCNN=OFF -S backend -B backend/build &&
   cmake --build backend/build && ./backend/build/workflow_test` → 9
   gtests across 3 suites (ExecutorTest, DebugControllerTest, baseline).
+
+## UI conventions
+
+- **No emoji icons.** Use SVG components from `NodeIcons.tsx` or inline
+  SVG (24×24, stroke-based). Emojis render inconsistently across platforms.
+- **No layout-shifting hover.** Use `box-shadow` or `border-color` changes
+  for hover feedback. Never `transform: translate*()` on hover.
+- **Font: Silkscreen is branding only.** Use it for `.palette-title`,
+  `.props-title` only. All other UI text uses `var(--font-mono)`.
+- **CSS variables for edge colours.** Edge stroke colors use
+  `--edge-net`, `--edge-image`, `--edge-tensor`, `--edge-branch`,
+  `--edge-generic`, `--edge-cyclic`. Defined in `:root` and
+  `[data-theme="light"]`.
+- **Dark theme: deep navy, not pure black.** Base is `#0B0F19`.

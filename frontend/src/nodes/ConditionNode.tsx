@@ -3,11 +3,12 @@
 import { Position, type Node, type NodeProps } from '@xyflow/react';
 import { LabeledHandle } from '../components/LabeledHandle';
 import type { WorkflowNodeData } from '../store/workflowStore';
+import { BranchIcon } from './NodeIcons';
 
 export function ConditionNode({ data: d }: NodeProps<Node<WorkflowNodeData>>) {
   return (
     <div className="workflow-node">
-      <div className="node-header"><span className="icon">🔀</span> Condition</div>
+      <div className="node-header"><span className="icon"><BranchIcon /></span> Condition</div>
       <div className="node-body">
         {(d.config?.expression as string) || 'value > threshold'}
       </div>

@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 // SPDX-FileCopyrightText: 2026 WorkflowUI contributors
+import type { ReactNode } from 'react';
 import type { NodeTypes } from '@xyflow/react';
 import { InputImageNode } from './InputImageNode';
 import { InputTensorNode } from './InputTensorNode';
@@ -31,7 +32,7 @@ export const nodeTypes: NodeTypes = {
 export interface NodeTypeInfo {
   type: string;
   label: string;
-  icon: string;
+  icon: ReactNode;
   category: NodeCategoryKey;
 }
 

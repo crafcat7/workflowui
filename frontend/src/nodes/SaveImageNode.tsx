@@ -3,6 +3,7 @@
 import { Position, type Node, type NodeProps } from '@xyflow/react';
 import { LabeledHandle } from '../components/LabeledHandle';
 import type { WorkflowNodeData } from '../store/workflowStore';
+import { SaveImageIcon } from './NodeIcons';
 
 /**
  * Renders a Save Image sink. Matches the backend SaveImageHandler:
@@ -12,7 +13,7 @@ import type { WorkflowNodeData } from '../store/workflowStore';
 export function SaveImageNode({ data: d }: NodeProps<Node<WorkflowNodeData>>) {
   return (
     <div className="workflow-node">
-      <div className="node-header"><span className="icon">🖼️</span> Save Image</div>
+      <div className="node-header"><span className="icon"><SaveImageIcon /></span> Save Image</div>
       <div className="node-body">
         {(d.config?.filePath as string) || 'output.png'}
       </div>

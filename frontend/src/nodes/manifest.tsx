@@ -18,8 +18,22 @@
  * component in `nodes/index.ts`. Nothing else.
  */
 
+import type { ReactNode } from 'react';
 import type { HandleDataType } from '../components/LabeledHandle';
 import type { ConfigSection } from './configSchemas';
+import {
+  ImageIcon,
+  TensorIcon,
+  BrainIcon,
+  ZapIcon,
+  TrendingUpIcon,
+  WrenchIcon,
+  SaveTextIcon,
+  SaveImageIcon,
+  BranchIcon,
+  OutputIcon,
+  InspectIcon,
+} from './NodeIcons';
 
 export type NodeCategoryKey = 'input' | 'inference' | 'output' | 'control' | 'debug';
 
@@ -56,8 +70,8 @@ export interface NodeManifestEntry {
   type: string;
   /** Human-readable name shown in the palette and node header. */
   label: string;
-  /** Emoji/icon shown in the palette card. */
-  icon: string;
+  /** SVG icon component rendered in the palette card and node header. */
+  icon: ReactNode;
   /** Category for styling + palette grouping. */
   category: NodeCategoryKey;
   /** Ports; empty for source-only or sink-only nodes. */
@@ -75,7 +89,7 @@ export const NODE_MANIFEST: NodeManifestEntry[] = [
   {
     type: 'inputImage',
     label: 'Input Image',
-    icon: '🖼',
+    icon: <ImageIcon />,
     category: 'input',
     ports: [{ id: 'image_data', direction: 'source', dataType: 'image' }],
     configSections: [
@@ -96,7 +110,7 @@ export const NODE_MANIFEST: NodeManifestEntry[] = [
   {
     type: 'inputTensor',
     label: 'Input Tensor',
-    icon: '📊',
+    icon: <TensorIcon />,
     category: 'input',
     ports: [{ id: 'tensor_data', direction: 'source', dataType: 'tensor' }],
     configSections: [
@@ -142,7 +156,7 @@ export const NODE_MANIFEST: NodeManifestEntry[] = [
   {
     type: 'createNet',
     label: 'Create Net',
-    icon: '🧠',
+    icon: <BrainIcon />,
     category: 'inference',
     ports: [{ id: 'net_handle', direction: 'source', dataType: 'net' }],
     vendorSchema: true,
@@ -150,7 +164,7 @@ export const NODE_MANIFEST: NodeManifestEntry[] = [
   {
     type: 'inference',
     label: 'Inference',
-    icon: '⚡',
+    icon: <ZapIcon />,
     category: 'inference',
     ports: [
       { id: 'net_handle', direction: 'target', dataType: 'net' },
@@ -161,7 +175,7 @@ export const NODE_MANIFEST: NodeManifestEntry[] = [
   {
     type: 'benchmark',
     label: 'Benchmark',
-    icon: '📈',
+    icon: <TrendingUpIcon />,
     category: 'inference',
     ports: [
       { id: 'net_handle', direction: 'target', dataType: 'net' },
@@ -188,7 +202,7 @@ export const NODE_MANIFEST: NodeManifestEntry[] = [
   {
     type: 'postprocess',
     label: 'Postprocess',
-    icon: '🛠️',
+    icon: <WrenchIcon />,
     category: 'inference',
     ports: [
       { id: 'input_data', direction: 'target', dataType: 'tensor' },
@@ -234,7 +248,7 @@ export const NODE_MANIFEST: NodeManifestEntry[] = [
   {
     type: 'saveText',
     label: 'Save Text',
-    icon: '💾',
+    icon: <SaveTextIcon />,
     category: 'output',
     ports: [{ id: 'data', direction: 'target', dataType: 'generic' }],
     configSections: [
@@ -254,7 +268,7 @@ export const NODE_MANIFEST: NodeManifestEntry[] = [
   {
     type: 'saveImage',
     label: 'Save Image',
-    icon: '🖼️',
+    icon: <SaveImageIcon />,
     category: 'output',
     ports: [{ id: 'image_data', direction: 'target', dataType: 'image' }],
     configSections: [
@@ -274,7 +288,7 @@ export const NODE_MANIFEST: NodeManifestEntry[] = [
   {
     type: 'condition',
     label: 'Condition',
-    icon: '🔀',
+    icon: <BranchIcon />,
     category: 'control',
     ports: [
       { id: 'input_data', direction: 'target', dataType: 'tensor' },
@@ -299,14 +313,14 @@ export const NODE_MANIFEST: NodeManifestEntry[] = [
   {
     type: 'output',
     label: 'Output',
-    icon: '📤',
+    icon: <OutputIcon />,
     category: 'output',
     ports: [{ id: 'data', direction: 'target', dataType: 'generic' }],
   },
   {
     type: 'debug',
     label: 'Inspect',
-    icon: '🔍',
+    icon: <InspectIcon />,
     category: 'debug',
     ports: [
       { id: 'data_in', direction: 'target', dataType: 'generic' },

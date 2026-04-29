@@ -3,6 +3,7 @@
 import { Position, type Node, type NodeProps } from '@xyflow/react';
 import { LabeledHandle } from '../components/LabeledHandle';
 import type { WorkflowNodeData } from '../store/workflowStore';
+import { WrenchIcon } from './NodeIcons';
 
 export function PostprocessNode({ data: d }: NodeProps<Node<WorkflowNodeData>>) {
   const op = (d.config?.op as string) || 'nms';
@@ -12,7 +13,7 @@ export function PostprocessNode({ data: d }: NodeProps<Node<WorkflowNodeData>>) 
 
   return (
     <div className="workflow-node">
-      <div className="node-header"><span className="icon">🛠️</span> Postprocess</div>
+      <div className="node-header"><span className="icon"><WrenchIcon /></span> Postprocess</div>
       <div className="node-body">
         <div>{op.toUpperCase()}</div>
         <div style={{ fontSize: '0.8em', color: '#888' }}>{paramText}</div>

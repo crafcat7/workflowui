@@ -3,6 +3,7 @@
 import { Position, type Node, type NodeProps } from '@xyflow/react';
 import { LabeledHandle } from '../components/LabeledHandle';
 import type { WorkflowNodeData } from '../store/workflowStore';
+import { TrendingUpIcon } from './NodeIcons';
 
 export function BenchmarkNode({ data: d }: NodeProps<Node<WorkflowNodeData>>) {
   const runs = d.runsCount as number | undefined;
@@ -20,7 +21,7 @@ export function BenchmarkNode({ data: d }: NodeProps<Node<WorkflowNodeData>>) {
     : 10;
   return (
     <div className="workflow-node">
-      <div className="node-header"><span className="icon">📈</span> Benchmark</div>
+      <div className="node-header"><span className="icon"><TrendingUpIcon /></span> Benchmark</div>
       <div className="node-body">{durationSec}s stress test</div>
       <div className="node-footer">
         <span className={`node-status ${d.status}`}>{d.status}</span>

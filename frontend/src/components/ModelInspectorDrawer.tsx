@@ -48,6 +48,7 @@ import {
 import dagre from 'dagre';
 import type { ModelGraph, ModelInspectRequest } from '../types/modelInspector';
 import { useModelInspect } from '../hooks/useModelInspect';
+import { useTheme } from '../hooks/useTheme';
 
 export interface ModelInspectorDrawerProps {
   /** When false the drawer slides off-screen and the inspect hook is reset. */
@@ -89,49 +90,33 @@ function fmtShape(shape: number[]): string {
 }
 
 /**
- * Background colour by layer family. Grouping the ~20 ncnn layer
- * types we care about into 5 visual buckets gives the user a
- * skimming aid on tall graphs (find all activations / find all
- * pools) without devolving into a confetti of distinct colours.
- * Anything outside the bucket list lands on the neutral default.
+ * Background colour by layer family. Two palettes: dark (default) and
+ * light — selected via the `light` flag so the same grouping logic
+ * serves both themes without duplicating the type-matching chain.
  */
-function headerBgFor(type: string): string {
-  if (type === 'Input') return '#1a3a3a'; // teal — graph entry
-  if (
-    type === 'Convolution' ||
-    type === 'ConvolutionDepthWise' ||
-    type === 'InnerProduct' ||
-    type === 'Deconvolution'
-  ) {
-    return '#2a3a5a'; // blue — weighted compute
+function headerBgFor(type: string, light: boolean): string {
+  if (light) {
+    if (type === 'Input') return '#d4edee';
+    if (type === 'Convolution' || type === 'ConvolutionDepthWise' || type === 'InnerProduct' || type === 'Deconvolution')
+      return '#dbe5f6';
+    if (type === 'ReLU' || type === 'Sigmoid' || type === 'PReLU' || type === 'HardSwish' || type === 'Mish' || type === 'Swish')
+      return '#e8ddf5';
+    if (type === 'Pooling' || type === 'PoolingV2' || type === 'GlobalPooling')
+      return '#ddf0e0';
+    if (type === 'BatchNorm' || type === 'Scale' || type === 'Concat' || type === 'Split' || type === 'Eltwise' || type === 'Reshape' || type === 'Permute' || type === 'Crop' || type === 'Flatten')
+      return '#f0ead6';
+    return '#e8e8ef';
   }
-  if (
-    type === 'ReLU' ||
-    type === 'Sigmoid' ||
-    type === 'PReLU' ||
-    type === 'HardSwish' ||
-    type === 'Mish' ||
-    type === 'Swish'
-  ) {
-    return '#3a2a4a'; // purple — activations
-  }
-  if (type === 'Pooling' || type === 'PoolingV2' || type === 'GlobalPooling') {
-    return '#2a4a3a'; // green — spatial reduction
-  }
-  if (
-    type === 'BatchNorm' ||
-    type === 'Scale' ||
-    type === 'Concat' ||
-    type === 'Split' ||
-    type === 'Eltwise' ||
-    type === 'Reshape' ||
-    type === 'Permute' ||
-    type === 'Crop' ||
-    type === 'Flatten'
-  ) {
-    return '#3a3a2a'; // amber — shape / fusion plumbing
-  }
-  return '#1a1a3a'; // neutral fallback
+  if (type === 'Input') return '#1a3a3a';
+  if (type === 'Convolution' || type === 'ConvolutionDepthWise' || type === 'InnerProduct' || type === 'Deconvolution')
+    return '#2a3a5a';
+  if (type === 'ReLU' || type === 'Sigmoid' || type === 'PReLU' || type === 'HardSwish' || type === 'Mish' || type === 'Swish')
+    return '#3a2a4a';
+  if (type === 'Pooling' || type === 'PoolingV2' || type === 'GlobalPooling')
+    return '#2a4a3a';
+  if (type === 'BatchNorm' || type === 'Scale' || type === 'Concat' || type === 'Split' || type === 'Eltwise' || type === 'Reshape' || type === 'Permute' || type === 'Crop' || type === 'Flatten')
+    return '#3a3a2a';
+  return '#1a1a3a';
 }
 
 /**
@@ -189,13 +174,11 @@ function fmtKeyParams(type: string, params: Record<string, unknown>): string {
 interface LayerNodeData extends Record<string, unknown> {
   type: string;
   id: string;
-  /** Pre-formatted output shape string (axis-named when 3- or 4-D). */
   outShape: string;
-  /** Optional key-param summary; empty string when not Conv/Pool/IP. */
   keyParams: string;
-  /** Background colour for the type header bar. */
   headerBg: string;
   selected: boolean;
+  light: boolean;
 }
 
 /**
@@ -208,16 +191,27 @@ interface LayerNodeData extends Record<string, unknown> {
  * pin to top/bottom so edges anchor at the rank boundary.
  */
 function LayerNode({ data }: NodeProps<Node<LayerNodeData>>): ReactElement {
-  const { type, id, outShape, keyParams, headerBg, selected } = data;
+  const { type, id, outShape, keyParams, headerBg, selected, light } = data;
+  const bg = light ? '#ffffff' : '#0e0e22';
+  const borderColor = selected
+    ? (light ? '#9b59b6' : '#c39be0')
+    : (light ? '#d0d0d7' : '#2a2a4a');
+  const textColor = light ? '#1d1d1f' : '#d0d0e8';
+  const idColor = light ? '#6e6e73' : '#9090b0';
+  const paramColor = light ? '#424245' : '#a0a0c0';
+  const shapeColor = light ? '#0058b0' : '#7ab8ff';
+  const handleBg = light ? '#a0a0a8' : '#555';
   return (
     <div
       style={{
         width: NODE_W,
         height: NODE_H,
-        background: '#0e0e22',
-        border: `1px solid ${selected ? '#c39be0' : '#2a2a4a'}`,
-        boxShadow: selected ? '0 0 0 2px rgba(155, 89, 182, 0.35)' : 'none',
-        color: '#d0d0e8',
+        background: bg,
+        border: `1px solid ${borderColor}`,
+        boxShadow: selected
+          ? (light ? '0 0 0 2px rgba(155, 89, 182, 0.25)' : '0 0 0 2px rgba(155, 89, 182, 0.35)')
+          : 'none',
+        color: textColor,
         borderRadius: 5,
         fontSize: 11,
         lineHeight: 1.25,
@@ -226,9 +220,7 @@ function LayerNode({ data }: NodeProps<Node<LayerNodeData>>): ReactElement {
         overflow: 'hidden',
       }}
     >
-      <Handle type="target" position={Position.Top} style={{ background: '#555' }} />
-      {/* Header bar: bold type name on a category-coloured background.
-          Acts as the visual anchor when scanning a tall graph. */}
+      <Handle type="target" position={Position.Top} style={{ background: handleBg }} />
       <div
         style={{
           background: headerBg,
@@ -238,17 +230,16 @@ function LayerNode({ data }: NodeProps<Node<LayerNodeData>>): ReactElement {
           whiteSpace: 'nowrap',
           overflow: 'hidden',
           textOverflow: 'ellipsis',
+          color: light ? '#1d1d1f' : undefined,
         }}
         title={type}
       >
         {type}
       </div>
-      {/* ID row: dimmer secondary identifier so the type stays the
-          primary read. */}
       <div
         style={{
           padding: '2px 8px',
-          color: '#9090b0',
+          color: idColor,
           fontSize: 10,
           whiteSpace: 'nowrap',
           overflow: 'hidden',
@@ -258,13 +249,10 @@ function LayerNode({ data }: NodeProps<Node<LayerNodeData>>): ReactElement {
       >
         {id}
       </div>
-      {/* Key-params row: blank for layers without high-signal params,
-          rendered as a non-breaking space so the row still reserves
-          the same vertical pixels (uniform NODE_H across the graph). */}
       <div
         style={{
           padding: '2px 8px',
-          color: '#a0a0c0',
+          color: paramColor,
           fontSize: 10,
           whiteSpace: 'nowrap',
           overflow: 'hidden',
@@ -275,12 +263,10 @@ function LayerNode({ data }: NodeProps<Node<LayerNodeData>>): ReactElement {
       >
         {keyParams || '\u00A0'}
       </div>
-      {/* Output shape row: arrow prefix evokes "produces"; the blue
-          tint distinguishes it from the muted id / params rows. */}
       <div
         style={{
           padding: '2px 8px',
-          color: '#7ab8ff',
+          color: shapeColor,
           fontSize: 11,
           fontFamily: 'monospace',
           whiteSpace: 'nowrap',
@@ -292,7 +278,7 @@ function LayerNode({ data }: NodeProps<Node<LayerNodeData>>): ReactElement {
       >
         ↓ {outShape}
       </div>
-      <Handle type="source" position={Position.Bottom} style={{ background: '#555' }} />
+      <Handle type="source" position={Position.Bottom} style={{ background: handleBg }} />
     </div>
   );
 }
@@ -312,24 +298,19 @@ function InspectorCanvas({
   edges,
   selectedLayer,
   onSelect,
+  theme,
 }: {
   styledNodes: Node[];
   edges: Edge[];
   selectedLayer: string | null;
   onSelect: (id: string) => void;
+  theme: 'dark' | 'light';
 }): ReactElement {
   const rf = useReactFlow();
-  // When selection changes (from either node click or table row
-  // click), recentre the viewport on the selected node so it's
-  // never stranded off-screen on tall graphs. We *don't* refit on
-  // every render — only when the selected id transitions — to
-  // preserve the user's manual pan/zoom between selections.
   useEffect(() => {
     if (!selectedLayer) return;
     const n = styledNodes.find((node) => node.id === selectedLayer);
     if (!n) return;
-    // setCenter takes a graph-space point; node.position is the top-
-    // left, so we offset by half the node size for a visual centre.
     rf.setCenter(n.position.x + NODE_W / 2, n.position.y + NODE_H / 2, {
       zoom: rf.getZoom(),
       duration: 250,
@@ -342,11 +323,6 @@ function InspectorCanvas({
       edges={edges}
       nodeTypes={nodeTypes}
       fitView
-      // Constrain the auto-fit zoom: tall TB graphs (e.g. shufflenet
-      // ~120 layers) otherwise zoom out so far the labels are
-      // unreadable; short graphs zoom in past 1× and look pixel-soft.
-      // 0.4–1.5 keeps both ends acceptable, 15% padding so nodes
-      // never touch the canvas edge.
       fitViewOptions={{ padding: 0.15, minZoom: 0.4, maxZoom: 1.5 }}
       minZoom={0.2}
       maxZoom={2}
@@ -355,6 +331,7 @@ function InspectorCanvas({
       nodesConnectable={false}
       edgesFocusable={false}
       onNodeClick={(_e, n) => onSelect(n.id)}
+      colorMode={theme}
     >
       <Background />
       <Controls showInteractive={false} />
@@ -362,26 +339,22 @@ function InspectorCanvas({
   );
 }
 
-function layoutGraph(graph: ModelGraph): { nodes: Node[]; edges: Edge[] } {
+function layoutGraph(graph: ModelGraph, light: boolean): { nodes: Node[]; edges: Edge[] } {
   const g = new dagre.graphlib.Graph();
-  // TB layout: ranksep separates rows (vertical), nodesep separates
-  // siblings sharing a rank (horizontal). 70px between rows leaves
-  // room for the blob-name edge label that sits midway between
-  // producer and consumer; 60px between siblings stops fan-outs
-  // (e.g. Split → multiple consumers) from colliding.
   g.setGraph({ rankdir: 'TB', nodesep: 60, ranksep: 70, edgesep: 10 });
   g.setDefaultEdgeLabel(() => ({}));
 
   for (const layer of graph.layers) {
     g.setNode(layer.id, { width: NODE_W, height: NODE_H });
   }
-  // Build edges from blob producer/consumers. A blob with N consumers
-  // becomes N edges; multi-output layers like Split fan out
-  // naturally because each output_blob has its own consumer set.
+
   const edgeKey = new Set<string>();
   const edges: Edge[] = [];
+  const edgeLabelFill = light ? '#1d1d1f' : '#d0d0e8';
+  const edgeLabelBg = light ? '#ffffff' : '#12122a';
+  const edgeLabelBgOpacity = light ? 0.85 : 0.9;
   for (const blob of graph.blobs) {
-    if (!blob.producer) continue; // graph input, no incoming edge to draw
+    if (!blob.producer) continue;
     for (const consumer of blob.consumers) {
       const key = `${blob.producer}->${consumer}::${blob.name}`;
       if (edgeKey.has(key)) continue;
@@ -392,11 +365,8 @@ function layoutGraph(graph: ModelGraph): { nodes: Node[]; edges: Edge[] } {
         source: blob.producer,
         target: consumer,
         label: blob.name,
-        // Pad a dark-themed background behind the blob name so labels
-        // stay legible against both the canvas background and the
-        // edge stroke when fan-outs cluster their labels close.
-        labelStyle: { fill: '#d0d0e8', fontSize: 11 },
-        labelBgStyle: { fill: '#12122a', fillOpacity: 0.9 },
+        labelStyle: { fill: edgeLabelFill, fontSize: 11 },
+        labelBgStyle: { fill: edgeLabelBg, fillOpacity: edgeLabelBgOpacity },
         labelBgPadding: [4, 2],
         labelBgBorderRadius: 2,
         markerEnd: { type: MarkerType.ArrowClosed },
@@ -406,20 +376,13 @@ function layoutGraph(graph: ModelGraph): { nodes: Node[]; edges: Edge[] } {
 
   dagre.layout(g);
 
-  // Look up shapes by blob name. Indexed once per layoutGraph call
-  // so the per-layer mapping below is O(out) and not O(n²).
   const blobShape = new Map<string, number[]>();
   for (const b of graph.blobs) blobShape.set(b.name, b.shape);
 
   const nodes: Node[] = graph.layers.map((layer) => {
     const pos = g.node(layer.id);
-    // Use the first output blob's shape as the node's display shape.
-    // Multi-output layers (Split, Slice) are rare in the inference
-    // graphs we render, and their fan-out edges already disambiguate
-    // per-branch shapes via their target nodes.
     const firstOut = layer.output_blobs[0];
     const outShape = fmtShape(firstOut ? (blobShape.get(firstOut) ?? []) : []);
-    // dagre returns the *center* point; ReactFlow wants the top-left.
     return {
       id: layer.id,
       type: 'layer',
@@ -429,8 +392,9 @@ function layoutGraph(graph: ModelGraph): { nodes: Node[]; edges: Edge[] } {
         id: layer.id,
         outShape,
         keyParams: fmtKeyParams(layer.type, layer.params),
-        headerBg: headerBgFor(layer.type),
+        headerBg: headerBgFor(layer.type, light),
         selected: false,
+        light,
       } satisfies LayerNodeData,
     };
   });
@@ -445,16 +409,11 @@ export function ModelInspectorDrawer({
   request,
 }: ModelInspectorDrawerProps): ReactElement | null {
   const { graph, loading, error, inspect, reset } = useModelInspect();
+  const theme = useTheme();
+  const light = theme === 'light';
   const [selectedLayer, setSelectedLayer] = useState<string | null>(null);
-  // Per-layer-id row refs so a selection from the canvas can scroll
-  // the matching row into view. Keyed Map (not array) survives
-  // re-orderings and avoids stale numeric indexes if `graph.layers`
-  // ever changes between renders.
   const rowRefs = useRef(new Map<string, HTMLTableRowElement | null>());
 
-  // Auto-fire when the drawer opens with a valid request. We don't
-  // refetch on every render — only when (open, request) flips into
-  // an inspectable state.
   useEffect(() => {
     if (open && request && request.paramPath) {
       inspect(request);
@@ -463,15 +422,9 @@ export function ModelInspectorDrawer({
       reset();
       setSelectedLayer(null);
     }
-    // We deliberately omit `inspect` and `reset` from deps — the hook
-    // returns referentially-stable callbacks (useCallback with []),
-    // but listing them would make refresh-on-rerender a bug source
-    // if that contract ever loosens.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, request?.vendor, request?.paramPath, request?.modelPath]);
 
-  // Escape closes. Listener only attaches while open so we don't
-  // intercept Escape for the rest of the app.
   useEffect(() => {
     if (!open) return;
     const handler = (e: KeyboardEvent) => {
@@ -483,8 +436,8 @@ export function ModelInspectorDrawer({
 
   const { nodes, edges } = useMemo(() => {
     if (!graph) return { nodes: [], edges: [] };
-    return layoutGraph(graph);
-  }, [graph]);
+    return layoutGraph(graph, light);
+  }, [graph, light]);
 
   // Highlight the selected layer in the canvas without recomputing
   // layout. Selection is pushed into the custom node's `data.selected`
@@ -568,6 +521,7 @@ export function ModelInspectorDrawer({
                 edges={edges}
                 selectedLayer={selectedLayer}
                 onSelect={setSelectedLayer}
+                theme={theme}
               />
             </ReactFlowProvider>
           </section>
@@ -619,7 +573,7 @@ export function ModelInspectorDrawer({
                     <td>{l.id}</td>
                     <td>{l.input_blobs.length}</td>
                     <td>{l.output_blobs.length}</td>
-                    <td style={{ fontFamily: 'monospace', color: '#7ab8ff' }}>{outShape}</td>
+                    <td style={{ fontFamily: 'monospace', color: light ? '#0058b0' : '#7ab8ff' }}>{outShape}</td>
                   </tr>
                   );
                 })}

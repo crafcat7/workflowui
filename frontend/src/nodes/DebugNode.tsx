@@ -3,6 +3,7 @@
 import { Position, type Node, type NodeProps, useEdges } from '@xyflow/react';
 import { LabeledHandle } from '../components/LabeledHandle';
 import type { WorkflowNodeData } from '../store/workflowStore';
+import { InspectIcon } from './NodeIcons';
 
 /**
  * DebugNode - a passthrough inspector. It forwards its `data_in` value to
@@ -28,7 +29,7 @@ export function DebugNode({ id, data: d }: NodeProps<Node<WorkflowNodeData>>) {
   return (
     <div className="workflow-node">
       <div className="node-header">
-        <span className="icon">🔍</span> Inspect
+        <span className="icon"><InspectIcon /></span> Inspect
       </div>
       <div className="node-body">
         <div>{getStatusText()}</div>

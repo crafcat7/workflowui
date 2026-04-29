@@ -3,6 +3,7 @@
 import { Position, type Node, type NodeProps } from '@xyflow/react';
 import { LabeledHandle } from '../components/LabeledHandle';
 import { useWorkflowStore, type WorkflowNodeData } from '../store/workflowStore';
+import { TensorIcon } from './NodeIcons';
 
 export function InputTensorNode({ id, data: d }: NodeProps<Node<WorkflowNodeData>>) {
   const isAuto = d.config?.fillMode === 'auto';
@@ -15,7 +16,7 @@ export function InputTensorNode({ id, data: d }: NodeProps<Node<WorkflowNodeData
 
   return (
     <div className="workflow-node">
-      <div className="node-header"><span className="icon">📊</span> Input Tensor</div>
+      <div className="node-header"><span className="icon"><TensorIcon /></span> Input Tensor</div>
       <div className="node-body">
         {isAuto ? (
           <div className="tensor-auto-summary">

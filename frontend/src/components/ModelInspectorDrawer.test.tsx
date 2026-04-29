@@ -57,7 +57,7 @@ function fakeGraph(overrides: Partial<ModelGraph> = {}): ModelGraph {
 
 describe('layoutGraph', () => {
   it('returns one node per layer with computed positions', () => {
-    const { nodes } = __layoutGraphForTest(fakeGraph());
+    const { nodes } = __layoutGraphForTest(fakeGraph(), false);
     expect(nodes).toHaveLength(2);
     const ids = nodes.map((n) => n.id).sort();
     expect(ids).toEqual(['data', 'relu']);
@@ -68,7 +68,7 @@ describe('layoutGraph', () => {
   });
 
   it('emits one edge per (producer, consumer, blob) triple with the blob as label', () => {
-    const { edges } = __layoutGraphForTest(fakeGraph());
+    const { edges } = __layoutGraphForTest(fakeGraph(), false);
     expect(edges).toHaveLength(1);
     expect(edges[0]).toMatchObject({
       source: 'data',
@@ -90,7 +90,7 @@ describe('layoutGraph', () => {
         { name: 'out', shape: [], producer: 'relu', consumers: [] },
       ],
     };
-    const { edges } = __layoutGraphForTest(g);
+    const { edges } = __layoutGraphForTest(g, false);
     expect(edges).toEqual([]);
   });
 
@@ -108,7 +108,7 @@ describe('layoutGraph', () => {
         { name: 'bo', shape: [], producer: 'b', consumers: [] },
       ],
     };
-    const { edges } = __layoutGraphForTest(g);
+    const { edges } = __layoutGraphForTest(g, false);
     expect(edges).toHaveLength(2);
     expect(edges.map((e) => e.target).sort()).toEqual(['a', 'b']);
   });
