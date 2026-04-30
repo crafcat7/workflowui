@@ -2,8 +2,9 @@
 // SPDX-FileCopyrightText: 2026 WorkflowUI contributors
 #pragma once
 
-#include "../../model/node.h"
 #include <string>
+
+#include "../../model/node.h"
 
 namespace workflow {
 namespace handlers {
@@ -33,5 +34,5 @@ namespace handlers {
 bool evaluate_condition(const std::string& expr, const PortValue& input,
                         std::string* error_out = nullptr);
 
-} // namespace handlers
-} // namespace workflow
+}  // namespace handlers
+}  // namespace workflow

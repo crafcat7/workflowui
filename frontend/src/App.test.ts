@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 // SPDX-FileCopyrightText: 2026 WorkflowUI contributors
 import { describe, it, expect } from 'vitest';
-import { computeNodeClassName } from './App';
+import { computeNodeClassName } from './utils/nodeClassName';
 
 // Sanity coverage for the className helper that drives ReactFlow node
 // visuals. The styledNodes memo keys its per-node cache on the same

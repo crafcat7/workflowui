@@ -16,33 +16,37 @@ namespace workflow {
  * distinguish a local failure from an upstream one.
  */
 class NodeError : public std::runtime_error {
-public:
-    enum class Kind {
-        MissingInput,   // Required input port had no value
-        InvalidConfig,  // User-supplied config rejected
-        Runtime,        // Handler logic failed at runtime
-        UpstreamFailed, // Dependency produced no value because it errored
-    };
+ public:
+  enum class Kind {
+    MissingInput,    // Required input port had no value
+    InvalidConfig,   // User-supplied config rejected
+    Runtime,         // Handler logic failed at runtime
+    UpstreamFailed,  // Dependency produced no value because it errored
+  };
 
-    NodeError(Kind kind, std::string message)
-        : std::runtime_error(message), kind_(kind), message_(std::move(message)) {}
+  NodeError(Kind kind, std::string message)
+      : std::runtime_error(message), kind_(kind), message_(std::move(message)) {}
 
-    Kind kind() const noexcept { return kind_; }
-    const std::string& message() const noexcept { return message_; }
+  Kind kind() const noexcept { return kind_; }
+  const std::string& message() const noexcept { return message_; }
 
-    static const char* kind_to_string(Kind k) noexcept {
-        switch (k) {
-            case Kind::MissingInput:   return "missing_input";
-            case Kind::InvalidConfig:  return "invalid_config";
-            case Kind::Runtime:        return "runtime";
-            case Kind::UpstreamFailed: return "upstream_failed";
-        }
+  static const char* kind_to_string(Kind k) noexcept {
+    switch (k) {
+      case Kind::MissingInput:
+        return "missing_input";
+      case Kind::InvalidConfig:
+        return "invalid_config";
+      case Kind::Runtime:
         return "runtime";
+      case Kind::UpstreamFailed:
+        return "upstream_failed";
     }
+    return "runtime";
+  }
 
-private:
-    Kind kind_;
-    std::string message_;
+ private:
+  Kind kind_;
+  std::string message_;
 };
 
-} // namespace workflow
+}  // namespace workflow

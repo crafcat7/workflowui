@@ -23,10 +23,7 @@
  */
 
 import { useEffect } from 'react';
-import {
-  useWorkflowStore,
-  generateNodeId,
-} from '../store/workflowStore';
+import { useWorkflowStore, generateNodeId } from '../store/workflowStore';
 import type { WorkflowActions } from './useWorkflowActions';
 
 export interface KeyboardShortcutDeps {
@@ -140,11 +137,9 @@ function handleLegacyCopy() {
   if (!state.selectedNodeId) return;
   const node = state.nodesById.get(state.selectedNodeId);
   if (!node) return;
-  void navigator.clipboard
-    .writeText(JSON.stringify({ type: 'workflow_node', node }))
-    .catch(() => {
-      /* clipboard permission denied; silently ignore */
-    });
+  void navigator.clipboard.writeText(JSON.stringify({ type: 'workflow_node', node })).catch(() => {
+    /* clipboard permission denied; silently ignore */
+  });
 }
 
 function handleLegacyPaste() {

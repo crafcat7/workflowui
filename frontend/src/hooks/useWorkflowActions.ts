@@ -12,10 +12,7 @@
  */
 
 import { useCallback } from 'react';
-import {
-  useWorkflowStore,
-  type WorkflowNodeData,
-} from '../store/workflowStore';
+import { useWorkflowStore, type WorkflowNodeData } from '../store/workflowStore';
 import { useDebugStore, type Breakpoint } from '../store/debugStore';
 import { wsClient } from '../transport/WsClient';
 import { showToast } from '../store/toastStore';
@@ -64,9 +61,7 @@ export function useWorkflowActions(triggerLoad?: () => void): WorkflowActions {
       connected.add(e.target);
     });
     const activeNodes =
-      store.nodes.length === 1
-        ? store.nodes
-        : store.nodes.filter((n) => connected.has(n.id));
+      store.nodes.length === 1 ? store.nodes : store.nodes.filter((n) => connected.has(n.id));
 
     if (activeNodes.length === 0) {
       showToast('No connected nodes to execute', 'warn');
@@ -176,8 +171,7 @@ export function useWorkflowActions(triggerLoad?: () => void): WorkflowActions {
   const toggleBreakpointOnSelected = useCallback(() => {
     const { selectedNodeId, isRunning } = useWorkflowStore.getState();
     if (!selectedNodeId) return;
-    const { breakpoints, addBreakpoint, removeBreakpoint } =
-      useDebugStore.getState();
+    const { breakpoints, addBreakpoint, removeBreakpoint } = useDebugStore.getState();
     const existing = breakpoints.find((b) => b.nodeId === selectedNodeId);
     // Mid-run breakpoint sync: backend registers `debug.add_breakpoint`
     // and `debug.remove_breakpoint` via `register_method` (request/response,

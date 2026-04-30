@@ -121,9 +121,7 @@ function useVendorSchema() {
     };
     schemaSubscribers.add(refetch);
 
-    if (cachedSchema) {
-      setSchema(cachedSchema);
-    } else {
+    if (!cachedSchema) {
       fetchVendorSchema().then((s) => {
         if (!cancelled) setSchema(s);
       });
@@ -139,6 +137,7 @@ function useVendorSchema() {
 
 // Exposed for tests — lets the suite simulate a reconnect without
 // having to spin up a real WsClient. Not part of the public surface.
+// eslint-disable-next-line react-refresh/only-export-components -- test-only export
 export const __test_invalidateVendorSchemaCache = invalidateVendorSchemaCache;
 
 // ---------------------------------------------------------------------------
@@ -155,7 +154,9 @@ export function PropertiesPanel() {
     <div className="properties-panel">
       <div className="props-title">PROPERTIES</div>
       <div className="props-body">
-        {!selectedNode ? <PropertiesEmptyState /> : (
+        {!selectedNode ? (
+          <PropertiesEmptyState />
+        ) : (
           <PropertiesContent node={selectedNode} onUpdate={updateNodeData} />
         )}
       </div>
@@ -200,8 +201,8 @@ function PropertiesEmptyState() {
       </svg>
       <div className="props-empty-headline">No node selected</div>
       <div className="props-empty-hint">
-        Click a node on the canvas to edit its properties, or drag one
-        in from the library on the left.
+        Click a node on the canvas to edit its properties, or drag one in from the library on the
+        left.
       </div>
       <div className="props-empty-kbds">
         <span className="kbd-chip">Click</span>
@@ -239,7 +240,8 @@ function PropertiesContent({
   // when their inspector ships.
   const paramPath = typeof config.paramPath === 'string' ? config.paramPath.trim() : '';
   const modelPath = typeof config.modelPath === 'string' ? config.modelPath.trim() : '';
-  const explicitVendor = typeof config.vendor === 'string' ? config.vendor.trim().toLowerCase() : '';
+  const explicitVendor =
+    typeof config.vendor === 'string' ? config.vendor.trim().toLowerCase() : '';
   const nodeType = (node.type ?? '').toLowerCase();
   const inspectVendor: 'ncnn' | null =
     explicitVendor === 'ncnn' || nodeType.includes('ncnn') ? 'ncnn' : null;
@@ -365,8 +367,12 @@ function PortSummaryView({ value }: { value: PortSummary }) {
     case 'tensor':
       return (
         <div className="config-help">
-          tensor[{value.length ?? 0}] {value.preview && value.preview.length > 0 ? (
-            <>≈ [{value.preview.map((v) => v.toFixed(3)).join(', ')}{(value.length ?? 0) > (value.preview?.length ?? 0) ? ', …' : ''}]</>
+          tensor[{value.length ?? 0}]{' '}
+          {value.preview && value.preview.length > 0 ? (
+            <>
+              ≈ [{value.preview.map((v) => v.toFixed(3)).join(', ')}
+              {(value.length ?? 0) > (value.preview?.length ?? 0) ? ', …' : ''}]
+            </>
           ) : null}
         </div>
       );
@@ -424,7 +430,7 @@ function FieldRenderer({
   onChange: (key: string, value: string) => void;
 }) {
   const raw = config[field.key];
-  const value = raw === undefined || raw === null ? field.defaultValue ?? '' : String(raw);
+  const value = raw === undefined || raw === null ? (field.defaultValue ?? '') : String(raw);
 
   const help = field.help ? <div className="config-help">{field.help}</div> : null;
 
@@ -529,8 +535,8 @@ function GenericConfigEditor({
   if (entries.length === 0) {
     return (
       <div className="props-empty" style={{ fontSize: 11 }}>
-        No configuration registered for this node type. Extend NODE_SCHEMAS to
-        customize this editor.
+        No configuration registered for this node type. Extend NODE_SCHEMAS to customize this
+        editor.
       </div>
     );
   }
@@ -719,8 +725,20 @@ function FallbackNcnnConfig({
   return (
     <>
       <ConfigSection title="MODEL">
-        <PlainField label="Param Path (.param)" cfgKey="paramPath" config={config} onChange={onChange} placeholder="model.param" />
-        <PlainField label="Model Path (.bin)" cfgKey="modelPath" config={config} onChange={onChange} placeholder="model.bin" />
+        <PlainField
+          label="Param Path (.param)"
+          cfgKey="paramPath"
+          config={config}
+          onChange={onChange}
+          placeholder="model.param"
+        />
+        <PlainField
+          label="Model Path (.bin)"
+          cfgKey="modelPath"
+          config={config}
+          onChange={onChange}
+          placeholder="model.bin"
+        />
         <div className="config-field">
           <label className="config-checkbox">
             <input
@@ -733,18 +751,54 @@ function FallbackNcnnConfig({
         </div>
       </ConfigSection>
       <ConfigSection title="I/O NAMES">
-        <PlainField label="Input Name" cfgKey="inputName" config={config} onChange={onChange} placeholder="data" />
-        <PlainField label="Output Name" cfgKey="outputName" config={config} onChange={onChange} placeholder="output" />
+        <PlainField
+          label="Input Name"
+          cfgKey="inputName"
+          config={config}
+          onChange={onChange}
+          placeholder="data"
+        />
+        <PlainField
+          label="Output Name"
+          cfgKey="outputName"
+          config={config}
+          onChange={onChange}
+          placeholder="output"
+        />
       </ConfigSection>
       <ConfigSection title="INPUT DIMENSIONS">
         <div className="config-row-3">
-          <PlainField label="W" cfgKey="inputW" config={config} onChange={onChange} placeholder="224" />
-          <PlainField label="H" cfgKey="inputH" config={config} onChange={onChange} placeholder="224" />
-          <PlainField label="C" cfgKey="inputC" config={config} onChange={onChange} placeholder="3" />
+          <PlainField
+            label="W"
+            cfgKey="inputW"
+            config={config}
+            onChange={onChange}
+            placeholder="224"
+          />
+          <PlainField
+            label="H"
+            cfgKey="inputH"
+            config={config}
+            onChange={onChange}
+            placeholder="224"
+          />
+          <PlainField
+            label="C"
+            cfgKey="inputC"
+            config={config}
+            onChange={onChange}
+            placeholder="3"
+          />
         </div>
       </ConfigSection>
       <ConfigSection title="RUNTIME">
-        <PlainField label="Threads" cfgKey="numThreads" config={config} onChange={onChange} placeholder="2" />
+        <PlainField
+          label="Threads"
+          cfgKey="numThreads"
+          config={config}
+          onChange={onChange}
+          placeholder="2"
+        />
       </ConfigSection>
     </>
   );
@@ -800,9 +854,7 @@ function OutputBarChart({ output }: { output: unknown }) {
   const values = output as number[];
   const numeric = values.every((v) => typeof v === 'number' && Number.isFinite(v));
   if (!numeric) {
-    return (
-      <pre className="node-output-pre">{JSON.stringify(values.slice(0, 50), null, 2)}</pre>
-    );
+    return <pre className="node-output-pre">{JSON.stringify(values.slice(0, 50), null, 2)}</pre>;
   }
 
   const maxVal = Math.max(...values);

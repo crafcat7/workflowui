@@ -23,7 +23,9 @@ vi.mock('../transport/WsClient', () => ({
     onNotification: vi.fn(() => () => {}),
     onReconnect: vi.fn((cb: () => void) => {
       wsMocks.reconnect = cb;
-      return () => { wsMocks.reconnect = null; };
+      return () => {
+        wsMocks.reconnect = null;
+      };
     }),
     call: (...args: unknown[]) => wsMocks.call(...args),
   },
@@ -96,9 +98,7 @@ describe('PropertiesPanel vendor schema cache', () => {
     // can't find new ones that do).
     wsMocks.call.mockResolvedValueOnce({
       vendor: 'ncnn',
-      fields: [
-        { key: 'paramPath', label: 'Param', type: 'string', group: 'MODEL' },
-      ],
+      fields: [{ key: 'paramPath', label: 'Param', type: 'string', group: 'MODEL' }],
     });
     seedCreateNetNode();
     render(<PropertiesPanel />);
@@ -127,16 +127,16 @@ describe('PropertiesPanel vendor schema cache', () => {
     // wedging on a cancelled promise or caching the pre-disconnect
     // in-flight result.
     let resolveFirst: (s: unknown) => void = () => {};
-    const firstPromise = new Promise((r) => { resolveFirst = r; });
+    const firstPromise = new Promise((r) => {
+      resolveFirst = r;
+    });
     wsMocks.call.mockReturnValueOnce(firstPromise);
     // Arm the post-reconnect response *before* firing reconnect —
     // the refetch is synchronous and will consume whatever mock is
     // on the queue at that instant.
     wsMocks.call.mockResolvedValueOnce({
       vendor: 'ncnn',
-      fields: [
-        { key: 'postReconnect', label: 'Post Reconnect', type: 'string', group: 'MODEL' },
-      ],
+      fields: [{ key: 'postReconnect', label: 'Post Reconnect', type: 'string', group: 'MODEL' }],
     });
 
     seedCreateNetNode();
@@ -149,9 +149,7 @@ describe('PropertiesPanel vendor schema cache', () => {
     // the post-reconnect schema on screen.
     resolveFirst({
       vendor: 'ncnn',
-      fields: [
-        { key: 'stale', label: 'Stale', type: 'string', group: 'MODEL' },
-      ],
+      fields: [{ key: 'stale', label: 'Stale', type: 'string', group: 'MODEL' }],
     });
 
     await waitFor(() => expect(screen.getByText('Post Reconnect')).toBeInTheDocument());

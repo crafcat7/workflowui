@@ -37,7 +37,10 @@ describe('useWorkflowActions', () => {
   // store exposes a `nodesById` Map that mutators keep in sync; bare
   // `setState({ nodes: [...] })` bypasses that sync and leaves
   // `duplicateNode` / `getNodeById` looking at a stale (empty) cache.
-  function seed(nodes: Node<WorkflowNodeData>[], extra: Partial<ReturnType<typeof useWorkflowStore.getState>> = {}) {
+  function seed(
+    nodes: Node<WorkflowNodeData>[],
+    extra: Partial<ReturnType<typeof useWorkflowStore.getState>> = {},
+  ) {
     const nodesById = new Map(nodes.map((n) => [n.id, n]));
     useWorkflowStore.setState({ nodes, nodesById, ...extra });
   }

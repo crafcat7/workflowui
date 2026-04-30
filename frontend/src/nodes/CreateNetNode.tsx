@@ -10,7 +10,12 @@ export function CreateNetNode({ data: d }: NodeProps<Node<WorkflowNodeData>>) {
   const vendor = (d.config?.vendor as string) || '';
   return (
     <div className="workflow-node">
-      <div className="node-header"><span className="icon"><BrainIcon /></span> Create Net</div>
+      <div className="node-header">
+        <span className="icon">
+          <BrainIcon />
+        </span>{' '}
+        Create Net
+      </div>
       <div className="node-body">
         {vendor && <span className="node-vendor-tag">{vendor.toUpperCase()}</span>}
         {(d.config?.paramPath as string) || (d.config?.modelPath as string) || 'No model path'}
@@ -22,7 +27,13 @@ export function CreateNetNode({ data: d }: NodeProps<Node<WorkflowNodeData>>) {
           <span className="elapsed-footer">{d.elapsedMs.toFixed(1)}ms</span>
         )}
       </div>
-      <LabeledHandle type="source" position={Position.Right} id="net_handle" label="net" dataType="net" />
+      <LabeledHandle
+        type="source"
+        position={Position.Right}
+        id="net_handle"
+        label="net"
+        dataType="net"
+      />
     </div>
   );
 }

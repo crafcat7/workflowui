@@ -29,7 +29,9 @@ beforeEach(() => {
   if (!('DOMMatrixReadOnly' in globalThis)) {
     (globalThis as unknown as { DOMMatrixReadOnly: unknown }).DOMMatrixReadOnly = class {
       m22 = 1;
-      constructor(_init?: unknown) {}
+      constructor(_init?: unknown) {
+        void _init;
+      }
     };
   }
 });
@@ -139,7 +141,10 @@ describe('ModelInspectorDrawer', () => {
   it('fires inspect on open and shows loading state', async () => {
     let resolveCall: (g: ModelGraph) => void = () => {};
     vi.mocked(wsClient.call).mockImplementationOnce(
-      () => new Promise((r) => { resolveCall = r; }),
+      () =>
+        new Promise((r) => {
+          resolveCall = r;
+        }),
     );
     render(
       <ModelInspectorDrawer
@@ -149,10 +154,13 @@ describe('ModelInspectorDrawer', () => {
       />,
     );
     await waitFor(() => {
-      expect(wsClient.call).toHaveBeenCalledWith('model.inspect', expect.objectContaining({
-        vendor: 'ncnn',
-        param_path: '/x.param',
-      }));
+      expect(wsClient.call).toHaveBeenCalledWith(
+        'model.inspect',
+        expect.objectContaining({
+          vendor: 'ncnn',
+          param_path: '/x.param',
+        }),
+      );
     });
     expect(screen.getByText('Loading…')).toBeTruthy();
     resolveCall(fakeGraph());

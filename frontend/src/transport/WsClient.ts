@@ -4,6 +4,7 @@
  * WebSocket JSON-RPC 2.0 Client
  * Handles communication between frontend and backend wrapper.
  */
+import { logError } from '../utils/logger';
 
 type RpcCallback = (result: unknown, error?: RpcError) => void;
 
@@ -132,7 +133,11 @@ export class WsClient {
         // signal don't race with reconcile logic.
         if (wasReconnect) {
           for (const h of this.reconnectHandlers) {
-            try { h(); } catch (e) { console.error('[WsClient] reconnect handler error:', e); }
+            try {
+              h();
+            } catch (e) {
+              logError('[WsClient] reconnect handler error:', e);
+            }
           }
         }
         if (!settled) {
@@ -142,7 +147,7 @@ export class WsClient {
       };
 
       this.ws.onerror = (err) => {
-        console.error('[WsClient] Error:', err);
+        logError('[WsClient] Error:', err);
         if (!settled) {
           settled = true;
           reject(err);
@@ -157,7 +162,11 @@ export class WsClient {
         // already been rejected by this close.
         for (const [, p] of this.pending) {
           if (p.timer) clearTimeout(p.timer);
-          try { p.cb(undefined, { code: -32000, message: 'WebSocket closed' }); } catch { /* ignore */ }
+          try {
+            p.cb(undefined, { code: -32000, message: 'WebSocket closed' });
+          } catch {
+            /* ignore */
+          }
         }
         this.pending.clear();
         this.notifyConnection(false);
@@ -180,7 +189,9 @@ export class WsClient {
     this.emitState();
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null;
-      this.connect().catch(() => { /* will reschedule via onclose */ });
+      this.connect().catch(() => {
+        /* will reschedule via onclose */
+      });
     }, this._nextRetryMs);
   }
 
@@ -189,7 +200,7 @@ export class WsClient {
     try {
       msg = JSON.parse(raw);
     } catch {
-      console.error('[WsClient] Invalid JSON:', raw);
+      logError('[WsClient] Invalid JSON:', raw);
       return;
     }
 
@@ -222,7 +233,11 @@ export class WsClient {
    * silently dropped rather than resolving an already-rejected
    * promise.
    */
-  call<T = unknown>(method: string, params?: unknown, timeoutMs: number = DEFAULT_CALL_TIMEOUT_MS): Promise<T> {
+  call<T = unknown>(
+    method: string,
+    params?: unknown,
+    timeoutMs: number = DEFAULT_CALL_TIMEOUT_MS,
+  ): Promise<T> {
     return new Promise((resolve, reject) => {
       if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
         reject(new Error('WebSocket not connected'));
@@ -318,7 +333,11 @@ export class WsClient {
   private emitState() {
     const snap = this.snapshotState();
     for (const h of this.connectionStateHandlers) {
-      try { h(snap); } catch (e) { console.error('[WsClient] state handler error:', e); }
+      try {
+        h(snap);
+      } catch (e) {
+        logError('[WsClient] state handler error:', e);
+      }
     }
   }
 

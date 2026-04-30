@@ -63,11 +63,7 @@ describe('toastStore', () => {
     showToast('a', 'info');
     showToast('b', 'warn');
     showToast('c', 'error');
-    expect(useToastStore.getState().toasts.map((t) => t.message)).toEqual([
-      'a',
-      'b',
-      'c',
-    ]);
+    expect(useToastStore.getState().toasts.map((t) => t.message)).toEqual(['a', 'b', 'c']);
   });
 
   it('reset cancels every in-flight timer', () => {

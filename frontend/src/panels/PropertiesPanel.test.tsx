@@ -79,8 +79,6 @@ describe('PropertiesPanel error surfacing', () => {
       error: 'input port "x" has no incoming edge',
     });
     render(<PropertiesPanel />);
-    expect(screen.getByRole('alert')).toHaveTextContent(
-      'input port "x" has no incoming edge',
-    );
+    expect(screen.getByRole('alert')).toHaveTextContent('input port "x" has no incoming edge');
   });
 });

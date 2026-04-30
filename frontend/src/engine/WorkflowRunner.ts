@@ -9,6 +9,7 @@ import { wsClient } from '../transport/WsClient';
 import { useWorkflowStore, type NodeStatus } from '../store/workflowStore';
 import { useDebugStore } from '../store/debugStore';
 import { showToast } from '../store/toastStore';
+import { logWarn } from '../utils/logger';
 
 interface NodeStatusUpdate {
   node_id: string;
@@ -36,10 +37,10 @@ interface NodeStatusUpdate {
  * populated when the problem is local enough to point at.
  */
 interface ValidationError {
-  kind: string;                 // unknown_node_type | dangling_edge | unknown_port | type_mismatch
+  kind: string; // unknown_node_type | dangling_edge | unknown_port | type_mismatch
   message: string;
   node_id?: string;
-  edge?: string;                // "source:handle -> target:handle"
+  edge?: string; // "source:handle -> target:handle"
 }
 
 interface DebugPausedEvent {
@@ -65,7 +66,14 @@ interface WorkflowStateSnapshot {
   paused_at?: string;
 }
 
-const VALID_STATUSES: ReadonlySet<string> = new Set(['idle', 'running', 'done', 'error', 'paused', 'skipped']);
+const VALID_STATUSES: ReadonlySet<string> = new Set([
+  'idle',
+  'running',
+  'done',
+  'error',
+  'paused',
+  'skipped',
+]);
 
 function coerceStatus(raw: string): NodeStatus {
   return (VALID_STATUSES.has(raw) ? raw : 'idle') as NodeStatus;
@@ -97,8 +105,8 @@ export function _getActiveRunIdForTest(): string | null {
 
 /** Returns true if the event should be processed; false if it's from a stale run and should be dropped. */
 function isFreshEvent(evRunId: string | undefined): boolean {
-  if (!evRunId) return true;              // legacy/untagged: always accept
-  if (currentRunId == null) return true;  // no active filter yet
+  if (!evRunId) return true; // legacy/untagged: always accept
+  if (currentRunId == null) return true; // no active filter yet
   return evRunId === currentRunId;
 }
 
@@ -169,7 +177,7 @@ export async function reconcileFromSnapshot(): Promise<void> {
     // `workflow.state` is new (W1). Older backends will reply with
     // method-not-found (-32601); that's fine — just skip reconcile
     // and carry on with the pre-W1 behavior.
-    console.warn('[WorkflowRunner] workflow.state failed, skipping reconcile:', err);
+    logWarn('[WorkflowRunner] workflow.state failed, skipping reconcile:', err);
     return;
   }
 
@@ -281,9 +289,10 @@ export function initWorkflowRunner() {
         // both so the UI keeps working if the wire schema is later
         // tightened. DebugInputsPanel reads `.inputs` off whatever
         // record we hand it, so prefer the nested copy when present.
-        const inspect = (event.data && typeof event.data === 'object')
-          ? event.data
-          : (params as Record<string, unknown>);
+        const inspect =
+          event.data && typeof event.data === 'object'
+            ? event.data
+            : (params as Record<string, unknown>);
         useDebugStore.getState().setInspectData(inspect);
         useWorkflowStore.getState().updateNodeStatus(event.node_id, 'paused');
         useDebugStore.getState().addLog({

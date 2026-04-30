@@ -38,7 +38,10 @@ export const NODE_PORTS: Record<string, PortDef[]> = Object.fromEntries(
   NODE_MANIFEST.map((e) => [e.type, e.ports]),
 );
 
-export function getPort(nodeType: string | undefined, handleId: string | null | undefined): PortDef | null {
+export function getPort(
+  nodeType: string | undefined,
+  handleId: string | null | undefined,
+): PortDef | null {
   if (!nodeType || !handleId) return null;
   const ports = NODE_PORTS[nodeType];
   if (!ports) return null;
@@ -130,10 +133,16 @@ export function validateConnection(
 
   // Direction sanity check when registry entries exist.
   if (srcPort && srcPort.direction !== 'source') {
-    return { ok: false, reason: `${srcNode?.type}:${connection.sourceHandle} is not a source port` };
+    return {
+      ok: false,
+      reason: `${srcNode?.type}:${connection.sourceHandle} is not a source port`,
+    };
   }
   if (tgtPort && tgtPort.direction !== 'target') {
-    return { ok: false, reason: `${tgtNode?.type}:${connection.targetHandle} is not a target port` };
+    return {
+      ok: false,
+      reason: `${tgtNode?.type}:${connection.targetHandle} is not a target port`,
+    };
   }
 
   return areTypesCompatible(srcPort?.dataType, tgtPort?.dataType);

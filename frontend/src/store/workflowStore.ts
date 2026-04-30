@@ -2,6 +2,7 @@
 // SPDX-FileCopyrightText: 2026 WorkflowUI contributors
 import { create } from 'zustand';
 import { temporal } from 'zundo';
+import { logWarn } from '../utils/logger';
 import {
   type Node,
   type Edge,
@@ -202,7 +203,7 @@ export const useWorkflowStore = create<WorkflowState>()(
           throw new Error('Workflow root must be an object');
         }
         if (workflow.version !== 1) {
-          console.warn('Unknown workflow version:', workflow.version);
+          logWarn('Unknown workflow version:', workflow.version);
         }
         if (!Array.isArray(workflow.nodes) || !Array.isArray(workflow.edges)) {
           throw new Error('Workflow must contain `nodes` and `edges` arrays');
@@ -275,8 +276,8 @@ export const useWorkflowStore = create<WorkflowState>()(
         return true;
       },
       limit: 50,
-    }
-  )
+    },
+  ),
 );
 
 // Keep `nodesById` consistent with `nodes` across *every* store write,
@@ -305,8 +306,7 @@ useWorkflowStore.subscribe((state, prev) => {
   const cache = state.nodesById;
   const sample = state.nodes[0];
   const consistent =
-    cache.size === state.nodes.length &&
-    (sample === undefined || cache.get(sample.id) === sample);
+    cache.size === state.nodes.length && (sample === undefined || cache.get(sample.id) === sample);
   if (!consistent) {
     useWorkflowStore.setState({ nodesById: rebuildNodesById(state.nodes) });
   }

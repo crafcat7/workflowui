@@ -25,11 +25,7 @@ export function ReconnectBanner() {
 
   // Countdown ticker — only active while reconnecting.
   useEffect(() => {
-    if (!state.reconnecting || state.connected) {
-      setCountdownMs(0);
-      return;
-    }
-    setCountdownMs(state.nextRetryMs);
+    if (!state.reconnecting || state.connected) return;
     const started = Date.now();
     const iv = setInterval(() => {
       const remaining = Math.max(0, state.nextRetryMs - (Date.now() - started));
@@ -41,7 +37,8 @@ export function ReconnectBanner() {
 
   if (state.connected) return null;
 
-  const seconds = (countdownMs / 1000).toFixed(1);
+  const displayMs = !state.reconnecting || state.connected ? 0 : countdownMs;
+  const seconds = (displayMs / 1000).toFixed(1);
   const label = state.reconnecting
     ? `Backend disconnected — reconnecting (attempt ${state.attempt}, retry in ${seconds}s)`
     : 'Backend disconnected';

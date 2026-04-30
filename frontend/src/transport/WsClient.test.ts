@@ -21,10 +21,18 @@ class MockWebSocket {
     this.url = url;
     MockWebSocket.instances.push(this);
   }
-  send(data: string) { this.sent.push(data); }
-  close() { this.readyState = 3; this.onclose?.(); }
+  send(data: string) {
+    this.sent.push(data);
+  }
+  close() {
+    this.readyState = 3;
+    this.onclose?.();
+  }
   // Test helpers
-  _open() { this.readyState = MockWebSocket.OPEN; this.onopen?.(); }
+  _open() {
+    this.readyState = MockWebSocket.OPEN;
+    this.onopen?.();
+  }
   _reply(id: number, result: unknown) {
     this.onmessage?.({ data: JSON.stringify({ jsonrpc: '2.0', id, result }) });
   }
@@ -63,7 +71,12 @@ describe('WsClient.call timeout', () => {
     vi.advanceTimersByTime(4999);
     // Still pending right before the deadline.
     let racedEarly = false;
-    await Promise.race([caught.then(() => { racedEarly = true; }), Promise.resolve()]);
+    await Promise.race([
+      caught.then(() => {
+        racedEarly = true;
+      }),
+      Promise.resolve(),
+    ]);
     expect(racedEarly).toBe(false);
 
     vi.advanceTimersByTime(2);
@@ -125,8 +138,12 @@ describe('WsClient.call timeout', () => {
     const promise = client.call('forever.method', undefined, 0);
     let settled = false;
     void promise.then(
-      () => { settled = true; },
-      () => { settled = true; },
+      () => {
+        settled = true;
+      },
+      () => {
+        settled = true;
+      },
     );
 
     // Far past the default ceiling — must still not have settled.

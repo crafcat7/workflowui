@@ -39,9 +39,9 @@ namespace workflow {
  * `consumers` while reading layer rows.
  */
 class NcnnInspector : public ModelInspector {
-public:
-    std::string vendor() const override { return "ncnn"; }
-    ModelGraph inspect(const ModelInspectRequest& req) override;
+ public:
+  std::string vendor() const override { return "ncnn"; }
+  ModelGraph inspect(const ModelInspectRequest& req) override;
 };
 
-} // namespace workflow
+}  // namespace workflow

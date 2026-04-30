@@ -63,9 +63,10 @@ export const useDebugStore = create<DebugState>((set, get) => ({
 
   addLog: (entry) => {
     const logs = get().logs;
-    const next = logs.length >= MAX_LOG_ENTRIES
-      ? [...logs.slice(logs.length - MAX_LOG_ENTRIES + 1), { ...entry, timestamp: Date.now() }]
-      : [...logs, { ...entry, timestamp: Date.now() }];
+    const next =
+      logs.length >= MAX_LOG_ENTRIES
+        ? [...logs.slice(logs.length - MAX_LOG_ENTRIES + 1), { ...entry, timestamp: Date.now() }]
+        : [...logs, { ...entry, timestamp: Date.now() }];
     set({ logs: next });
   },
 

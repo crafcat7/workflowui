@@ -19,7 +19,14 @@ interface LabeledHandleProps {
   top?: string;
 }
 
-export function LabeledHandle({ type, position, id, label, dataType = 'generic', top }: LabeledHandleProps) {
+export function LabeledHandle({
+  type,
+  position,
+  id,
+  label,
+  dataType = 'generic',
+  top,
+}: LabeledHandleProps) {
   const isLeft = position === Position.Left;
 
   return (

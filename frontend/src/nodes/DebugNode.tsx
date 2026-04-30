@@ -29,7 +29,10 @@ export function DebugNode({ id, data: d }: NodeProps<Node<WorkflowNodeData>>) {
   return (
     <div className="workflow-node">
       <div className="node-header">
-        <span className="icon"><InspectIcon /></span> Inspect
+        <span className="icon">
+          <InspectIcon />
+        </span>{' '}
+        Inspect
       </div>
       <div className="node-body">
         <div>{getStatusText()}</div>
@@ -45,8 +48,20 @@ export function DebugNode({ id, data: d }: NodeProps<Node<WorkflowNodeData>>) {
       <div className="node-footer">
         <span className={`node-status ${d.status}`}>{d.status}</span>
       </div>
-      <LabeledHandle type="target" position={Position.Left} id="data_in" label="in" dataType="generic" />
-      <LabeledHandle type="source" position={Position.Right} id="data_out" label="out" dataType="generic" />
+      <LabeledHandle
+        type="target"
+        position={Position.Left}
+        id="data_in"
+        label="in"
+        dataType="generic"
+      />
+      <LabeledHandle
+        type="source"
+        position={Position.Right}
+        id="data_out"
+        label="out"
+        dataType="generic"
+      />
     </div>
   );
 }

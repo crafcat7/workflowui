@@ -70,7 +70,9 @@ export function NodePalette() {
           onChange={(e) => setQuery(e.target.value)}
           // Esc clears the filter — matches the idiom in most IDE
           // command palettes and keeps keyboard flow intact.
-          onKeyDown={(e) => { if (e.key === 'Escape') setQuery(''); }}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') setQuery('');
+          }}
           aria-label="Search nodes"
         />
       </div>
@@ -95,7 +97,9 @@ export function NodePalette() {
                   without swapping glyphs (the +/- swap was abrupt
                   and looked unfinished against the rest of the dark-
                   mode polish). */}
-              <span className="palette-cat-toggle" data-collapsed={isCollapsed} aria-hidden="true">▾</span>
+              <span className="palette-cat-toggle" data-collapsed={isCollapsed} aria-hidden="true">
+                ▾
+              </span>
             </div>
             {!isCollapsed && (
               <div className="palette-items">

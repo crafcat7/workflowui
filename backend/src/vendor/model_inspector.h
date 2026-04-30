@@ -37,39 +37,39 @@ namespace workflow {
  *     round-trip.
  */
 struct ModelLayer {
-    std::string id;                          // layer name (unique within graph)
-    std::string type;                        // "Convolution", "ReLU", ...
-    std::vector<std::string> input_blobs;
-    std::vector<std::string> output_blobs;
-    nlohmann::json params = nlohmann::json::object(); // engine-specific k=v
+  std::string id;    // layer name (unique within graph)
+  std::string type;  // "Convolution", "ReLU", ...
+  std::vector<std::string> input_blobs;
+  std::vector<std::string> output_blobs;
+  nlohmann::json params = nlohmann::json::object();  // engine-specific k=v
 };
 
 struct ModelBlob {
-    std::string name;
-    // Optional: ncnn .param does not always carry shape annotations
-    // (the inference-time shape is determined by the input tensor +
-    // each layer's transfer function). Empty when unknown.
-    std::vector<int> shape;
-    std::string producer; // layer id that emits this blob; empty for graph inputs
-    std::vector<std::string> consumers; // layer ids reading this blob
+  std::string name;
+  // Optional: ncnn .param does not always carry shape annotations
+  // (the inference-time shape is determined by the input tensor +
+  // each layer's transfer function). Empty when unknown.
+  std::vector<int> shape;
+  std::string producer;                // layer id that emits this blob; empty for graph inputs
+  std::vector<std::string> consumers;  // layer ids reading this blob
 };
 
 struct ModelGraph {
-    std::string vendor;          // matches `ModelInspector::vendor()`
-    std::string format_version;  // engine-specific tag, e.g. "ncnn-7767517"
-    std::vector<ModelLayer> layers;
-    std::vector<ModelBlob>  blobs;
+  std::string vendor;          // matches `ModelInspector::vendor()`
+  std::string format_version;  // engine-specific tag, e.g. "ncnn-7767517"
+  std::vector<ModelLayer> layers;
+  std::vector<ModelBlob> blobs;
 
-    // Whole-model metadata — surfaced in the drawer header.
-    int64_t param_bytes = 0;
-    int64_t bin_bytes = 0;
-    std::vector<std::string> input_blob_names;
-    std::vector<std::string> output_blob_names;
+  // Whole-model metadata — surfaced in the drawer header.
+  int64_t param_bytes = 0;
+  int64_t bin_bytes = 0;
+  std::vector<std::string> input_blob_names;
+  std::vector<std::string> output_blob_names;
 
-    // Reserved: this iteration always returns false. Wired through so
-    // the frontend can branch on it today instead of waiting for a
-    // schema bump when edit support lands.
-    bool editable = false;
+  // Reserved: this iteration always returns false. Wired through so
+  // the frontend can branch on it today instead of waiting for a
+  // schema bump when edit support lands.
+  bool editable = false;
 };
 
 /**
@@ -78,8 +78,8 @@ struct ModelGraph {
  * is optional because pure structural inspection only needs .param.
  */
 struct ModelInspectRequest {
-    std::string param_path;
-    std::string model_path; // optional — empty means "metadata only, skip bin"
+  std::string param_path;
+  std::string model_path;  // optional — empty means "metadata only, skip bin"
 };
 
 /**
@@ -89,19 +89,19 @@ struct ModelInspectRequest {
  * make sense without any frontend translation.
  */
 class ModelInspectError : public std::runtime_error {
-public:
-    using std::runtime_error::runtime_error;
+ public:
+  using std::runtime_error::runtime_error;
 };
 
 class ModelInspector {
-public:
-    virtual ~ModelInspector() = default;
-    // Stable identifier matching the `vendor` field on inference
-    // nodes ("ncnn" today). The frontend dispatches drawer requests
-    // by this name so multi-vendor coexistence works without an
-    // engine registry on the FE side.
-    virtual std::string vendor() const = 0;
-    virtual ModelGraph inspect(const ModelInspectRequest& req) = 0;
+ public:
+  virtual ~ModelInspector() = default;
+  // Stable identifier matching the `vendor` field on inference
+  // nodes ("ncnn" today). The frontend dispatches drawer requests
+  // by this name so multi-vendor coexistence works without an
+  // engine registry on the FE side.
+  virtual std::string vendor() const = 0;
+  virtual ModelGraph inspect(const ModelInspectRequest& req) = 0;
 };
 
 // ── JSON conversions ────────────────────────────────────────────────
@@ -111,40 +111,42 @@ public:
 // the wire contract documented on ModelGraph above.
 
 inline nlohmann::json to_json(const ModelLayer& l) {
-    return nlohmann::json{
-        {"id", l.id},
-        {"type", l.type},
-        {"input_blobs", l.input_blobs},
-        {"output_blobs", l.output_blobs},
-        {"params", l.params},
-    };
+  return nlohmann::json{
+      {"id", l.id},
+      {"type", l.type},
+      {"input_blobs", l.input_blobs},
+      {"output_blobs", l.output_blobs},
+      {"params", l.params},
+  };
 }
 
 inline nlohmann::json to_json(const ModelBlob& b) {
-    return nlohmann::json{
-        {"name", b.name},
-        {"shape", b.shape},
-        {"producer", b.producer},
-        {"consumers", b.consumers},
-    };
+  return nlohmann::json{
+      {"name", b.name},
+      {"shape", b.shape},
+      {"producer", b.producer},
+      {"consumers", b.consumers},
+  };
 }
 
 inline nlohmann::json to_json(const ModelGraph& g) {
-    nlohmann::json layers = nlohmann::json::array();
-    for (const auto& l : g.layers) layers.push_back(to_json(l));
-    nlohmann::json blobs = nlohmann::json::array();
-    for (const auto& b : g.blobs) blobs.push_back(to_json(b));
-    return nlohmann::json{
-        {"vendor", g.vendor},
-        {"format_version", g.format_version},
-        {"layers", std::move(layers)},
-        {"blobs", std::move(blobs)},
-        {"param_bytes", g.param_bytes},
-        {"bin_bytes", g.bin_bytes},
-        {"input_blob_names", g.input_blob_names},
-        {"output_blob_names", g.output_blob_names},
-        {"editable", g.editable},
-    };
+  nlohmann::json layers = nlohmann::json::array();
+  for (const auto& l : g.layers)
+    layers.push_back(to_json(l));
+  nlohmann::json blobs = nlohmann::json::array();
+  for (const auto& b : g.blobs)
+    blobs.push_back(to_json(b));
+  return nlohmann::json{
+      {"vendor", g.vendor},
+      {"format_version", g.format_version},
+      {"layers", std::move(layers)},
+      {"blobs", std::move(blobs)},
+      {"param_bytes", g.param_bytes},
+      {"bin_bytes", g.bin_bytes},
+      {"input_blob_names", g.input_blob_names},
+      {"output_blob_names", g.output_blob_names},
+      {"editable", g.editable},
+  };
 }
 
-} // namespace workflow
+}  // namespace workflow

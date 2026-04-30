@@ -13,14 +13,23 @@ import { SaveImageIcon } from './NodeIcons';
 export function SaveImageNode({ data: d }: NodeProps<Node<WorkflowNodeData>>) {
   return (
     <div className="workflow-node">
-      <div className="node-header"><span className="icon"><SaveImageIcon /></span> Save Image</div>
-      <div className="node-body">
-        {(d.config?.filePath as string) || 'output.png'}
+      <div className="node-header">
+        <span className="icon">
+          <SaveImageIcon />
+        </span>{' '}
+        Save Image
       </div>
+      <div className="node-body">{(d.config?.filePath as string) || 'output.png'}</div>
       <div className="node-footer">
         <span className={`node-status ${d.status}`}>{d.status}</span>
       </div>
-      <LabeledHandle type="target" position={Position.Left} id="image_data" label="image" dataType="image" />
+      <LabeledHandle
+        type="target"
+        position={Position.Left}
+        id="image_data"
+        label="image"
+        dataType="image"
+      />
     </div>
   );
 }

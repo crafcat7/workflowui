@@ -97,24 +97,66 @@ function fmtShape(shape: number[]): string {
 function headerBgFor(type: string, light: boolean): string {
   if (light) {
     if (type === 'Input') return '#d4edee';
-    if (type === 'Convolution' || type === 'ConvolutionDepthWise' || type === 'InnerProduct' || type === 'Deconvolution')
+    if (
+      type === 'Convolution' ||
+      type === 'ConvolutionDepthWise' ||
+      type === 'InnerProduct' ||
+      type === 'Deconvolution'
+    )
       return '#dbe5f6';
-    if (type === 'ReLU' || type === 'Sigmoid' || type === 'PReLU' || type === 'HardSwish' || type === 'Mish' || type === 'Swish')
+    if (
+      type === 'ReLU' ||
+      type === 'Sigmoid' ||
+      type === 'PReLU' ||
+      type === 'HardSwish' ||
+      type === 'Mish' ||
+      type === 'Swish'
+    )
       return '#e8ddf5';
-    if (type === 'Pooling' || type === 'PoolingV2' || type === 'GlobalPooling')
-      return '#ddf0e0';
-    if (type === 'BatchNorm' || type === 'Scale' || type === 'Concat' || type === 'Split' || type === 'Eltwise' || type === 'Reshape' || type === 'Permute' || type === 'Crop' || type === 'Flatten')
+    if (type === 'Pooling' || type === 'PoolingV2' || type === 'GlobalPooling') return '#ddf0e0';
+    if (
+      type === 'BatchNorm' ||
+      type === 'Scale' ||
+      type === 'Concat' ||
+      type === 'Split' ||
+      type === 'Eltwise' ||
+      type === 'Reshape' ||
+      type === 'Permute' ||
+      type === 'Crop' ||
+      type === 'Flatten'
+    )
       return '#f0ead6';
     return '#e8e8ef';
   }
   if (type === 'Input') return '#1a3a3a';
-  if (type === 'Convolution' || type === 'ConvolutionDepthWise' || type === 'InnerProduct' || type === 'Deconvolution')
+  if (
+    type === 'Convolution' ||
+    type === 'ConvolutionDepthWise' ||
+    type === 'InnerProduct' ||
+    type === 'Deconvolution'
+  )
     return '#2a3a5a';
-  if (type === 'ReLU' || type === 'Sigmoid' || type === 'PReLU' || type === 'HardSwish' || type === 'Mish' || type === 'Swish')
+  if (
+    type === 'ReLU' ||
+    type === 'Sigmoid' ||
+    type === 'PReLU' ||
+    type === 'HardSwish' ||
+    type === 'Mish' ||
+    type === 'Swish'
+  )
     return '#3a2a4a';
-  if (type === 'Pooling' || type === 'PoolingV2' || type === 'GlobalPooling')
-    return '#2a4a3a';
-  if (type === 'BatchNorm' || type === 'Scale' || type === 'Concat' || type === 'Split' || type === 'Eltwise' || type === 'Reshape' || type === 'Permute' || type === 'Crop' || type === 'Flatten')
+  if (type === 'Pooling' || type === 'PoolingV2' || type === 'GlobalPooling') return '#2a4a3a';
+  if (
+    type === 'BatchNorm' ||
+    type === 'Scale' ||
+    type === 'Concat' ||
+    type === 'Split' ||
+    type === 'Eltwise' ||
+    type === 'Reshape' ||
+    type === 'Permute' ||
+    type === 'Crop' ||
+    type === 'Flatten'
+  )
     return '#3a3a2a';
   return '#1a1a3a';
 }
@@ -135,11 +177,7 @@ function fmtKeyParams(type: string, params: Record<string, unknown>): string {
     if (typeof v === 'string' && /^-?\d+$/.test(v)) return Number(v);
     return undefined;
   };
-  if (
-    type === 'Convolution' ||
-    type === 'ConvolutionDepthWise' ||
-    type === 'Deconvolution'
-  ) {
+  if (type === 'Convolution' || type === 'ConvolutionDepthWise' || type === 'Deconvolution') {
     const out = num('0');
     const k = num('1');
     const s = num('3');
@@ -193,9 +231,7 @@ interface LayerNodeData extends Record<string, unknown> {
 function LayerNode({ data }: NodeProps<Node<LayerNodeData>>): ReactElement {
   const { type, id, outShape, keyParams, headerBg, selected, light } = data;
   const bg = light ? '#ffffff' : '#0e0e22';
-  const borderColor = selected
-    ? (light ? '#9b59b6' : '#c39be0')
-    : (light ? '#d0d0d7' : '#2a2a4a');
+  const borderColor = selected ? (light ? '#9b59b6' : '#c39be0') : light ? '#d0d0d7' : '#2a2a4a';
   const textColor = light ? '#1d1d1f' : '#d0d0e8';
   const idColor = light ? '#6e6e73' : '#9090b0';
   const paramColor = light ? '#424245' : '#a0a0c0';
@@ -209,7 +245,9 @@ function LayerNode({ data }: NodeProps<Node<LayerNodeData>>): ReactElement {
         background: bg,
         border: `1px solid ${borderColor}`,
         boxShadow: selected
-          ? (light ? '0 0 0 2px rgba(155, 89, 182, 0.25)' : '0 0 0 2px rgba(155, 89, 182, 0.35)')
+          ? light
+            ? '0 0 0 2px rgba(155, 89, 182, 0.25)'
+            : '0 0 0 2px rgba(155, 89, 182, 0.35)'
           : 'none',
         color: textColor,
         borderRadius: 5,
@@ -478,12 +516,17 @@ export function ModelInspectorDrawer({
     >
       <header className="model-inspector-header">
         <h2>Model Inspector</h2>
-        <button type="button" onClick={onClose} aria-label="Close">×</button>
+        <button type="button" onClick={onClose} aria-label="Close">
+          ×
+        </button>
       </header>
 
       {loading && <div className="model-inspector-status">Loading…</div>}
       {error && (
-        <div className="model-inspector-status model-inspector-error" data-testid="model-inspector-error">
+        <div
+          className="model-inspector-status model-inspector-error"
+          data-testid="model-inspector-error"
+        >
           {/* code 0 → transport, -32602 → bad request, others → server/parser */}
           {error.code === 0
             ? `Network error: ${error.message}`
@@ -526,10 +569,7 @@ export function ModelInspectorDrawer({
             </ReactFlowProvider>
           </section>
 
-          <section
-            className="model-inspector-layers"
-            data-testid="model-inspector-layers"
-          >
+          <section className="model-inspector-layers" data-testid="model-inspector-layers">
             <table>
               <thead>
                 {/* Column meanings:
@@ -540,7 +580,14 @@ export function ModelInspectorDrawer({
                     Output shape — first output blob's NCHW (or CHW)
                       dimensions. Mirrors the canvas node footer so
                       the table reads consistently with the graph. */}
-                <tr><th>#</th><th>Type</th><th>Name</th><th>#In</th><th>#Out</th><th>Output shape</th></tr>
+                <tr>
+                  <th>#</th>
+                  <th>Type</th>
+                  <th>Name</th>
+                  <th>#In</th>
+                  <th>#Out</th>
+                  <th>Output shape</th>
+                </tr>
               </thead>
               <tbody>
                 {graph.layers.map((l, i) => {
@@ -550,31 +597,31 @@ export function ModelInspectorDrawer({
                   // than threading the formatted string through
                   // node.data and back out for the table render.
                   const firstOut = l.output_blobs[0];
-                  const blob = firstOut
-                    ? graph.blobs.find((b) => b.name === firstOut)
-                    : undefined;
+                  const blob = firstOut ? graph.blobs.find((b) => b.name === firstOut) : undefined;
                   const outShape = fmtShape(blob?.shape ?? []);
                   return (
-                  <tr
-                    key={l.id}
-                    ref={(el) => {
-                      // Register/deregister row ref so the
-                      // selectedLayer effect can scroll it into
-                      // view. We must set null on unmount to avoid
-                      // pinning detached DOM in the Map.
-                      if (el) rowRefs.current.set(l.id, el);
-                      else rowRefs.current.delete(l.id);
-                    }}
-                    className={l.id === selectedLayer ? 'selected' : undefined}
-                    onClick={() => setSelectedLayer(l.id)}
-                  >
-                    <td>{i}</td>
-                    <td>{l.type}</td>
-                    <td>{l.id}</td>
-                    <td>{l.input_blobs.length}</td>
-                    <td>{l.output_blobs.length}</td>
-                    <td style={{ fontFamily: 'monospace', color: light ? '#0058b0' : '#7ab8ff' }}>{outShape}</td>
-                  </tr>
+                    <tr
+                      key={l.id}
+                      ref={(el) => {
+                        // Register/deregister row ref so the
+                        // selectedLayer effect can scroll it into
+                        // view. We must set null on unmount to avoid
+                        // pinning detached DOM in the Map.
+                        if (el) rowRefs.current.set(l.id, el);
+                        else rowRefs.current.delete(l.id);
+                      }}
+                      className={l.id === selectedLayer ? 'selected' : undefined}
+                      onClick={() => setSelectedLayer(l.id)}
+                    >
+                      <td>{i}</td>
+                      <td>{l.type}</td>
+                      <td>{l.id}</td>
+                      <td>{l.input_blobs.length}</td>
+                      <td>{l.output_blobs.length}</td>
+                      <td style={{ fontFamily: 'monospace', color: light ? '#0058b0' : '#7ab8ff' }}>
+                        {outShape}
+                      </td>
+                    </tr>
                   );
                 })}
               </tbody>
@@ -605,4 +652,5 @@ function fmtBytes(n: number): string {
 }
 
 // Exported for unit testing without instantiating ReactFlow.
+// eslint-disable-next-line react-refresh/only-export-components -- test-only exports
 export { layoutGraph as __layoutGraphForTest, fmtBytes as __fmtBytesForTest };

@@ -11,7 +11,9 @@ vi.mock('../transport/WsClient', () => ({
   wsClient: {
     onNotification: vi.fn((cb: (method: string, params: unknown) => void) => {
       capturedHandler = cb;
-      return () => { capturedHandler = null; };
+      return () => {
+        capturedHandler = null;
+      };
     }),
     // Reconnect subscription isn't exercised here — we call
     // reconcileFromSnapshot directly instead of firing through the
@@ -25,7 +27,12 @@ vi.mock('../transport/WsClient', () => ({
 vi.mock('../store/toastStore', () => ({ showToast: vi.fn() }));
 
 // Import AFTER mocks so the runner picks them up.
-import { initWorkflowRunner, setActiveRunId, _getActiveRunIdForTest, reconcileFromSnapshot } from './WorkflowRunner';
+import {
+  initWorkflowRunner,
+  setActiveRunId,
+  _getActiveRunIdForTest,
+  reconcileFromSnapshot,
+} from './WorkflowRunner';
 import { useDebugStore } from '../store/debugStore';
 import { showToast } from '../store/toastStore';
 
@@ -39,7 +46,9 @@ function seedNode(id: string) {
   // the cache entry, reconcileFromSnapshot skips this node (it can't
   // tell a real unknown id from a test that forgot to wire things up).
   const node = {
-    id, type: 'debug', position: { x: 0, y: 0 },
+    id,
+    type: 'debug',
+    position: { x: 0, y: 0 },
     data: { label: id, type: 'debug', status: 'idle', config: {} },
   };
   useWorkflowStore.setState({
@@ -95,7 +104,11 @@ describe('WorkflowRunner run_id filter', () => {
     // says "PAUSED".
     setActiveRunId('run-7-1');
     const inputs = [
-      { handle: 'input_data', source: 'n_src:output_data', value: { type: 'tensor', length: 3, preview: [0.1, 0.2, 0.3] } },
+      {
+        handle: 'input_data',
+        source: 'n_src:output_data',
+        value: { type: 'tensor', length: 3, preview: [0.1, 0.2, 0.3] },
+      },
     ];
     emit('debug.paused', {
       node_id: 'n1',
@@ -113,7 +126,10 @@ describe('WorkflowRunner run_id filter', () => {
     // Forward-compat: if the wire schema later wraps everything under
     // a `data` key, the runner should still light up DebugInputsPanel.
     setActiveRunId('run-8-2');
-    const nested = { type: 'inference', inputs: [{ handle: 'x', source: 'a:b', value: { type: 'empty' } }] };
+    const nested = {
+      type: 'inference',
+      inputs: [{ handle: 'x', source: 'a:b', value: { type: 'empty' } }],
+    };
     emit('debug.paused', { node_id: 'n1', data: nested, run_id: 'run-8-2' });
     expect(useDebugStore.getState().inspectData).toEqual(nested);
   });
@@ -193,7 +209,11 @@ describe('WorkflowRunner validation_failed', () => {
       status: 'validation_failed',
       errors: [
         { kind: 'type_mismatch', message: 'port int != string', node_id: 'n1' },
-        { kind: 'dangling_edge', message: 'edge points at removed node', edge: 'n1:out -> ghost:in' },
+        {
+          kind: 'dangling_edge',
+          message: 'edge points at removed node',
+          edge: 'n1:out -> ghost:in',
+        },
       ],
     });
 
@@ -221,7 +241,9 @@ describe('WorkflowRunner validation_failed', () => {
     emit('node.status', {
       node_id: '__workflow__',
       status: 'validation_failed',
-      errors: [{ kind: 'unknown_node_type', message: 'no handler for type=bogus', node_id: 'ghost' }],
+      errors: [
+        { kind: 'unknown_node_type', message: 'no handler for type=bogus', node_id: 'ghost' },
+      ],
     });
 
     expect(showToast).toHaveBeenCalledWith(

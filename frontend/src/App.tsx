@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 // SPDX-FileCopyrightText: 2026 WorkflowUI contributors
+/* eslint-disable react-hooks/refs -- ref-backed memo cache is intentional for node styling perf */
 import { useCallback, useMemo, useRef, useState } from 'react';
 import {
   ReactFlow,
@@ -31,6 +32,7 @@ import { useResizable } from './hooks/useResizable';
 import { nodeTypes } from './nodes';
 import { validateConnection, getPort } from './nodes/portSchema';
 import { CATEGORY_VISUALS, getManifestEntry } from './nodes/manifest';
+import { computeNodeClassName } from './utils/nodeClassName';
 import { NodePalette } from './panels/NodePalette';
 import { PropertiesPanel } from './panels/PropertiesPanel';
 import { ConsolePanel } from './panels/ConsolePanel';
@@ -135,7 +137,16 @@ function AppInner() {
   const lastRejectionRef = useRef<string | null>(null);
 
   const isValidConnection = useCallback(
-    (c: Connection | { source: string; target: string; sourceHandle?: string | null; targetHandle?: string | null }) => {
+    (
+      c:
+        | Connection
+        | {
+            source: string;
+            target: string;
+            sourceHandle?: string | null;
+            targetHandle?: string | null;
+          },
+    ) => {
       const conn = {
         source: c.source,
         target: c.target,
@@ -169,10 +180,7 @@ function AppInner() {
       const srcNode = useWorkflowStore.getState().nodesById.get(connection.source ?? '');
       const srcPort = getPort(srcNode?.type, connection.sourceHandle);
       setEdges((eds) =>
-        addEdge(
-          { ...connection, data: { dataType: srcPort?.dataType ?? 'generic' } },
-          eds,
-        ),
+        addEdge({ ...connection, data: { dataType: srcPort?.dataType ?? 'generic' } }, eds),
       );
     },
     [setEdges],
@@ -245,20 +253,19 @@ function AppInner() {
   const styledEdges = useMemo(
     () =>
       edges.map((e) => {
-        const dataType =
-          (e.data?.dataType as string | undefined) ?? 'generic';
+        const dataType = (e.data?.dataType as string | undefined) ?? 'generic';
         const isCyclic = cyclicEdgeIds.has(e.id);
         const baseStroke = isCyclic
           ? 'var(--edge-cyclic)'
           : dataType === 'net'
             ? 'var(--edge-net)'
             : dataType === 'image'
-            ? 'var(--edge-image)'
-            : dataType === 'tensor'
-            ? 'var(--edge-tensor)'
-            : dataType === 'branch'
-            ? 'var(--edge-branch)'
-            : 'var(--edge-generic)';
+              ? 'var(--edge-image)'
+              : dataType === 'tensor'
+                ? 'var(--edge-tensor)'
+                : dataType === 'branch'
+                  ? 'var(--edge-branch)'
+                  : 'var(--edge-generic)';
         return {
           ...e,
           type: 'smoothstep',
@@ -272,8 +279,8 @@ function AppInner() {
           style: isCyclic
             ? { stroke: baseStroke, strokeWidth: 3, strokeDasharray: '6 3' }
             : isRunning
-            ? { stroke: baseStroke, strokeWidth: 2.5 }
-            : { stroke: baseStroke, strokeWidth: 1.5, opacity: 0.75 },
+              ? { stroke: baseStroke, strokeWidth: 2.5 }
+              : { stroke: baseStroke, strokeWidth: 1.5, opacity: 0.75 },
           // Arrow heads make data-flow direction unambiguous —
           // smoothstep paths can otherwise look bidirectional at a
           // glance, especially on tight loops. Colour matches the
@@ -302,12 +309,7 @@ function AppInner() {
   // the prior string when the tuple is unchanged. The cached object
   // identity also lets ReactFlow skip per-node re-render work for
   // unchanged nodes.
-  const styledNodeCacheRef = useRef(
-    new Map<
-      string,
-      { key: string; className: string }
-    >(),
-  );
+  const styledNodeCacheRef = useRef(new Map<string, { key: string; className: string }>());
 
   const styledNodes = useMemo(() => {
     const bpMap = new Map(breakpoints.map((b) => [b.nodeId, b.enabled]));
@@ -414,7 +416,7 @@ function AppInner() {
           <Controls position="bottom-left">
             <ControlButton onClick={onLayout} title="Auto Layout">
               <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
-                <path d="M4 4h4v4H4zm6 0h4v4h-4zm6 0h4v4h-4zM4 10h4v4H4zm6 0h4v4h-4zm6 0h4v4h-4zM4 16h4v4H4zm6 0h4v4h-4zm6 0h4v4h-4z"/>
+                <path d="M4 4h4v4H4zm6 0h4v4h-4zm6 0h4v4h-4zM4 10h4v4H4zm6 0h4v4h-4zm6 0h4v4h-4zM4 16h4v4H4zm6 0h4v4h-4zm6 0h4v4h-4z" />
               </svg>
             </ControlButton>
           </Controls>
@@ -425,7 +427,12 @@ function AppInner() {
             pannable
             zoomable
           />
-          <Background variant={BackgroundVariant.Dots} gap={16} size={1} color={theme === 'light' ? '#d0d0d5' : '#333'} />
+          <Background
+            variant={BackgroundVariant.Dots}
+            gap={16}
+            size={1}
+            color={theme === 'light' ? '#d0d0d5' : '#333'}
+          />
           {nodes.length === 0 && (
             <div className="empty-state">
               <h2>Workflow Canvas</h2>
@@ -464,9 +471,7 @@ function AppInner() {
         onChange={onFileChange}
       />
 
-      {contextMenu && (
-        <NodeContextMenu menu={contextMenu} onClose={() => setContextMenu(null)} />
-      )}
+      {contextMenu && <NodeContextMenu menu={contextMenu} onClose={() => setContextMenu(null)} />}
     </div>
   );
 }
@@ -481,38 +486,6 @@ function App() {
 
 function getCategoryClass(type: string): string {
   return nodeCategory(type).cssClass;
-}
-
-/**
- * Pure className builder used by the styledNodes memo. Exported for
- * unit-test coverage so the cache key in `styledNodes` and the
- * resulting className stay in sync — a regression in either side
- * would silently degrade the badge styling without any test catching
- * it (the visual diff is too small for snapshot tests, the bug is
- * cache-correctness not visual).
- *
- * The output deliberately preserves token order so existing CSS
- * selectors that key on adjacency (`.inference.node-running`) keep
- * matching, and skips empty tokens so the className doesn't gain
- * trailing whitespace as conditions toggle off.
- */
-export function computeNodeClassName(args: {
-  category: string;
-  status: string | undefined;
-  selected: boolean;
-  hasBp: boolean;
-  bpEnabled: boolean;
-}): string {
-  const { category, status, selected, hasBp, bpEnabled } = args;
-  return [
-    category,
-    selected ? 'selected' : '',
-    status === 'running' ? 'node-running' : '',
-    status === 'paused' ? 'node-paused' : '',
-    hasBp ? (bpEnabled ? 'node-bp-armed' : 'node-bp-disabled') : '',
-  ]
-    .filter(Boolean)
-    .join(' ');
 }
 
 /**

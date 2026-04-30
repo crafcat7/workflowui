@@ -19,7 +19,9 @@ function handleRpc(ws, msg) {
   try {
     req = JSON.parse(msg);
   } catch {
-    ws.send(JSON.stringify({ jsonrpc: '2.0', error: { code: -32700, message: 'Parse error' }, id: null }));
+    ws.send(
+      JSON.stringify({ jsonrpc: '2.0', error: { code: -32700, message: 'Parse error' }, id: null }),
+    );
     return;
   }
 
@@ -37,13 +39,16 @@ function handleRpc(ws, msg) {
 
   // Methods
   if (method === 'vendor.getConfigSchema') {
-    ws.send(JSON.stringify({
-      jsonrpc: '2.0', id,
-      result: {
-        vendor: 'stub',
-        fields: []
-      }
-    }));
+    ws.send(
+      JSON.stringify({
+        jsonrpc: '2.0',
+        id,
+        result: {
+          vendor: 'stub',
+          fields: [],
+        },
+      }),
+    );
     return;
   }
 
@@ -59,9 +64,15 @@ function handleRpc(ws, msg) {
       delay += 50;
 
       if (node.type === 'createNet') {
-        setTimeout(() => broadcast(ws, 'node.status', { node_id: nid, status: 'done', elapsed_ms: 0.1 }), delay);
+        setTimeout(
+          () => broadcast(ws, 'node.status', { node_id: nid, status: 'done', elapsed_ms: 0.1 }),
+          delay,
+        );
       } else if (node.type === 'inference') {
-        setTimeout(() => broadcast(ws, 'node.status', { node_id: nid, status: 'done', elapsed_ms: 1.0 }), delay);
+        setTimeout(
+          () => broadcast(ws, 'node.status', { node_id: nid, status: 'done', elapsed_ms: 1.0 }),
+          delay,
+        );
       } else {
         // `debug` nodes used to emit debug.paused here, but nothing was wired
         // up to resume them (debug.continue is a no-op notification), so the
@@ -96,7 +107,13 @@ function handleRpc(ws, msg) {
   }
 
   // Unknown method
-  ws.send(JSON.stringify({ jsonrpc: '2.0', id, error: { code: -32601, message: `Method not found: ${method}` } }));
+  ws.send(
+    JSON.stringify({
+      jsonrpc: '2.0',
+      id,
+      error: { code: -32601, message: `Method not found: ${method}` },
+    }),
+  );
 }
 
 wss.on('connection', (ws) => {

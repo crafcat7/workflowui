@@ -163,15 +163,23 @@ export function NodeContextMenu({ menu, onClose }: Props) {
       onKeyDown={handleMenuKeyDown}
     >
       <button className="ctx-item" onClick={toggleBreakpoint} role="menuitem">
-        <span className="ctx-icon" aria-hidden="true">{armed ? '🔴' : '⚪'}</span>
+        <span className="ctx-icon" aria-hidden="true">
+          {armed ? '🔴' : '⚪'}
+        </span>
         {armed ? 'Remove breakpoint' : 'Add breakpoint'}
       </button>
       <div className="ctx-separator" role="separator" aria-hidden="true" />
       <button className="ctx-item" onClick={handleDuplicate} role="menuitem">
-        <span className="ctx-icon" aria-hidden="true">⎘</span> Duplicate
+        <span className="ctx-icon" aria-hidden="true">
+          ⎘
+        </span>{' '}
+        Duplicate
       </button>
       <button className="ctx-item ctx-danger" onClick={handleDelete} role="menuitem">
-        <span className="ctx-icon" aria-hidden="true">✕</span> Delete
+        <span className="ctx-icon" aria-hidden="true">
+          ✕
+        </span>{' '}
+        Delete
       </button>
     </div>
   );

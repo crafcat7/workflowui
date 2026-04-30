@@ -104,13 +104,21 @@ test.describe('Node CRUD', () => {
 
     const pane = page.locator('.react-flow__pane');
     // Add Input Tensor
-    await page.locator('.palette-node-card').filter({ hasText: 'Input Tensor' }).first().dragTo(pane);
+    await page
+      .locator('.palette-node-card')
+      .filter({ hasText: 'Input Tensor' })
+      .first()
+      .dragTo(pane);
     // Add Create Net
     await page.locator('.palette-node-card').filter({ hasText: 'Create Net' }).first().dragTo(pane);
     // Add Inference
     await page.locator('.palette-node-card').filter({ hasText: 'Inference' }).first().dragTo(pane);
     // Add Postprocess
-    await page.locator('.palette-node-card').filter({ hasText: 'Postprocess' }).first().dragTo(pane);
+    await page
+      .locator('.palette-node-card')
+      .filter({ hasText: 'Postprocess' })
+      .first()
+      .dragTo(pane);
 
     await expect(page.locator('.react-flow__node')).toHaveCount(4);
   });
@@ -119,7 +127,11 @@ test.describe('Node CRUD', () => {
     await page.goto('/');
     await waitForConnection(page);
 
-    await page.locator('.palette-node-card').filter({ hasText: 'Input Tensor' }).first().dragTo(page.locator('.react-flow__pane'));
+    await page
+      .locator('.palette-node-card')
+      .filter({ hasText: 'Input Tensor' })
+      .first()
+      .dragTo(page.locator('.react-flow__pane'));
     // Click on the node
     await page.locator('.react-flow__node').first().click();
 
@@ -132,7 +144,11 @@ test.describe('Node CRUD', () => {
     await page.goto('/');
     await waitForConnection(page);
 
-    await page.locator('.palette-node-card').filter({ hasText: 'Output' }).first().dragTo(page.locator('.react-flow__pane'));
+    await page
+      .locator('.palette-node-card')
+      .filter({ hasText: 'Output' })
+      .first()
+      .dragTo(page.locator('.react-flow__pane'));
     await expect(page.locator('.react-flow__node')).toHaveCount(1);
 
     // Select the node
@@ -176,7 +192,10 @@ test.describe('Workflow execution', () => {
       .dragTo(page.locator('.react-flow__pane'));
 
     // Click Run button
-    const runBtn = page.locator('button').filter({ hasText: /Run|Execute/i }).first();
+    const runBtn = page
+      .locator('button')
+      .filter({ hasText: /Run|Execute/i })
+      .first();
     await runBtn.click();
 
     // The mock backend emits workflow.complete after all nodes report done.
@@ -202,7 +221,11 @@ test.describe('Save / Load workflow', () => {
 
     // Add a node
     const pane = page.locator('.react-flow__pane');
-    await page.locator('.palette-node-card').filter({ hasText: 'Input Tensor' }).first().dragTo(pane);
+    await page
+      .locator('.palette-node-card')
+      .filter({ hasText: 'Input Tensor' })
+      .first()
+      .dragTo(pane);
     await expect(page.locator('.react-flow__node')).toHaveCount(1);
 
     // Click Save button — triggers download

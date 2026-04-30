@@ -6,6 +6,7 @@ interface ImportMetaEnv {
   readonly VITE_WS_URL?: string;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- interface augmentation for Vite
 interface ImportMeta {
   readonly env: ImportMetaEnv;
 }

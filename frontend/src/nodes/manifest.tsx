@@ -58,11 +58,11 @@ export interface CategoryVisual {
 }
 
 export const CATEGORY_VISUALS: Record<NodeCategoryKey, CategoryVisual> = {
-  input:     { label: 'INPUT',     color: '#2a9d8f', cssClass: 'node-input' },
+  input: { label: 'INPUT', color: '#2a9d8f', cssClass: 'node-input' },
   inference: { label: 'INFERENCE', color: '#9b59b6', cssClass: 'node-inference' },
-  output:    { label: 'OUTPUT',    color: '#2ecc71', cssClass: 'node-output' },
-  control:   { label: 'CONTROL',   color: '#6080c0', cssClass: 'node-control' },
-  debug:     { label: 'DEBUG',     color: '#e0c080', cssClass: 'node-debug' },
+  output: { label: 'OUTPUT', color: '#2ecc71', cssClass: 'node-output' },
+  control: { label: 'CONTROL', color: '#6080c0', cssClass: 'node-control' },
+  debug: { label: 'DEBUG', color: '#e0c080', cssClass: 'node-debug' },
 };
 
 export interface NodeManifestEntry {
@@ -330,8 +330,9 @@ export const NODE_MANIFEST: NodeManifestEntry[] = [
 ];
 
 /** Index for O(1) lookup by type. */
-export const NODE_MANIFEST_BY_TYPE: Record<string, NodeManifestEntry> =
-  Object.fromEntries(NODE_MANIFEST.map((e) => [e.type, e]));
+export const NODE_MANIFEST_BY_TYPE: Record<string, NodeManifestEntry> = Object.fromEntries(
+  NODE_MANIFEST.map((e) => [e.type, e]),
+);
 
 export function getManifestEntry(type: string | undefined): NodeManifestEntry | undefined {
   return type ? NODE_MANIFEST_BY_TYPE[type] : undefined;

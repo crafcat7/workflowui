@@ -7,7 +7,8 @@ namespace workflow {
 namespace handlers {
 
 // Register all core handlers into a registry (map)
-void register_core_handlers(std::unordered_map<std::string, std::shared_ptr<NodeHandler>>& registry);
+void register_core_handlers(
+    std::unordered_map<std::string, std::shared_ptr<NodeHandler>>& registry);
 
-} // namespace handlers
-} // namespace workflow
+}  // namespace handlers
+}  // namespace workflow

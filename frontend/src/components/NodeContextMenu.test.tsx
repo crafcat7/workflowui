@@ -21,9 +21,7 @@ function resetStores() {
 
 function open(nodeId = 'n-1') {
   const onClose = vi.fn();
-  const utils = render(
-    <NodeContextMenu menu={{ x: 10, y: 10, nodeId }} onClose={onClose} />,
-  );
+  const utils = render(<NodeContextMenu menu={{ x: 10, y: 10, nodeId }} onClose={onClose} />);
   return { ...utils, onClose };
 }
 

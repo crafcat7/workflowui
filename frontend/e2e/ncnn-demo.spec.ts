@@ -27,7 +27,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, '..', '..');
 const BACKEND_BIN = path.join(REPO_ROOT, 'backend', 'build', 'workflow_backend');
 const DEMO_WORKFLOW = path.join(REPO_ROOT, 'demo', 'NCNN_demo', 'workflow.json');
-const BACKEND_PORT = 9098;  // isolated from the mock backend on 9099 and prod 9090
+const BACKEND_PORT = 9098; // isolated from the mock backend on 9099 and prod 9090
 
 let backendProc: ChildProcessWithoutNullStreams | undefined;
 let backendOutput = '';
@@ -40,8 +40,12 @@ test.beforeAll(async () => {
     cwd: REPO_ROOT,
     stdio: ['ignore', 'pipe', 'pipe'],
   });
-  backendProc.stdout.on('data', (d) => { backendOutput += d.toString(); });
-  backendProc.stderr.on('data', (d) => { backendOutput += d.toString(); });
+  backendProc.stdout.on('data', (d) => {
+    backendOutput += d.toString();
+  });
+  backendProc.stderr.on('data', (d) => {
+    backendOutput += d.toString();
+  });
 
   // Wait for the "WS Server listening" banner or timeout.
   const deadline = Date.now() + 5000;
@@ -86,12 +90,13 @@ test.describe('NCNN demo end-to-end', () => {
     page.on('websocket', (ws) => {
       ws.on('framereceived', (evt) => {
         try {
-          const payload = typeof evt.payload === 'string'
-            ? evt.payload
-            : evt.payload.toString('utf8');
+          const payload =
+            typeof evt.payload === 'string' ? evt.payload : evt.payload.toString('utf8');
           const msg = JSON.parse(payload);
           if (msg.method) wsEvents.push({ method: msg.method, params: msg.params ?? {} });
-        } catch { /* binary or non-json */ }
+        } catch {
+          /* binary or non-json */
+        }
       });
     });
 
@@ -114,17 +119,22 @@ test.describe('NCNN demo end-to-end', () => {
 
     // Kick off execution. The button label varies across the toolbar; we
     // target the canonical Run control on the console toolbar.
-    const runBtn = page.locator('button').filter({ hasText: /^\s*▶?\s*RUN\s*$/i }).first();
+    const runBtn = page
+      .locator('button')
+      .filter({ hasText: /^\s*▶?\s*RUN\s*$/i })
+      .first();
     await runBtn.click();
 
     // The demo benchmark node runs for 2 wall-clock seconds. Stub engine
     // is sub-millisecond per call, so total run is dominated by that 2s
     // bound. 20s is comfortable on slow CI; E2E_SLOW=1 doubles it.
     const completeTimeoutMs = process.env.E2E_SLOW ? 60_000 : 20_000;
-    await expect.poll(
-      () => wsEvents.some((e) => e.method === 'workflow.complete'),
-      { timeout: completeTimeoutMs, message: 'workflow.complete never arrived' },
-    ).toBe(true);
+    await expect
+      .poll(() => wsEvents.some((e) => e.method === 'workflow.complete'), {
+        timeout: completeTimeoutMs,
+        message: 'workflow.complete never arrived',
+      })
+      .toBe(true);
 
     // Partition expected terminals: the false_branch consumer (save_text)
     // is the deliberate skipped target — condition expr "> 0.4" against
@@ -154,10 +164,9 @@ test.describe('NCNN demo end-to-end', () => {
         expect(doneIds, `node ${id} should NOT reach done (must be skipped)`).not.toContain(id);
         const skipForId = skippedEvents.find((e) => e.params.node_id === id);
         expect(skipForId, `node ${id} should emit a skipped event`).toBeTruthy();
-        expect(
-          skipForId?.params.reason,
-          `node ${id} skipped reason should be branch_pruned`,
-        ).toBe('branch_pruned');
+        expect(skipForId?.params.reason, `node ${id} skipped reason should be branch_pruned`).toBe(
+          'branch_pruned',
+        );
       } else {
         expect(doneIds, `node ${id} never reached done`).toContain(id);
       }
@@ -180,7 +189,10 @@ test.describe('NCNN demo end-to-end', () => {
     expect(fs.existsSync(roundtripPath), `roundtrip.png missing at ${roundtripPath}`).toBe(true);
     const head = fs.readFileSync(roundtripPath).subarray(0, 8);
     const PNG_MAGIC = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
-    expect(head.equals(PNG_MAGIC), `roundtrip.png is not a PNG (head=${head.toString('hex')})`).toBe(true);
+    expect(
+      head.equals(PNG_MAGIC),
+      `roundtrip.png is not a PNG (head=${head.toString('hex')})`,
+    ).toBe(true);
   });
 
   test('View Model opens the inspector drawer for the createNet node', async ({ page }) => {
@@ -221,14 +233,18 @@ test.describe('NCNN demo end-to-end', () => {
 
     // The layer table renders one row per layer; shufflenet has 120
     // layers but we only need to verify rows exist.
-    await expect(page.locator('[data-testid="model-inspector-layers"] tbody tr')).not.toHaveCount(0);
+    await expect(page.locator('[data-testid="model-inspector-layers"] tbody tr')).not.toHaveCount(
+      0,
+    );
 
     // Escape closes the drawer.
     await page.keyboard.press('Escape');
     await expect(page.getByText('Model Inspector')).not.toBeVisible();
   });
 
-  test('debug-mode: breakpoint pauses on infer, STEP advances, CONTINUE finishes', async ({ page }) => {
+  test('debug-mode: breakpoint pauses on infer, STEP advances, CONTINUE finishes', async ({
+    page,
+  }) => {
     // Capture WS frames so we can assert on the lifecycle and on the
     // post-pause notifications (debug.continue / debug.step_over are
     // notifications, not requests, so the only on-the-wire signal is
@@ -237,12 +253,13 @@ test.describe('NCNN demo end-to-end', () => {
     page.on('websocket', (ws) => {
       ws.on('framereceived', (evt) => {
         try {
-          const payload = typeof evt.payload === 'string'
-            ? evt.payload
-            : evt.payload.toString('utf8');
+          const payload =
+            typeof evt.payload === 'string' ? evt.payload : evt.payload.toString('utf8');
           const msg = JSON.parse(payload);
           if (msg.method) wsEvents.push({ method: msg.method, params: msg.params ?? {} });
-        } catch { /* binary or non-json */ }
+        } catch {
+          /* binary or non-json */
+        }
       });
     });
 
@@ -281,15 +298,19 @@ test.describe('NCNN demo end-to-end', () => {
     // run_id }; the per-node `node.status` frame may also flip to
     // "paused" but the authoritative signal is debug.paused. Match
     // either to remain robust if the wire schema later consolidates.
-    await expect.poll(
-      () => wsEvents.some(
-        (e) => (
-          (e.method === 'debug.paused' && e.params.node_id === 'infer') ||
-          (e.method === 'node.status' && e.params.node_id === 'infer' && e.params.status === 'paused')
-        ),
-      ),
-      { timeout: 10_000, message: 'infer never reached paused' },
-    ).toBe(true);
+    await expect
+      .poll(
+        () =>
+          wsEvents.some(
+            (e) =>
+              (e.method === 'debug.paused' && e.params.node_id === 'infer') ||
+              (e.method === 'node.status' &&
+                e.params.node_id === 'infer' &&
+                e.params.status === 'paused'),
+          ),
+        { timeout: 10_000, message: 'infer never reached paused' },
+      )
+      .toBe(true);
 
     // DEBUG INPUTS section is the visible witness that pause + inspect
     // round-tripped through the panel. Both inputs (tensor + net) of
@@ -311,17 +332,20 @@ test.describe('NCNN demo end-to-end', () => {
       (e) => e.method === 'debug.paused' && e.params.node_id === 'infer',
     ).length;
     await page.locator('.console-btn.step').click();
-    await expect.poll(
-      () => wsEvents
-        .filter((e) => e.method === 'debug.paused')
-        .some((e) => e.params.node_id !== 'infer'),
-      { timeout: 10_000, message: 'no further pause after step_over' },
-    ).toBe(true);
+    await expect
+      .poll(
+        () =>
+          wsEvents
+            .filter((e) => e.method === 'debug.paused')
+            .some((e) => e.params.node_id !== 'infer'),
+        { timeout: 10_000, message: 'no further pause after step_over' },
+      )
+      .toBe(true);
     // Sanity: the step_over fired at least one new pause beyond the
     // initial infer breakpoint.
-    expect(
-      wsEvents.filter((e) => e.method === 'debug.paused').length,
-    ).toBeGreaterThan(initialPaused);
+    expect(wsEvents.filter((e) => e.method === 'debug.paused').length).toBeGreaterThan(
+      initialPaused,
+    );
 
     // Identify the node that the step landed on, click it so the
     // PropertiesPanel switches over, and re-verify DEBUG INPUTS. This
@@ -349,17 +373,22 @@ test.describe('NCNN demo end-to-end', () => {
     // further pauses. The benchmark branch (2s wall-clock) dominates
     // the remaining run, so 20s is comfortable.
     await page.locator('.console-btn.continue').click();
-    await expect.poll(
-      () => wsEvents.some((e) => e.method === 'workflow.complete'),
-      { timeout: 20_000, message: 'workflow.complete never arrived after CONTINUE' },
-    ).toBe(true);
+    await expect
+      .poll(() => wsEvents.some((e) => e.method === 'workflow.complete'), {
+        timeout: 20_000,
+        message: 'workflow.complete never arrived after CONTINUE',
+      })
+      .toBe(true);
 
     // Same skip-propagation guard as the main test: false_branch saveText
     // must still be skipped, no node may error.
     const errored = wsEvents
       .filter((e) => e.method === 'node.status' && e.params.status === 'error')
       .map((e) => ({ id: e.params.node_id, error: e.params.error }));
-    expect(errored, `No node should error in debug-mode. Got: ${JSON.stringify(errored)}`).toHaveLength(0);
+    expect(
+      errored,
+      `No node should error in debug-mode. Got: ${JSON.stringify(errored)}`,
+    ).toHaveLength(0);
 
     expect(backendProc?.killed ?? true, 'Backend died during debug-mode run').toBe(false);
   });

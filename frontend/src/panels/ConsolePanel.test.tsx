@@ -44,7 +44,9 @@ describe('ConsolePanel a11y', () => {
     // contract.
     render(<ConsolePanel actions={makeActions()} />);
     expect(screen.getByRole('button', { name: /run workflow/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /continue until next breakpoint/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: /continue until next breakpoint/i }),
+    ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /step over to next node/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /stop workflow/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /save workflow/i })).toBeInTheDocument();
@@ -97,10 +99,7 @@ describe('ConsolePanel autoscroll', () => {
   function pushLog(msg: string) {
     act(() => {
       useDebugStore.setState((s) => ({
-        logs: [
-          ...s.logs,
-          { timestamp: Date.now(), nodeId: 'n', level: 'info', message: msg },
-        ],
+        logs: [...s.logs, { timestamp: Date.now(), nodeId: 'n', level: 'info', message: msg }],
       }));
     });
   }

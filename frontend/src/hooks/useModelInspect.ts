@@ -26,11 +26,7 @@
 
 import { useCallback, useRef, useState } from 'react';
 import { wsClient } from '../transport/WsClient';
-import type {
-  ModelGraph,
-  ModelInspectError,
-  ModelInspectRequest,
-} from '../types/modelInspector';
+import type { ModelGraph, ModelInspectError, ModelInspectRequest } from '../types/modelInspector';
 
 export interface UseModelInspectResult {
   /** Latest successful graph, or null until the first successful call. */

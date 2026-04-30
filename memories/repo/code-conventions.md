@@ -1,7 +1,13 @@
 # Code Conventions
 
 Quick reference for contributors and future agents. Verified against
-current `main` as of UI optimization pass (2026-04-29).
+current `main` as of normalization pass (2026-04-30).
+
+## Language
+
+All source code, comments, scripts, and user-facing messages must be
+written in **English**. Chinese (or other non-English) text is only
+permitted in dedicated translation files (e.g. `README.zh-CN.md`).
 
 ## File header
 
@@ -14,6 +20,36 @@ Every hand-written source file starts with:
 
 Applies to `.ts`, `.tsx`, `.cpp`, `.h`. Generated files (CMake-generated,
 build outputs) are exempt.
+
+## Code formatting
+
+### EditorConfig (`.editorconfig`)
+
+Project-wide editor settings: UTF-8, LF line endings, 2-space indent,
+trim trailing whitespace, insert final newline.
+
+### Frontend: Prettier
+
+Config: `frontend/.prettierrc.json`
+
+- Single quotes, trailing commas (all), 100 char print width, 2-space
+  tabs, semicolons, bracket spacing, arrow parens always.
+- Run: `cd frontend && npm run format`
+- Check: `cd frontend && npm run format:check`
+
+### Backend: clang-format
+
+Config: `backend/.clang-format` (Google style, 2-space indent, 100 col
+limit).
+
+- Run: `find backend/src backend/tests -name '*.cpp' -o -name '*.h' |
+  xargs clang-format -i`
+
+### ESLint
+
+Flat config at `frontend/eslint.config.js`. Run: `cd frontend && npm run lint`.
+
+**Zero errors required.** All rules must pass before committing.
 
 ## Commit format
 
@@ -56,7 +92,10 @@ Enforced by the `commit-format-standard` skill. Types used so far:
   `<Handle id=.../>` in a node component must have a matching entry.
 - Toasts: `import { showToast } from './store/toastStore'`; levels are
   `error` (10s TTL), `warn` (6s), `info` (4s), `success` (3s).
-- Logging: `useDebugStore` keeps a ring buffer of 2000 entries.
+- Logging: use `logWarn()` / `logError()` from `src/utils/logger.ts`
+  which writes to the `useDebugStore` ring buffer (2000 entries) and
+  forwards to console in dev mode. Do NOT use bare `console.warn` /
+  `console.error` directly.
 - WebSocket client: `src/transport/WsClient.ts` — `onConnectionState()`
   emits `connecting | open | retrying | closed`; retries use exponential
   backoff with full jitter between 500ms and 15s.
@@ -84,11 +123,11 @@ Enforced by the `commit-format-standard` skill. Types used so far:
 ## Test counts (verify before/after any non-trivial change)
 
 - Frontend: `cd frontend && npx vitest run` → 161 tests across 21 files
-  (as of 2026-04-29). `npx tsc -b --noEmit` must be clean; `npx vite build`
-  must succeed.
+  (as of 2026-04-30). `npx tsc -b --noEmit` must be clean; `npx eslint .`
+  must report zero errors; `npx vite build` must succeed.
 - Backend: `cmake -DENABLE_NCNN=OFF -S backend -B backend/build &&
-  cmake --build backend/build && ./backend/build/workflow_test` → 9
-  gtests across 3 suites (ExecutorTest, DebugControllerTest, baseline).
+  cmake --build backend/build && ./backend/build/workflow_test` → 88
+  gtests across 10 suites (89 total; 1 pre-existing NCNN path failure).
 
 ## UI conventions
 

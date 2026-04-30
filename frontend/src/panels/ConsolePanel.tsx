@@ -82,7 +82,10 @@ export function ConsolePanel({ actions }: Props) {
             aria-label={pausedAtNodeId ? 'Resume workflow' : 'Run workflow'}
             title="Run workflow (R) / Resume if paused"
           >
-            <svg {...btnIconProps}><polygon points="5 3 19 12 5 21" /></svg> {pausedAtNodeId ? 'RESUME' : 'RUN'}
+            <svg {...btnIconProps}>
+              <polygon points="5 3 19 12 5 21" />
+            </svg>{' '}
+            {pausedAtNodeId ? 'RESUME' : 'RUN'}
           </button>
           <button
             className="console-btn continue"
@@ -91,7 +94,11 @@ export function ConsolePanel({ actions }: Props) {
             aria-label="Continue until next breakpoint"
             title="Continue execution (until next breakpoint)"
           >
-            <svg {...btnIconProps}><polygon points="5 4 15 12 5 20" /><line x1="19" y1="5" x2="19" y2="19" stroke="currentColor" strokeWidth="2" /></svg> CONTINUE
+            <svg {...btnIconProps}>
+              <polygon points="5 4 15 12 5 20" />
+              <line x1="19" y1="5" x2="19" y2="19" stroke="currentColor" strokeWidth="2" />
+            </svg>{' '}
+            CONTINUE
           </button>
           <button
             className="console-btn step"
@@ -100,7 +107,11 @@ export function ConsolePanel({ actions }: Props) {
             aria-label="Step over to next node"
             title="Step over (run next node then pause)"
           >
-            <svg {...btnIconProps}><polygon points="5 4 15 12 5 20" /><line x1="19" y1="5" x2="19" y2="19" stroke="currentColor" strokeWidth="2" /></svg> STEP
+            <svg {...btnIconProps}>
+              <polygon points="5 4 15 12 5 20" />
+              <line x1="19" y1="5" x2="19" y2="19" stroke="currentColor" strokeWidth="2" />
+            </svg>{' '}
+            STEP
           </button>
           <button
             className="console-btn stop"
@@ -109,7 +120,10 @@ export function ConsolePanel({ actions }: Props) {
             aria-label="Stop workflow"
             title="Stop workflow"
           >
-            <svg {...btnIconProps}><rect x="4" y="4" width="16" height="16" rx="2" /></svg> STOP
+            <svg {...btnIconProps}>
+              <rect x="4" y="4" width="16" height="16" rx="2" />
+            </svg>{' '}
+            STOP
           </button>
           <div className="console-separator" aria-hidden="true" />
           <button
@@ -118,7 +132,26 @@ export function ConsolePanel({ actions }: Props) {
             aria-label="Save workflow"
             title="Save workflow (Cmd/Ctrl+S)"
           >
-            <svg {...btnIconProps}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /><polyline points="7 10 12 15 17 10" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /><line x1="12" y1="15" x2="12" y2="3" stroke="currentColor" strokeWidth="2" /></svg> SAVE
+            <svg {...btnIconProps}>
+              <path
+                d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+              <polyline
+                points="7 10 12 15 17 10"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+              <line x1="12" y1="15" x2="12" y2="3" stroke="currentColor" strokeWidth="2" />
+            </svg>{' '}
+            SAVE
           </button>
           <button
             className="console-btn file-op"
@@ -126,7 +159,17 @@ export function ConsolePanel({ actions }: Props) {
             aria-label="Load workflow"
             title="Load workflow (Cmd/Ctrl+O)"
           >
-            <svg {...btnIconProps}><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg> LOAD
+            <svg {...btnIconProps}>
+              <path
+                d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>{' '}
+            LOAD
           </button>
         </div>
         <div className="console-toolbar-right">
@@ -143,7 +186,9 @@ export function ConsolePanel({ actions }: Props) {
           {/* Connection / pause state cluster. Identity tag (build
               version) was previously here; removed because it added
               visual noise without supporting any user task. */}
-          <span className="console-status-label" aria-hidden="true">STATUS</span>
+          <span className="console-status-label" aria-hidden="true">
+            STATUS
+          </span>
           <span
             className={`console-status-value ${isRunning ? 'running' : pausedAtNodeId ? 'paused' : 'ready'}`}
           >
@@ -155,7 +200,10 @@ export function ConsolePanel({ actions }: Props) {
             aria-label={wsConnected ? 'Backend connected' : 'Backend disconnected'}
             title={wsConnected ? 'Connected' : 'Disconnected'}
           >
-            <span className={`ws-dot ${wsConnected ? 'connected' : 'disconnected'}`} aria-hidden="true" />
+            <span
+              className={`ws-dot ${wsConnected ? 'connected' : 'disconnected'}`}
+              aria-hidden="true"
+            />
             {wsConnected ? 'ONLINE' : 'OFFLINE'}
           </div>
           <button

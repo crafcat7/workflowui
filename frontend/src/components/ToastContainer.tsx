@@ -17,7 +17,10 @@ export function ToastContainer() {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
       const target = e.target as HTMLElement | null;
-      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) {
+      if (
+        target &&
+        (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)
+      ) {
         return;
       }
       const top = toasts[toasts.length - 1];
@@ -34,11 +37,7 @@ export function ToastContainer() {
     // their own role/politeness — errors escalate to role="alert"
     // + assertive so screen readers interrupt; others use status +
     // polite so they don't clobber whatever the user was hearing.
-    <div
-      className="toast-container"
-      role="region"
-      aria-label="Notifications"
-    >
+    <div className="toast-container" role="region" aria-label="Notifications">
       {toasts.map((t) => {
         const isError = t.level === 'error';
         return (

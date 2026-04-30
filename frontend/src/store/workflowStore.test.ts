@@ -198,9 +198,7 @@ describe('workflowStore nodesById cache', () => {
     expect(afterUpdate.getNodeById('a')?.data.status).toBe('running');
     // Cache entry must be the same object reference as the array
     // element — otherwise selectors would tear against the canvas.
-    expect(afterUpdate.getNodeById('a')).toBe(
-      afterUpdate.nodes.find((n) => n.id === 'a'),
-    );
+    expect(afterUpdate.getNodeById('a')).toBe(afterUpdate.nodes.find((n) => n.id === 'a'));
 
     useWorkflowStore.getState().removeNode('a');
     const afterRemove = useWorkflowStore.getState();

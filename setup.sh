@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # ─────────────────────────────────────────────────────
-#  WorkflowUI — 一键构建 & 启动脚本
-#  用法:
-#    ./setup.sh              # Stub 模式（无需 NCNN）
-#    ./setup.sh --ncnn       # 启用 NCNN 推理后端
-#    ./setup.sh --dev        # 仅启动开发服务器（需已构建后端）
-#    ./setup.sh --test       # 运行 E2E 测试
+#  WorkflowUI — One-shot build & launch script
+#  Usage:
+#    ./setup.sh              # Stub mode (no NCNN required)
+#    ./setup.sh --ncnn       # Enable NCNN inference backend
+#    ./setup.sh --dev        # Launch dev servers only (backend must be pre-built)
+#    ./setup.sh --test       # Run E2E tests
 # ─────────────────────────────────────────────────────
 set -euo pipefail
 
@@ -28,7 +28,7 @@ ok()    { echo -e "${GREEN}[OK]${NC}    $*"; }
 warn()  { echo -e "${YELLOW}[WARN]${NC}  $*"; }
 err()   { echo -e "${RED}[ERROR]${NC} $*"; exit 1; }
 
-# ── 跨平台工具函数 ────────────────────────────────────
+# ── Cross-platform utility functions ──────────────────
 cpu_count() {
   if command -v nproc >/dev/null 2>&1; then
     nproc
@@ -64,7 +64,7 @@ is_port_listening() {
   return 1
 }
 
-# ── 参数解析 ──────────────────────────────────────────
+# ── Argument parsing ──────────────────────────────────
 ENABLE_NCNN=OFF
 DEV_ONLY=false
 TEST_ONLY=false
@@ -75,23 +75,23 @@ for arg in "$@"; do
     --dev)   DEV_ONLY=true ;;
     --test)  TEST_ONLY=true ;;
     --help|-h)
-      echo "用法: $0 [--ncnn] [--dev] [--test]"
+      echo "Usage: $0 [--ncnn] [--dev] [--test]"
       echo ""
-      echo "  (无参数)    构建后端 (Stub) + 前端，然后启动"
-      echo "  --ncnn      从源码编译 NCNN 并启用真实推理后端"
-      echo "  --dev       跳过构建，仅启动前端 dev server + 后端"
-      echo "  --test      运行 Playwright E2E 测试"
+      echo "  (no args)   Build backend (Stub) + frontend, then launch"
+      echo "  --ncnn      Build NCNN from source and enable real inference backend"
+      echo "  --dev       Skip build, launch frontend dev server + backend only"
+      echo "  --test      Run Playwright E2E tests"
       echo ""
-      echo "环境变量:"
-      echo "  BACKEND_PORT    后端 WebSocket 端口 (默认 9090)"
-      echo "  FRONTEND_PORT   前端 dev-server 端口 (默认 5173)"
+      echo "Environment variables:"
+      echo "  BACKEND_PORT    Backend WebSocket port (default: 9090)"
+      echo "  FRONTEND_PORT   Frontend dev-server port (default: 5173)"
       exit 0
       ;;
-    *) err "未知参数: $arg（使用 --help 查看帮助）" ;;
+    *) err "Unknown argument: $arg (use --help for usage)" ;;
   esac
 done
 
-# ── 检查依赖 ──────────────────────────────────────────
+# ── Check dependencies ────────────────────────────────
 check_deps() {
   local missing=()
   command -v cmake  >/dev/null || missing+=(cmake)
@@ -101,22 +101,22 @@ check_deps() {
   command -v g++    >/dev/null || missing+=(g++)
 
   if [ ${#missing[@]} -gt 0 ]; then
-    err "缺少依赖: ${missing[*]}\n  请安装后重试: sudo apt install ${missing[*]}"
+    err "Missing dependencies: ${missing[*]}\n  Please install and retry: sudo apt install ${missing[*]}"
   fi
-  ok "系统依赖检查通过"
+  ok "System dependencies check passed"
 }
 
-# ── 编译 NCNN ─────────────────────────────────────────
+# ── Build NCNN ────────────────────────────────────────
 build_ncnn() {
   if [ -f "$NCNN_INSTALL_DIR/lib/cmake/ncnn/ncnnConfig.cmake" ]; then
-    ok "NCNN 已安装在 ${NCNN_INSTALL_DIR}，跳过编译"
+    ok "NCNN already installed at ${NCNN_INSTALL_DIR}, skipping build"
     return
   fi
 
-  info "从源码编译 NCNN..."
+  info "Building NCNN from source..."
 
   if [ ! -d "$NCNN_SRC_DIR" ]; then
-    info "克隆 ncnn 源码..."
+    info "Cloning ncnn source..."
     git clone --depth 1 https://github.com/Tencent/ncnn.git "$NCNN_SRC_DIR"
   fi
 
@@ -133,12 +133,12 @@ build_ncnn() {
   cmake --build "$NCNN_SRC_DIR/build" -j"$(cpu_count)" 2>&1 | tail -3
   cmake --install "$NCNN_SRC_DIR/build" 2>&1 | tail -3
 
-  ok "NCNN 编译安装完成 → $NCNN_INSTALL_DIR"
+  ok "NCNN build and install complete -> $NCNN_INSTALL_DIR"
 }
 
-# ── 构建 C++ 后端 ────────────────────────────────────
+# ── Build C++ backend ─────────────────────────────────
 build_backend() {
-  info "构建 C++ 后端 (ENABLE_NCNN=$ENABLE_NCNN)..."
+  info "Building C++ backend (ENABLE_NCNN=$ENABLE_NCNN)..."
 
   local cmake_args=(
     -S "$BACKEND_DIR"
@@ -154,31 +154,31 @@ build_backend() {
   cmake "${cmake_args[@]}" 2>&1 | tail -3
   cmake --build "$BACKEND_DIR/build" -j"$(cpu_count)" 2>&1 | tail -3
 
-  ok "后端构建完成 → $BACKEND_DIR/build/workflow_backend"
+  ok "Backend build complete -> $BACKEND_DIR/build/workflow_backend"
 }
 
-# ── 安装 & 构建前端 ──────────────────────────────────
+# ── Install & build frontend ──────────────────────────
 build_frontend() {
-  info "安装前端依赖..."
+  info "Installing frontend dependencies..."
   (cd "$FRONTEND_DIR" && npm install --silent)
 
-  info "构建前端..."
+  info "Building frontend..."
   (cd "$FRONTEND_DIR" && npm run build)
 
-  ok "前端构建完成 → $FRONTEND_DIR/dist/"
+  ok "Frontend build complete -> $FRONTEND_DIR/dist/"
 }
 
-# ── 启动服务 ──────────────────────────────────────────
+# ── Start services ────────────────────────────────────
 start_services() {
   if is_port_listening "$BACKEND_PORT"; then
-    err "后端端口 $BACKEND_PORT 已被占用，请释放该端口或设置 BACKEND_PORT=其他值后重试"
+    err "Backend port $BACKEND_PORT is already in use. Free it or set BACKEND_PORT to a different value."
   fi
 
-  info "启动后端 (端口 $BACKEND_PORT)..."
+  info "Starting backend (port $BACKEND_PORT)..."
   "$BACKEND_DIR/build/workflow_backend" "$BACKEND_PORT" &
   BACKEND_PID=$!
 
-  # 等待后端就绪
+  # Wait for backend to become ready
   for i in $(seq 1 20); do
     if is_port_listening "$BACKEND_PORT"; then
       break
@@ -190,91 +190,92 @@ start_services() {
   done
 
   if ! kill -0 "$BACKEND_PID" 2>/dev/null; then
-    err "后端进程启动后异常退出，请检查端口占用或后端日志"
+    err "Backend process exited unexpectedly. Check port conflicts or backend logs."
   fi
 
   if ! is_port_listening "$BACKEND_PORT"; then
-    err "后端未能在端口 $BACKEND_PORT 上启动"
+    err "Backend failed to start on port $BACKEND_PORT"
   fi
-  ok "后端已启动 (PID=$BACKEND_PID, 端口=$BACKEND_PORT)"
+  ok "Backend started (PID=$BACKEND_PID, port=$BACKEND_PORT)"
 
-  info "启动前端开发服务器 (端口 $FRONTEND_PORT)..."
-  # 若 $FRONTEND_PORT 已被占用，直接报错退出——Vite 的自动换端口会让
-  # 浏览器使用未登记的 origin，被后端的 origin 白名单拒绝，表现为
-  # "Backend disconnected — reconnecting" 死循环。
+  info "Starting frontend dev server (port $FRONTEND_PORT)..."
+  # If $FRONTEND_PORT is already in use, fail immediately. Vite's automatic
+  # port switching would cause the browser to use an unregistered origin,
+  # which gets rejected by the backend's origin allow-list, resulting in a
+  # "Backend disconnected — reconnecting" infinite loop.
   if is_port_listening "$FRONTEND_PORT"; then
     kill $BACKEND_PID 2>/dev/null
-    err "前端端口 $FRONTEND_PORT 已被占用，请释放该端口或设置 FRONTEND_PORT=其他值后重试"
+    err "Frontend port $FRONTEND_PORT is already in use. Free it or set FRONTEND_PORT to a different value."
   fi
   (cd "$FRONTEND_DIR" && \
     VITE_WS_URL="ws://localhost:$BACKEND_PORT" \
     npx vite --host --port "$FRONTEND_PORT" --strictPort) &
   FRONTEND_PID=$!
 
-  ok "前端开发服务器已启动 (PID=$FRONTEND_PID)"
+  ok "Frontend dev server started (PID=$FRONTEND_PID)"
   echo ""
   echo -e "${GREEN}════════════════════════════════════════════════${NC}"
-  echo -e "${GREEN}  WorkflowUI 已启动${NC}"
-  echo -e "  前端:  ${CYAN}http://localhost:$FRONTEND_PORT${NC}"
-  echo -e "  后端:  ${CYAN}ws://localhost:$BACKEND_PORT${NC}"
-  echo -e "  引擎:  ${YELLOW}$( [ "$ENABLE_NCNN" = "ON" ] && echo "NCNN" || echo "Stub" )${NC}"
+  echo -e "${GREEN}  WorkflowUI is running${NC}"
+  echo -e "  Frontend: ${CYAN}http://localhost:$FRONTEND_PORT${NC}"
+  echo -e "  Backend:  ${CYAN}ws://localhost:$BACKEND_PORT${NC}"
+  echo -e "  Engine:   ${YELLOW}$( [ "$ENABLE_NCNN" = "ON" ] && echo "NCNN" || echo "Stub" )${NC}"
   echo -e "${GREEN}════════════════════════════════════════════════${NC}"
   echo ""
-  echo "按 Ctrl+C 停止所有服务"
+  echo "Press Ctrl+C to stop all services."
 
-  # 捕获退出信号
-  trap "echo ''; info '正在停止服务...'; kill $BACKEND_PID $FRONTEND_PID 2>/dev/null; ok '已停止'; exit 0" INT TERM
+  # Trap exit signals
+  trap "echo ''; info 'Stopping services...'; kill $BACKEND_PID $FRONTEND_PID 2>/dev/null; ok 'Stopped'; exit 0" INT TERM
   wait
 }
 
-# ── 测试 ──────────────────────────────────────────
+# ── Tests ─────────────────────────────────────────────
 run_tests() {
-  info "运行 C++ 单元测试..."
+  info "Running C++ unit tests..."
   if [ -f "$BACKEND_DIR/build/workflow_test" ]; then
-    "$BACKEND_DIR/build/workflow_test" || err "C++ 单元测试失败"
-    ok "C++ 单元测试通过"
+    "$BACKEND_DIR/build/workflow_test" || err "C++ unit tests failed"
+    ok "C++ unit tests passed"
   else
-    warn "未找到 C++ 测试可执行文件，请先构建后端"
+    warn "C++ test executable not found. Build the backend first."
     exit 1
   fi
 
-  info "安装前端依赖..."
+  info "Installing frontend dependencies..."
   (cd "$FRONTEND_DIR" && npm install --silent)
 
-  info "运行前端单元测试..."
-  (cd "$FRONTEND_DIR" && npm run test:unit) || err "前端单元测试失败"
-  ok "前端单元测试通过"
+  info "Running frontend unit tests..."
+  (cd "$FRONTEND_DIR" && npm run test:unit) || err "Frontend unit tests failed"
+  ok "Frontend unit tests passed"
 
-  info "启动后端并运行集成测试..."
+  info "Starting backend and running integration tests..."
   if [ -f "$BACKEND_DIR/build/workflow_backend" ]; then
     "$BACKEND_DIR/build/workflow_backend" 9090 > /dev/null 2>&1 &
     local BACKEND_PID=$!
     sleep 1
     (cd "$ROOT_DIR" && node test_integration.mjs 9090) || {
       kill $BACKEND_PID 2>/dev/null
-      err "集成测试失败"
+      err "Integration tests failed"
     }
     kill $BACKEND_PID 2>/dev/null
-    ok "集成测试通过"
+    ok "Integration tests passed"
   else
-    warn "未找到后端可执行文件，请先构建后端"
+    warn "Backend executable not found. Build the backend first."
     exit 1
   fi
 
-  info "安装 Playwright 浏览器..."
+  info "Installing Playwright browsers..."
   (cd "$FRONTEND_DIR" && npx playwright install chromium 2>&1 | tail -2)
 
-  info "运行前端 E2E 测试..."
-  (cd "$FRONTEND_DIR" && npm run test:e2e) || err "E2E 测试失败"
-  ok "E2E 测试通过"
+  info "Running frontend E2E tests..."
+  (cd "$FRONTEND_DIR" && npm run test:e2e) || err "E2E tests failed"
+  ok "E2E tests passed"
 
   echo ""
   echo -e "${GREEN}════════════════════════════════════════════════${NC}"
-  echo -e "${GREEN}  所有测试运行完成并全部通过！${NC}"
+  echo -e "${GREEN}  All tests passed!${NC}"
   echo -e "${GREEN}════════════════════════════════════════════════${NC}"
 }
 
-# ── 主流程 ────────────────────────────────────────────
+# ── Main flow ─────────────────────────────────────────
 main() {
   echo ""
   echo -e "${CYAN}╔════════════════════════════════════════╗${NC}"
@@ -290,7 +291,7 @@ main() {
 
   if $DEV_ONLY; then
     if [ ! -f "$BACKEND_DIR/build/workflow_backend" ]; then
-      err "后端尚未构建，请先运行 $0 或 $0 --ncnn"
+      err "Backend not built yet. Run $0 or $0 --ncnn first."
     fi
     start_services
     exit 0

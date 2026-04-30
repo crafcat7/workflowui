@@ -16,12 +16,13 @@ namespace workflow {
  * -32000 ("Server error") which is reserved for handler logic faults.
  */
 class InvalidParams : public std::runtime_error {
-public:
-    explicit InvalidParams(std::string message)
-        : std::runtime_error(message), message_(std::move(message)) {}
-    const std::string& message() const noexcept { return message_; }
-private:
-    std::string message_;
+ public:
+  explicit InvalidParams(std::string message)
+      : std::runtime_error(message), message_(std::move(message)) {}
+  const std::string& message() const noexcept { return message_; }
+
+ private:
+  std::string message_;
 };
 
-} // namespace workflow
+}  // namespace workflow

@@ -27,11 +27,7 @@ vi.mock('../transport/WsClient', () => ({
   },
 }));
 
-function seedNode(opts: {
-  id?: string;
-  type: string;
-  config?: Record<string, unknown>;
-}) {
+function seedNode(opts: { id?: string; type: string; config?: Record<string, unknown> }) {
   const node = {
     id: opts.id ?? 'n1',
     type: opts.type,

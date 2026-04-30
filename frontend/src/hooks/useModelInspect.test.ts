@@ -68,7 +68,9 @@ describe('useModelInspect', () => {
   });
 
   it('exposes the resulting graph and clears loading on success', async () => {
-    const g = fakeGraph({ layers: [{ id: 'a', type: 'X', input_blobs: [], output_blobs: ['o'], params: {} }] });
+    const g = fakeGraph({
+      layers: [{ id: 'a', type: 'X', input_blobs: [], output_blobs: ['o'], params: {} }],
+    });
     mockedCall.mockResolvedValueOnce(g);
     const { result } = renderHook(() => useModelInspect());
 
@@ -94,7 +96,10 @@ describe('useModelInspect', () => {
 
     expect(result.current.graph).toBeNull();
     expect(result.current.loading).toBe(false);
-    expect(result.current.error).toEqual({ code: -32602, message: 'params.vendor must be a string' });
+    expect(result.current.error).toEqual({
+      code: -32602,
+      message: 'params.vendor must be a string',
+    });
   });
 
   it('captures transport-layer Error rejections as code 0', async () => {
@@ -115,7 +120,10 @@ describe('useModelInspect', () => {
     let resolveFirst: ((g: ModelGraph) => void) | null = null;
     mockedCall
       .mockImplementationOnce(
-        () => new Promise<ModelGraph>((resolve) => { resolveFirst = resolve; }) as Promise<unknown>,
+        () =>
+          new Promise<ModelGraph>((resolve) => {
+            resolveFirst = resolve;
+          }) as Promise<unknown>,
       )
       .mockResolvedValueOnce(fakeGraph({ vendor: 'second' }));
 
@@ -143,7 +151,10 @@ describe('useModelInspect', () => {
   it('reset clears state and invalidates pending call', async () => {
     let resolveCall: ((g: ModelGraph) => void) | null = null;
     mockedCall.mockImplementationOnce(
-      () => new Promise<ModelGraph>((resolve) => { resolveCall = resolve; }) as Promise<unknown>,
+      () =>
+        new Promise<ModelGraph>((resolve) => {
+          resolveCall = resolve;
+        }) as Promise<unknown>,
     );
     const { result } = renderHook(() => useModelInspect());
 
@@ -169,7 +180,10 @@ describe('useModelInspect', () => {
   it('toggles loading flag during the call lifetime', async () => {
     let resolveCall: ((g: ModelGraph) => void) | null = null;
     mockedCall.mockImplementationOnce(
-      () => new Promise<ModelGraph>((resolve) => { resolveCall = resolve; }) as Promise<unknown>,
+      () =>
+        new Promise<ModelGraph>((resolve) => {
+          resolveCall = resolve;
+        }) as Promise<unknown>,
     );
     const { result } = renderHook(() => useModelInspect());
 
@@ -189,8 +203,10 @@ describe('useModelInspect', () => {
 
 describe('toInspectError', () => {
   it('preserves JSON-RPC error envelopes', () => {
-    expect(toInspectError({ code: -32000, message: 'bad magic' }))
-      .toEqual({ code: -32000, message: 'bad magic' });
+    expect(toInspectError({ code: -32000, message: 'bad magic' })).toEqual({
+      code: -32000,
+      message: 'bad magic',
+    });
   });
 
   it('maps Error to code 0 with its message', () => {
@@ -203,6 +219,9 @@ describe('toInspectError', () => {
   });
 
   it('rejects partially-shaped envelopes (wrong field types)', () => {
-    expect(toInspectError({ code: 'oops', message: 42 })).toEqual({ code: 0, message: '[object Object]' });
+    expect(toInspectError({ code: 'oops', message: 42 })).toEqual({
+      code: 0,
+      message: '[object Object]',
+    });
   });
 });

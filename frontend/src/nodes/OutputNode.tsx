@@ -8,7 +8,12 @@ import { OutputIcon } from './NodeIcons';
 export function OutputNode({ data: d }: NodeProps<Node<WorkflowNodeData>>) {
   return (
     <div className="workflow-node node-output">
-      <div className="node-header"><span className="icon"><OutputIcon /></span> Output</div>
+      <div className="node-header">
+        <span className="icon">
+          <OutputIcon />
+        </span>{' '}
+        Output
+      </div>
       <div className="node-body">
         {d.output !== undefined ? (
           <div className="output-summary-box">
@@ -21,7 +26,13 @@ export function OutputNode({ data: d }: NodeProps<Node<WorkflowNodeData>>) {
       <div className="node-footer">
         <span className={`node-status ${d.status}`}>{d.status}</span>
       </div>
-      <LabeledHandle type="target" position={Position.Left} id="data" label="data" dataType="generic" />
+      <LabeledHandle
+        type="target"
+        position={Position.Left}
+        id="data"
+        label="data"
+        dataType="generic"
+      />
     </div>
   );
 }
