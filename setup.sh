@@ -28,6 +28,42 @@ ok()    { echo -e "${GREEN}[OK]${NC}    $*"; }
 warn()  { echo -e "${YELLOW}[WARN]${NC}  $*"; }
 err()   { echo -e "${RED}[ERROR]${NC} $*"; exit 1; }
 
+# ── 跨平台工具函数 ────────────────────────────────────
+cpu_count() {
+  if command -v nproc >/dev/null 2>&1; then
+    nproc
+    return
+  fi
+  if command -v getconf >/dev/null 2>&1; then
+    getconf _NPROCESSORS_ONLN 2>/dev/null && return
+  fi
+  if command -v sysctl >/dev/null 2>&1; then
+    sysctl -n hw.ncpu 2>/dev/null && return
+  fi
+  echo 4
+}
+
+is_port_listening() {
+  local port="$1"
+
+  if command -v ss >/dev/null 2>&1; then
+    ss -tln 2>/dev/null | grep -q ":$port "
+    return
+  fi
+
+  if command -v lsof >/dev/null 2>&1; then
+    lsof -nP -iTCP:"$port" -sTCP:LISTEN >/dev/null 2>&1
+    return
+  fi
+
+  if command -v netstat >/dev/null 2>&1; then
+    netstat -an 2>/dev/null | grep -E "[\.:]$port[[:space:]]" | grep -q LISTEN
+    return
+  fi
+
+  return 1
+}
+
 # ── 参数解析 ──────────────────────────────────────────
 ENABLE_NCNN=OFF
 DEV_ONLY=false
@@ -73,7 +109,7 @@ check_deps() {
 # ── 编译 NCNN ─────────────────────────────────────────
 build_ncnn() {
   if [ -f "$NCNN_INSTALL_DIR/lib/cmake/ncnn/ncnnConfig.cmake" ]; then
-    ok "NCNN 已安装在 $NCNN_INSTALL_DIR，跳过编译"
+    ok "NCNN 已安装在 ${NCNN_INSTALL_DIR}，跳过编译"
     return
   fi
 
@@ -94,7 +130,7 @@ build_ncnn() {
     -DCMAKE_BUILD_TYPE=Release \
     2>&1 | tail -3
 
-  cmake --build "$NCNN_SRC_DIR/build" -j"$(nproc)" 2>&1 | tail -3
+  cmake --build "$NCNN_SRC_DIR/build" -j"$(cpu_count)" 2>&1 | tail -3
   cmake --install "$NCNN_SRC_DIR/build" 2>&1 | tail -3
 
   ok "NCNN 编译安装完成 → $NCNN_INSTALL_DIR"
@@ -116,7 +152,7 @@ build_backend() {
   fi
 
   cmake "${cmake_args[@]}" 2>&1 | tail -3
-  cmake --build "$BACKEND_DIR/build" -j"$(nproc)" 2>&1 | tail -3
+  cmake --build "$BACKEND_DIR/build" -j"$(cpu_count)" 2>&1 | tail -3
 
   ok "后端构建完成 → $BACKEND_DIR/build/workflow_backend"
 }
@@ -134,19 +170,30 @@ build_frontend() {
 
 # ── 启动服务 ──────────────────────────────────────────
 start_services() {
+  if is_port_listening "$BACKEND_PORT"; then
+    err "后端端口 $BACKEND_PORT 已被占用，请释放该端口或设置 BACKEND_PORT=其他值后重试"
+  fi
+
   info "启动后端 (端口 $BACKEND_PORT)..."
   "$BACKEND_DIR/build/workflow_backend" "$BACKEND_PORT" &
   BACKEND_PID=$!
 
   # 等待后端就绪
   for i in $(seq 1 20); do
-    if ss -tlnp 2>/dev/null | grep -q ":$BACKEND_PORT"; then
+    if is_port_listening "$BACKEND_PORT"; then
+      break
+    fi
+    if ! kill -0 "$BACKEND_PID" 2>/dev/null; then
       break
     fi
     sleep 0.5
   done
 
-  if ! ss -tlnp 2>/dev/null | grep -q ":$BACKEND_PORT"; then
+  if ! kill -0 "$BACKEND_PID" 2>/dev/null; then
+    err "后端进程启动后异常退出，请检查端口占用或后端日志"
+  fi
+
+  if ! is_port_listening "$BACKEND_PORT"; then
     err "后端未能在端口 $BACKEND_PORT 上启动"
   fi
   ok "后端已启动 (PID=$BACKEND_PID, 端口=$BACKEND_PORT)"
@@ -155,7 +202,7 @@ start_services() {
   # 若 $FRONTEND_PORT 已被占用，直接报错退出——Vite 的自动换端口会让
   # 浏览器使用未登记的 origin，被后端的 origin 白名单拒绝，表现为
   # "Backend disconnected — reconnecting" 死循环。
-  if ss -tlnp 2>/dev/null | grep -q ":$FRONTEND_PORT "; then
+  if is_port_listening "$FRONTEND_PORT"; then
     kill $BACKEND_PID 2>/dev/null
     err "前端端口 $FRONTEND_PORT 已被占用，请释放该端口或设置 FRONTEND_PORT=其他值后重试"
   fi
