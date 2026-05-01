@@ -1,0 +1,76 @@
+<!-- SPDX-License-Identifier: MIT -->
+<!-- SPDX-FileCopyrightText: 2026 WorkflowUI contributors -->
+# Image Processing Demo (MobileNetV2)
+
+End-to-end image classification pipeline:
+
+```
+InputImage  ─►  Inference (image→tensor coercion)  ─►  Postprocess (Top-5)
+                       ▲                                       │
+                       │                                       ▼
+                CreateNet (NCNN)                          Condition
+                MobileNetV2                                   │
+                                                  ┌───────────┴───────────┐
+                                                  ▼                       ▼
+                                              Inspect → Output       SaveText
+                                              (true: max>0.1)        (false branch)
+                                                  │
+                                                  ├─► TensorToImage (softmax heatmap) ─► SaveImage
+                                                  │
+                                                  └─► AnnotateImage (top-5 labels)   ─► SaveImage
+```
+
+## Files
+
+| File | Purpose |
+|------|---------|
+| `workflow.json` | Wired demo workflow loadable from the UI. |
+| `sample.png` | 224×224 dog photo (Samoyed). Sourced from [pytorch/hub `images/dog.jpg`](https://github.com/pytorch/hub/blob/master/images/dog.jpg), center-cropped and resized. Used here for non-commercial demo/testing only — replace with your own image if your distribution requires a clean license. |
+| `imagenet_classes.txt` | 1000 ImageNet class labels (one per line), used by `annotateImage` to render human-readable class names. |
+| `mobilenetv2.param` / `mobilenetv2.bin` | NCNN model files. **Generated** — see below. |
+
+## Generating the model
+
+The NCNN files are produced from torchvision's pretrained MobileNetV2 via
+[pnnx](https://github.com/pnnx/pnnx) (or the legacy `onnx2ncnn` path):
+
+```bash
+pip install torch torchvision pnnx
+python scripts/convert_mobilenet_ncnn.py
+```
+
+This writes `mobilenetv2.param` and `mobilenetv2.bin` into this directory.
+
+The pnnx output uses blob names `in0` (input) and `out0` (output); the
+included `workflow.json` already references those names. If you regenerate
+the model with a different converter and the names differ, edit the
+`createNet` node's `inputName` / `outputName` accordingly.
+
+## Running the demo
+
+1. Build the backend with NCNN enabled:
+
+   ```bash
+   cmake -DENABLE_NCNN=ON -S backend -B backend/build && cmake --build backend/build
+   ```
+
+2. Start the backend and frontend, load `demo/image_processing/workflow.json`, click Run.
+
+3. Expect: image preview thumbnail in `Input Image` and `Save Image`, top-5 ImageNet logits surfaced through `inspect → output`, `softmax_heatmap.png` viridis heatmap of the full softmax distribution, `classified.png` with top-5 predictions overlaid (class name + confidence), `low_confidence.txt` only written when the max probability is ≤ 0.1.
+
+## Verifying without the UI
+
+A headless verification harness lives at `scripts/verify_image_workflow.mjs`. With the backend already running on a port (default 9097), run:
+
+```bash
+backend/build/workflow_backend --port 9097 &
+node scripts/verify_image_workflow.mjs
+# PORT=9090 node scripts/verify_image_workflow.mjs   # custom port
+```
+
+Exits 0 when every node reaches a terminal status (`done` / `skipped`), the condition routes exactly one branch, and `workflow.complete` is received. Exits non-zero on any timeout, error, or wiring regression. Uses Node 22's built-in `WebSocket`, no extra dependencies.
+
+## Notes
+
+- The `inference` node does **not** need a manual preprocess block: image→tensor coercion is performed in the handler (RGBA8 → RGB → CHW float [0,1]). Per-channel mean/std normalization is intentionally omitted; outputs are still meaningful for top-k inspection but won't match torchvision-reference accuracy without it. With the bundled dog photo the top-1 class is **Samoyed** at ~0.79.
+- `roundtrip.png` and `low_confidence.txt` are produced when the workflow runs and are gitignored.

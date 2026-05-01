@@ -125,8 +125,8 @@
   grid-template-columns: 200px 1fr 280px;
   grid-template-rows: 1fr 160px;
   grid-template-areas:
-    "left canvas right"
-    "console console console";
+    'left canvas right'
+    'console console console';
   overflow: hidden;
 }
 
@@ -194,7 +194,9 @@
   padding: 7px 10px;
   border-radius: 5px;
   outline: none;
-  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+  transition:
+    border-color var(--transition-fast),
+    box-shadow var(--transition-fast);
 }
 .palette-search-input:focus {
   border-color: var(--accent-purple);
@@ -227,7 +229,7 @@
 }
 
 .palette-category-header:hover {
-  background: rgba(255,255,255,0.03);
+  background: rgba(255, 255, 255, 0.03);
 }
 
 .palette-cat-indicator {
@@ -285,7 +287,9 @@
   border: 1px solid var(--border-subtle);
   border-radius: 5px;
   cursor: grab;
-  transition: background var(--transition-normal), border-color var(--transition-normal);
+  transition:
+    background var(--transition-normal),
+    border-color var(--transition-normal);
   border-left: 3px solid transparent;
 }
 
@@ -299,11 +303,21 @@
   transform: scale(0.97);
 }
 
-.palette-node-card.cat-input { border-left-color: var(--accent-green-alt); }
-.palette-node-card.cat-inference { border-left-color: var(--accent-purple); }
-.palette-node-card.cat-output { border-left-color: var(--accent-green); }
-.palette-node-card.cat-control { border-left-color: var(--accent-blue); }
-.palette-node-card.cat-debug { border-left-color: var(--accent-amber); }
+.palette-node-card.cat-input {
+  border-left-color: var(--accent-green-alt);
+}
+.palette-node-card.cat-inference {
+  border-left-color: var(--accent-purple);
+}
+.palette-node-card.cat-output {
+  border-left-color: var(--accent-green);
+}
+.palette-node-card.cat-control {
+  border-left-color: var(--accent-blue);
+}
+.palette-node-card.cat-debug {
+  border-left-color: var(--accent-amber);
+}
 
 .palette-node-icon {
   font-size: 14px;
@@ -406,7 +420,9 @@
   padding: 3px 7px;
   /* 1 px inset top-light for the same "physical key" feel used on
      toolbar buttons. */
-  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.05) inset, 0 1px 2px rgba(0, 0, 0, 0.4);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.05) inset,
+    0 1px 2px rgba(0, 0, 0, 0.4);
 }
 
 .kbd-chip-sep {
@@ -539,9 +555,9 @@
 }
 
 /* Unified input styles */
-.config-field input[type="text"],
-.config-field input[type="number"],
-.config-field input[type="url"],
+.config-field input[type='text'],
+.config-field input[type='number'],
+.config-field input[type='url'],
 .config-field textarea {
   width: 100%;
   background: var(--bg-base);
@@ -551,14 +567,15 @@
   padding: var(--space-2) var(--space-3);
   font-size: var(--text-sm);
   font-family: var(--font-mono);
-  transition: border-color var(--transition-normal),
-              box-shadow var(--transition-normal);
+  transition:
+    border-color var(--transition-normal),
+    box-shadow var(--transition-normal);
   box-sizing: border-box;
 }
 
-.config-field input[type="text"]:focus,
-.config-field input[type="number"]:focus,
-.config-field input[type="url"]:focus,
+.config-field input[type='text']:focus,
+.config-field input[type='number']:focus,
+.config-field input[type='url']:focus,
 .config-field textarea:focus {
   outline: none;
   border-color: var(--accent-blue);
@@ -566,9 +583,9 @@
   box-shadow: 0 0 0 3px rgba(74, 154, 255, 0.2);
 }
 
-.config-field input[type="text"]::placeholder,
-.config-field input[type="number"]::placeholder,
-.config-field input[type="url"]::placeholder,
+.config-field input[type='text']::placeholder,
+.config-field input[type='number']::placeholder,
+.config-field input[type='url']::placeholder,
 .config-field textarea::placeholder {
   color: var(--text-dim);
 }
@@ -592,7 +609,7 @@
   padding: var(--space-1) 0;
 }
 
-.config-checkbox input[type="checkbox"] {
+.config-checkbox input[type='checkbox'] {
   accent-color: var(--accent-green-alt);
   width: 14px;
   height: 14px;
@@ -649,8 +666,9 @@
   padding: var(--space-2) var(--space-3);
   font-size: var(--text-sm);
   font-family: var(--font-mono);
-  transition: border-color var(--transition-normal),
-              box-shadow var(--transition-normal);
+  transition:
+    border-color var(--transition-normal),
+    box-shadow var(--transition-normal);
   cursor: pointer;
   appearance: none;
 }
@@ -664,7 +682,7 @@
 }
 
 /* ── Config number input: inherits unified input styles above ── */
-.config-field input[type="number"] {
+.config-field input[type='number'] {
   -moz-appearance: textfield;
 }
 
@@ -718,7 +736,7 @@
   justify-content: space-between;
   font-size: 10px;
   padding: 1px 0;
-  border-bottom: 1px solid rgba(255,255,255,0.02);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.02);
 }
 
 .top-k-idx {
@@ -889,9 +907,15 @@
   font-weight: 700;
   letter-spacing: 1px;
 }
-.console-status-value.ready { color: var(--text-secondary); }
-.console-status-value.running { color: var(--accent-green); }
-.console-status-value.paused { color: var(--accent-amber); }
+.console-status-value.ready {
+  color: var(--text-secondary);
+}
+.console-status-value.running {
+  color: var(--accent-green);
+}
+.console-status-value.paused {
+  color: var(--accent-amber);
+}
 
 .console-ws-status {
   display: flex;
@@ -972,15 +996,28 @@
 .console-log-entry {
   padding: 1px 0;
   line-height: 1.6;
-  border-bottom: 1px solid rgba(255,255,255,0.01);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.01);
 }
 
-.console-log-entry .log-time { color: var(--border-strong); font-size: 10px; }
-.console-log-entry .log-node { color: var(--accent-blue-strong); }
-.console-log-entry .log-msg { color: var(--text-faint); }
-.console-log-entry.level-error .log-msg { color: var(--accent-pink-warn); }
-.console-log-entry.level-warn .log-msg { color: var(--accent-amber); }
-.console-log-entry.level-info .log-msg { color: var(--text-faint); }
+.console-log-entry .log-time {
+  color: var(--border-strong);
+  font-size: 10px;
+}
+.console-log-entry .log-node {
+  color: var(--accent-blue-strong);
+}
+.console-log-entry .log-msg {
+  color: var(--text-faint);
+}
+.console-log-entry.level-error .log-msg {
+  color: var(--accent-pink-warn);
+}
+.console-log-entry.level-warn .log-msg {
+  color: var(--accent-amber);
+}
+.console-log-entry.level-info .log-msg {
+  color: var(--text-faint);
+}
 
 /* ══════════════════════════════════════════
    ReactFlow Canvas & Nodes
@@ -1015,8 +1052,9 @@
   min-width: 180px;
   min-height: 86px;
   color: var(--text-secondary);
-  transition: border-color var(--transition-normal),
-              box-shadow var(--transition-normal);
+  transition:
+    border-color var(--transition-normal),
+    box-shadow var(--transition-normal);
   position: relative;
   box-shadow:
     0 1px 0 rgba(255, 255, 255, 0.03) inset,
@@ -1056,7 +1094,9 @@
   right: 0;
   height: 3px;
   background: var(--bg-elev-3);
-  transition: background 0.18s, box-shadow 0.18s;
+  transition:
+    background 0.18s,
+    box-shadow 0.18s;
 }
 
 .react-flow__node.selected > .workflow-node {
@@ -1094,6 +1134,33 @@
   font-size: 11px;
   color: var(--text-muted);
   text-align: center;
+}
+
+/* Image preview thumbnail rendered inline in InputImage / SaveImage nodes.
+   Sized so the preview fits within typical node widths without forcing
+   the node to grow excessively; object-fit:contain preserves aspect
+   ratio for portraits and landscapes alike. */
+.workflow-node .node-preview-thumb {
+  display: block;
+  max-width: 120px;
+  max-height: 80px;
+  margin: 6px auto 0;
+  border-radius: 4px;
+  object-fit: contain;
+  border: 1px solid var(--border);
+  background: var(--bg);
+}
+
+.workflow-node .node-preview-loading,
+.workflow-node .node-preview-error {
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-top: 4px;
+  text-align: center;
+}
+
+.workflow-node .node-preview-error {
+  color: var(--status-error, #d04a4a);
 }
 
 .workflow-node.node-output .node-body {
@@ -1148,8 +1215,13 @@
 }
 
 @keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
 }
 
 .elapsed {
@@ -1195,31 +1267,41 @@
   --node-accent: var(--accent-green-alt);
   --node-accent-rgb: 32, 196, 160;
 }
-.workflow-node.node-input .node-header { color: var(--accent-green-alt); }
+.workflow-node.node-input .node-header {
+  color: var(--accent-green-alt);
+}
 
 .workflow-node.node-inference {
   --node-accent: var(--accent-purple);
   --node-accent-rgb: 160, 122, 255;
 }
-.workflow-node.node-inference .node-header { color: var(--accent-purple); }
+.workflow-node.node-inference .node-header {
+  color: var(--accent-purple);
+}
 
 .workflow-node.node-output {
   --node-accent: var(--accent-green);
   --node-accent-rgb: 52, 217, 138;
 }
-.workflow-node.node-output .node-header { color: var(--accent-green); }
+.workflow-node.node-output .node-header {
+  color: var(--accent-green);
+}
 
 .workflow-node.node-control {
   --node-accent: var(--accent-blue);
   --node-accent-rgb: 74, 154, 255;
 }
-.workflow-node.node-control .node-header { color: var(--accent-blue); }
+.workflow-node.node-control .node-header {
+  color: var(--accent-blue);
+}
 
 .workflow-node.node-debug {
   --node-accent: var(--accent-amber);
   --node-accent-rgb: 255, 176, 64;
 }
-.workflow-node.node-debug .node-header { color: var(--accent-amber); }
+.workflow-node.node-debug .node-header {
+  color: var(--accent-amber);
+}
 
 /* Drive the 3 px top stripe from the category accent. Done in a
    single rule so adding a category in the future only needs the
@@ -1277,8 +1359,13 @@
 }
 
 @keyframes running-glow {
-  0%, 100% { box-shadow: 0 0 4px rgba(74, 154, 255, 0.15); }
-  50% { box-shadow: var(--shadow-glow-blue); }
+  0%,
+  100% {
+    box-shadow: 0 0 4px rgba(74, 154, 255, 0.15);
+  }
+  50% {
+    box-shadow: var(--shadow-glow-blue);
+  }
 }
 
 /* ── Handle / Port styling ──
@@ -1289,12 +1376,16 @@
   height: 11px !important;
   border: 2px solid var(--bg-elev-3) !important;
   border-radius: 50% !important;
-  transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+  transition:
+    transform var(--transition-fast),
+    box-shadow var(--transition-fast);
 }
 
 .react-flow__handle:hover {
   transform: scale(1.5);
-  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.1), 0 0 12px currentColor;
+  box-shadow:
+    0 0 0 3px rgba(255, 255, 255, 0.1),
+    0 0 12px currentColor;
 }
 
 /* `currentColor` resolution for the hover glow above. We set
@@ -1400,7 +1491,10 @@
  * Stroke colour and width are computed per-edge in App.tsx (data-type
  * dependent). CSS adds selection highlight and running-state glow. */
 .react-flow__edge-path {
-  transition: stroke 0.3s, stroke-width 0.2s, filter 0.2s;
+  transition:
+    stroke 0.3s,
+    stroke-width 0.2s,
+    filter 0.2s;
 }
 
 /* Selected edge: brighter halo */
@@ -1595,7 +1689,9 @@
   background: var(--bg-elev-1) !important;
   border-color: var(--border-subtle) !important;
   color: var(--text-muted) !important;
-  transition: background var(--transition-fast), color var(--transition-fast);
+  transition:
+    background var(--transition-fast),
+    color var(--transition-fast);
 }
 
 .react-flow__controls button:hover {
@@ -1661,11 +1757,11 @@
   .workflow-node {
     border: 2px solid ButtonText;
   }
-  
+
   .console-btn {
     border: 2px solid ButtonText;
   }
-  
+
   .react-flow__handle {
     border: 2px solid ButtonText !important;
   }
@@ -1720,13 +1816,20 @@
   text-align: center;
 }
 @keyframes reconnect-pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.35; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
 }
 
 /* ── Node breakpoint indicator (any node type) ────── */
 .react-flow__node.node-bp-armed {
-  box-shadow: inset 4px 0 0 var(--accent-red-alt), 0 0 0 1px rgba(220, 38, 38, 0.3);
+  box-shadow:
+    inset 4px 0 0 var(--accent-red-alt),
+    0 0 0 1px rgba(220, 38, 38, 0.3);
 }
 .react-flow__node.node-bp-armed::before {
   content: '';
@@ -1752,7 +1855,9 @@
   pointer-events: none;
 }
 .react-flow__node.node-paused {
-  box-shadow: 0 0 0 2px var(--accent-amber), 0 0 12px rgba(245, 158, 11, 0.4);
+  box-shadow:
+    0 0 0 2px var(--accent-amber),
+    0 0 12px rgba(245, 158, 11, 0.4);
 }
 
 /* ── Node context menu ────────────────────────────── */
@@ -1986,7 +2091,7 @@
 }
 
 /* ── Light theme support ──────────────────────────────────── */
-[data-theme="light"] {
+[data-theme='light'] {
   /* Backgrounds */
   --bg-base: #f5f5f7;
   --bg-elev-1: #ffffff;
@@ -2050,31 +2155,31 @@
  * but our custom component styles (controls, minimap, nodes)
  * need explicit overrides to look correct on a light surface. */
 
-[data-theme="light"] .canvas-area {
+[data-theme='light'] .canvas-area {
   background: var(--bg-canvas);
 }
 
-[data-theme="light"] .react-flow__controls {
+[data-theme='light'] .react-flow__controls {
   background: var(--bg-elev-1) !important;
   border: 1px solid var(--border-default) !important;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1) !important;
 }
 
-[data-theme="light"] .react-flow__controls button {
+[data-theme='light'] .react-flow__controls button {
   background: var(--bg-elev-1) !important;
   border-color: var(--border-default) !important;
   color: var(--text-secondary) !important;
 }
 
-[data-theme="light"] .react-flow__controls button:hover {
+[data-theme='light'] .react-flow__controls button:hover {
   background: var(--bg-elev-2) !important;
 }
 
-[data-theme="light"] .react-flow__controls svg {
+[data-theme='light'] .react-flow__controls svg {
   fill: var(--text-secondary) !important;
 }
 
-[data-theme="light"] .react-flow__minimap {
+[data-theme='light'] .react-flow__minimap {
   background: linear-gradient(
     180deg,
     rgba(255, 255, 255, 0.9) 0%,
@@ -2086,40 +2191,40 @@
     0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
-[data-theme="light"] .react-flow__minimap-mask {
+[data-theme='light'] .react-flow__minimap-mask {
   fill-opacity: 0.6;
 }
 
-[data-theme="light"] .react-flow__minimap-node {
+[data-theme='light'] .react-flow__minimap-node {
   stroke: rgba(0, 0, 0, 0.15);
 }
 
-[data-theme="light"] .workflow-node {
+[data-theme='light'] .workflow-node {
   background: var(--bg-elev-1);
   border: 1px solid var(--border-default);
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
   color: var(--text-secondary);
 }
 
-[data-theme="light"] .workflow-node:hover {
+[data-theme='light'] .workflow-node:hover {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
   border-color: var(--border-strong);
 }
 
-[data-theme="light"] .workflow-node .node-header {
+[data-theme='light'] .workflow-node .node-header {
   border-bottom-color: var(--border-subtle);
 }
 
-[data-theme="light"] .workflow-node .node-status.idle {
+[data-theme='light'] .workflow-node .node-status.idle {
   background: var(--bg-elev-2);
   color: var(--text-faint);
 }
 
-[data-theme="light"] .workflow-node .node-body {
+[data-theme='light'] .workflow-node .node-body {
   color: var(--text-muted);
 }
 
-[data-theme="light"] .react-flow__node.selected > .workflow-node {
+[data-theme='light'] .react-flow__node.selected > .workflow-node {
   border-color: var(--accent-blue) !important;
   box-shadow:
     0 0 0 1px var(--accent-blue) inset,
@@ -2127,233 +2232,233 @@
     0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
-[data-theme="light"] .react-flow__node.selected > .workflow-node.node-input {
+[data-theme='light'] .react-flow__node.selected > .workflow-node.node-input {
   border-color: var(--accent-green-alt) !important;
 }
-[data-theme="light"] .react-flow__node.selected > .workflow-node.node-inference {
+[data-theme='light'] .react-flow__node.selected > .workflow-node.node-inference {
   border-color: var(--accent-purple) !important;
 }
-[data-theme="light"] .react-flow__node.selected > .workflow-node.node-output {
+[data-theme='light'] .react-flow__node.selected > .workflow-node.node-output {
   border-color: var(--accent-green) !important;
 }
-[data-theme="light"] .react-flow__node.selected > .workflow-node.node-control {
+[data-theme='light'] .react-flow__node.selected > .workflow-node.node-control {
   border-color: var(--accent-blue) !important;
 }
-[data-theme="light"] .react-flow__node.selected > .workflow-node.node-debug {
+[data-theme='light'] .react-flow__node.selected > .workflow-node.node-debug {
   border-color: var(--accent-amber) !important;
 }
 
-[data-theme="light"] .react-flow__edge.selected .react-flow__edge-path {
+[data-theme='light'] .react-flow__edge.selected .react-flow__edge-path {
   filter: drop-shadow(0 0 3px var(--accent-blue));
 }
 
-[data-theme="light"] .react-flow__edge.animated .react-flow__edge-path {
+[data-theme='light'] .react-flow__edge.animated .react-flow__edge-path {
   filter: drop-shadow(0 0 2px currentColor);
 }
 
-[data-theme="light"] .react-flow__handle {
+[data-theme='light'] .react-flow__handle {
   border: 2px solid var(--bg-elev-2) !important;
 }
 
-[data-theme="light"] .left-sidebar {
+[data-theme='light'] .left-sidebar {
   background: var(--bg-sidebar);
   border-right-color: var(--border-subtle);
 }
 
-[data-theme="light"] .right-sidebar {
+[data-theme='light'] .right-sidebar {
   background: var(--bg-sidebar);
   border-left-color: var(--border-subtle);
 }
 
-[data-theme="light"] .bottom-console {
+[data-theme='light'] .bottom-console {
   background: var(--bg-base);
   border-top-color: var(--border-subtle);
 }
 
-[data-theme="light"] .palette-title,
-[data-theme="light"] .props-title {
+[data-theme='light'] .palette-title,
+[data-theme='light'] .props-title {
   border-bottom-color: var(--border-subtle);
   color: var(--text-secondary);
 }
 
-[data-theme="light"] .palette-category {
+[data-theme='light'] .palette-category {
   border-bottom-color: var(--border-subtle);
 }
 
-[data-theme="light"] .palette-node-card {
+[data-theme='light'] .palette-node-card {
   background: var(--bg-elev-1);
   border-color: var(--border-subtle);
   color: var(--text-secondary);
 }
 
-[data-theme="light"] .palette-node-card:hover {
+[data-theme='light'] .palette-node-card:hover {
   background: var(--bg-elev-2);
   border-color: var(--border-default);
 }
 
-[data-theme="light"] .palette-search-input {
+[data-theme='light'] .palette-search-input {
   background: var(--bg-elev-1);
   border-color: var(--border-default);
   color: var(--text-primary);
 }
 
-[data-theme="light"] .palette-search-input:focus {
+[data-theme='light'] .palette-search-input:focus {
   border-color: var(--accent-blue);
   box-shadow: 0 0 0 2px rgba(0, 113, 227, 0.15);
 }
 
-[data-theme="light"] .console-toolbar {
+[data-theme='light'] .console-toolbar {
   background: var(--bg-elev-1);
   border-bottom-color: var(--border-subtle);
 }
 
-[data-theme="light"] .console-btn {
+[data-theme='light'] .console-btn {
   background: var(--bg-elev-2);
   border-color: var(--border-default);
   color: var(--text-muted);
 }
 
-[data-theme="light"] .console-btn:hover:not(:disabled) {
+[data-theme='light'] .console-btn:hover:not(:disabled) {
   background: var(--bg-elev-3);
   color: var(--text-secondary);
 }
 
-[data-theme="light"] .console-btn.run {
+[data-theme='light'] .console-btn.run {
   background: rgba(36, 138, 61, 0.1);
   border-color: rgba(36, 138, 61, 0.3);
   color: var(--accent-green-alt);
 }
 
-[data-theme="light"] .console-btn.stop {
+[data-theme='light'] .console-btn.stop {
   background: rgba(255, 59, 48, 0.1);
   border-color: rgba(255, 59, 48, 0.3);
   color: var(--accent-red);
 }
 
-[data-theme="light"] .console-btn.continue {
+[data-theme='light'] .console-btn.continue {
   background: rgba(0, 113, 227, 0.1);
   border-color: rgba(0, 113, 227, 0.3);
   color: var(--accent-blue);
 }
 
-[data-theme="light"] .console-btn.step {
+[data-theme='light'] .console-btn.step {
   background: rgba(255, 149, 0, 0.1);
   border-color: rgba(255, 149, 0, 0.3);
   color: var(--accent-amber);
 }
 
-[data-theme="light"] .console-log-area {
+[data-theme='light'] .console-log-area {
   background: var(--bg-elev-1);
   color: var(--text-secondary);
 }
 
-[data-theme="light"] .console-log-entry .log-time {
+[data-theme='light'] .console-log-entry .log-time {
   color: var(--text-faint);
 }
 
-[data-theme="light"] .console-log-entry .log-node {
+[data-theme='light'] .console-log-entry .log-node {
   color: var(--accent-blue-strong);
 }
 
-[data-theme="light"] .console-log-entry .log-msg {
+[data-theme='light'] .console-log-entry .log-msg {
   color: var(--text-muted);
 }
 
-[data-theme="light"] .config-field input[type="text"],
-[data-theme="light"] .config-field input[type="number"],
-[data-theme="light"] .config-field input[type="url"],
-[data-theme="light"] .config-field textarea,
-[data-theme="light"] .config-select,
-[data-theme="light"] .config-field select {
+[data-theme='light'] .config-field input[type='text'],
+[data-theme='light'] .config-field input[type='number'],
+[data-theme='light'] .config-field input[type='url'],
+[data-theme='light'] .config-field textarea,
+[data-theme='light'] .config-select,
+[data-theme='light'] .config-field select {
   background: var(--bg-elev-1);
   border-color: var(--border-default);
   color: var(--text-primary);
 }
 
-[data-theme="light"] .config-field input:focus,
-[data-theme="light"] .config-field select:focus,
-[data-theme="light"] .config-field textarea:focus {
+[data-theme='light'] .config-field input:focus,
+[data-theme='light'] .config-field select:focus,
+[data-theme='light'] .config-field textarea:focus {
   border-color: var(--accent-blue);
   box-shadow: 0 0 0 2px rgba(0, 113, 227, 0.15);
 }
 
-[data-theme="light"] .props-empty-icon {
+[data-theme='light'] .props-empty-icon {
   color: var(--border-default);
   filter: none;
 }
 
-[data-theme="light"] .kbd-chip {
+[data-theme='light'] .kbd-chip {
   background: var(--bg-elev-2);
   border-color: var(--border-default);
   color: var(--text-muted);
   box-shadow: 0 1px 0 rgba(0, 0, 0, 0.05);
 }
 
-[data-theme="light"] .reconnect-banner {
+[data-theme='light'] .reconnect-banner {
   background: rgba(255, 149, 0, 0.1);
   border-bottom-color: rgba(255, 149, 0, 0.3);
 }
 
-[data-theme="light"] .reconnect-banner .reconnect-dot {
+[data-theme='light'] .reconnect-banner .reconnect-dot {
   background: var(--accent-red);
   box-shadow: 0 0 6px rgba(255, 59, 48, 0.4);
 }
 
-[data-theme="light"] .toast.info {
+[data-theme='light'] .toast.info {
   background: rgba(0, 113, 227, 0.1);
   border-color: rgba(0, 113, 227, 0.25);
 }
 
-[data-theme="light"] .toast.warn {
+[data-theme='light'] .toast.warn {
   background: rgba(255, 149, 0, 0.1);
   border-color: rgba(255, 149, 0, 0.25);
 }
 
-[data-theme="light"] .toast.error {
+[data-theme='light'] .toast.error {
   background: rgba(255, 59, 48, 0.1);
   border-color: rgba(255, 59, 48, 0.25);
 }
 
-[data-theme="light"] .toast.success {
+[data-theme='light'] .toast.success {
   background: rgba(52, 199, 89, 0.1);
   border-color: rgba(52, 199, 89, 0.25);
 }
 
-[data-theme="light"] .palette-node-icon {
+[data-theme='light'] .palette-node-icon {
   color: var(--text-muted);
 }
 
-[data-theme="light"] .palette-cat-indicator {
+[data-theme='light'] .palette-cat-indicator {
   box-shadow: 0 0 4px rgba(0, 0, 0, 0.1);
 }
 
-[data-theme="light"] .empty-state h2 {
+[data-theme='light'] .empty-state h2 {
   color: var(--text-muted);
 }
 
-[data-theme="light"] .empty-state p {
+[data-theme='light'] .empty-state p {
   color: var(--text-faint);
 }
 
-[data-theme="light"] .model-inspector-drawer {
+[data-theme='light'] .model-inspector-drawer {
   box-shadow: -4px 0 16px rgba(0, 0, 0, 0.12);
 }
 
-[data-theme="light"] .model-inspector-layers tr:hover {
+[data-theme='light'] .model-inspector-layers tr:hover {
   background: rgba(175, 82, 222, 0.08);
 }
 
-[data-theme="light"] .model-inspector-layers tr.selected {
+[data-theme='light'] .model-inspector-layers tr.selected {
   background: rgba(175, 82, 222, 0.15);
 }
 
-[data-theme="light"] .model-inspector-layers th {
+[data-theme='light'] .model-inspector-layers th {
   background: var(--bg-elev-1);
   color: var(--text-faint);
   border-bottom-color: var(--border-default);
 }
 
-[data-theme="light"] .model-inspector-layers td {
+[data-theme='light'] .model-inspector-layers td {
   color: var(--text-secondary);
   border-bottom-color: var(--border-subtle);
 }

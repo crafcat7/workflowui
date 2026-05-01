@@ -1,0 +1,184 @@
+{
+  "version": 1,
+  "nodes": [
+    {
+      "id": "img_in",
+      "type": "inputImage",
+      "position": { "x": -800, "y": 100 },
+      "data": {
+        "label": "Input Image (preview thumbnail)",
+        "config": {
+          "filePath": "demo/NCNN_demo/sample_224.png"
+        },
+        "status": "idle"
+      }
+    },
+    {
+      "id": "img_save",
+      "type": "saveImage",
+      "position": { "x": -480, "y": 100 },
+      "data": {
+        "label": "Save Image (preview after run)",
+        "config": {
+          "filePath": "demo/NCNN_demo/roundtrip.png"
+        },
+        "status": "idle"
+      }
+    },
+    {
+      "id": "net",
+      "type": "createNet",
+      "position": { "x": -800, "y": 380 },
+      "data": {
+        "label": "MobileNetV2 (NCNN)",
+        "config": {
+          "vendor": "ncnn",
+          "paramPath": "demo/NCNN_demo/mobilenetv2.param",
+          "modelPath": "demo/NCNN_demo/mobilenetv2.bin",
+          "inputName": "in0",
+          "outputName": "out0",
+          "inputW": "224",
+          "inputH": "224",
+          "inputC": "3",
+          "numThreads": "2"
+        },
+        "status": "idle"
+      }
+    },
+    {
+      "id": "infer",
+      "type": "inference",
+      "position": { "x": -440, "y": 250 },
+      "data": {
+        "label": "Inference (image -> tensor coercion)",
+        "config": {},
+        "status": "idle"
+      }
+    },
+    {
+      "id": "post",
+      "type": "postprocess",
+      "position": { "x": -120, "y": 250 },
+      "data": {
+        "label": "Top-K (k=5)",
+        "config": {
+          "op": "topk",
+          "k": "5"
+        },
+        "status": "idle"
+      }
+    },
+    {
+      "id": "cond",
+      "type": "condition",
+      "position": { "x": 200, "y": 250 },
+      "data": {
+        "label": "max > 0.1 ?",
+        "config": {
+          "expression": "max > 0.1"
+        },
+        "status": "idle"
+      }
+    },
+    {
+      "id": "inspect",
+      "type": "debug",
+      "position": { "x": 540, "y": 110 },
+      "data": {
+        "label": "Inspect Top-K",
+        "config": {},
+        "status": "idle"
+      }
+    },
+    {
+      "id": "out_main",
+      "type": "output",
+      "position": { "x": 870, "y": 110 },
+      "data": {
+        "label": "Classification Output",
+        "config": {},
+        "status": "idle"
+      }
+    },
+    {
+      "id": "save_text",
+      "type": "saveText",
+      "position": { "x": 540, "y": 390 },
+      "data": {
+        "label": "Low Confidence Log (false branch)",
+        "config": {
+          "filePath": "demo/NCNN_demo/low_confidence.txt"
+        },
+        "status": "idle"
+      }
+    },
+    {
+      "id": "heatmap",
+      "type": "tensorToImage",
+      "position": { "x": -120, "y": 500 },
+      "data": {
+        "label": "Softmax Heatmap",
+        "config": {
+          "width": "256",
+          "height": "32",
+          "colormap": "viridis",
+          "normalize": "auto"
+        },
+        "status": "idle"
+      }
+    },
+    {
+      "id": "save_heatmap",
+      "type": "saveImage",
+      "position": { "x": 200, "y": 500 },
+      "data": {
+        "label": "Save Softmax Heatmap",
+        "config": {
+          "filePath": "demo/NCNN_demo/softmax_heatmap.png"
+        },
+        "status": "idle"
+      }
+    },
+    {
+      "id": "annotate",
+      "type": "annotateImage",
+      "position": { "x": -120, "y": 660 },
+      "data": {
+        "label": "Annotate (top-5)",
+        "config": {
+          "labelsPath": "demo/NCNN_demo/imagenet_classes.txt",
+          "maxLines": "5",
+          "fontScale": "2"
+        },
+        "status": "idle"
+      }
+    },
+    {
+      "id": "save_annotated",
+      "type": "saveImage",
+      "position": { "x": 200, "y": 660 },
+      "data": {
+        "label": "Save Annotated Image",
+        "config": {
+          "filePath": "demo/NCNN_demo/classified.png"
+        },
+        "status": "idle"
+      }
+    }
+  ],
+  "edges": [
+    { "id": "e_img_save",   "source": "img_in",  "sourceHandle": "image_data",   "target": "img_save",  "targetHandle": "image_data" },
+    { "id": "e_net_infer",  "source": "net",     "sourceHandle": "net_handle",   "target": "infer",     "targetHandle": "net_handle" },
+    { "id": "e_img_infer",  "source": "img_in",  "sourceHandle": "image_data",   "target": "infer",     "targetHandle": "input_data" },
+    { "id": "e_infer_post", "source": "infer",   "sourceHandle": "output_data",  "target": "post",      "targetHandle": "input_data" },
+    { "id": "e_post_cond",  "source": "post",    "sourceHandle": "output_data",  "target": "cond",      "targetHandle": "input_data" },
+    { "id": "e_true",       "source": "cond",    "sourceHandle": "true_branch",  "target": "inspect",   "targetHandle": "data_in" },
+    { "id": "e_inspect",    "source": "inspect", "sourceHandle": "data_out",     "target": "out_main",  "targetHandle": "data" },
+    { "id": "e_false",      "source": "cond",    "sourceHandle": "false_branch", "target": "save_text", "targetHandle": "data" },
+    { "id": "e_post_heat",  "source": "post",    "sourceHandle": "output_data",  "target": "heatmap",   "targetHandle": "input_data" },
+    { "id": "e_heat_save",  "source": "heatmap", "sourceHandle": "image_data",   "target": "save_heatmap", "targetHandle": "image_data" },
+    { "id": "e_img_ann",    "source": "img_in",  "sourceHandle": "image_data",   "target": "annotate",  "targetHandle": "image_data" },
+    { "id": "e_post_ann",   "source": "post",    "sourceHandle": "output_data",  "target": "annotate",  "targetHandle": "topk_data" },
+    { "id": "e_ann_save",   "source": "annotate","sourceHandle": "output_data",  "target": "save_annotated", "targetHandle": "image_data" }
+  ]
+}

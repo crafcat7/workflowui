@@ -5,6 +5,10 @@
 #include <algorithm>
 #include <atomic>
 #include <chrono>
+#include <cstdint>
+#include <cstdio>
+#include <filesystem>
+#include <fstream>
 #include <thread>
 #include <unordered_set>
 
@@ -155,6 +159,388 @@ TEST(ExecutorTest, PostprocessTopK) {
   EXPECT_FLOAT_EQ(output[1], 0.9f);
   EXPECT_FLOAT_EQ(output[2], 4.0f);
   EXPECT_FLOAT_EQ(output[3], 0.8f);
+}
+
+// ---------------------------------------------------------------------------
+// Image-output handlers (tensorToImage, annotateImage)
+//
+// We exercise these end-to-end: drive the handler from a real Executor run,
+// pipe the result into saveImage, then poke at the resulting PNG on disk.
+// SecurityConfig is left in pass-through mode so absolute temp paths work.
+// ---------------------------------------------------------------------------
+
+namespace {
+
+namespace fs = std::filesystem;
+
+fs::path make_scratch_dir(const std::string& tag) {
+  fs::path p = fs::temp_directory_path() /
+               ("workflowui_imgh_" +
+                std::to_string(::testing::UnitTest::GetInstance()->random_seed()) + "_" + tag);
+  fs::create_directories(p);
+  return p;
+}
+
+// Validates the file is a non-empty PNG (89 50 4E 47 magic). We deliberately
+// don't try to decode + verify pixel content here — that path is already
+// covered by InputImageHandler tests elsewhere; here we only need to know the
+// handler produced a writable, structurally-valid PNG.
+void expect_valid_png(const fs::path& p) {
+  ASSERT_TRUE(fs::exists(p)) << "expected PNG at " << p;
+  ASSERT_GE(fs::file_size(p), 8u);
+  std::ifstream f(p, std::ios::binary);
+  ASSERT_TRUE(f.good());
+  unsigned char magic[8] = {0};
+  f.read(reinterpret_cast<char*>(magic), 8);
+  EXPECT_EQ(magic[0], 0x89);
+  EXPECT_EQ(magic[1], 'P');
+  EXPECT_EQ(magic[2], 'N');
+  EXPECT_EQ(magic[3], 'G');
+}
+
+}  // namespace
+
+TEST(ExecutorTest, TensorToImageWritesPng) {
+  auto scratch = make_scratch_dir("t2i");
+  auto out = scratch / "heatmap.png";
+
+  auto engine = std::make_shared<MockEngine>();
+  Executor executor(engine);
+
+  WorkflowGraph graph;
+
+  NodeDef n1;
+  n1.id = "src";
+  n1.type = "inputTensor";
+  n1.config["fillMode"] = "text";
+  // 8 values that span a non-trivial range so normalize=auto exercises both
+  // ends of the colormap.
+  n1.config["tensorText"] = "0.0 0.1 0.2 0.5 0.8 1.0 0.4 0.3";
+  graph.add_node(n1);
+
+  NodeDef n2;
+  n2.id = "viz";
+  n2.type = "tensorToImage";
+  n2.config["width"] = "32";
+  n2.config["height"] = "8";
+  n2.config["colormap"] = "viridis";
+  graph.add_node(n2);
+
+  NodeDef n3;
+  n3.id = "sink";
+  n3.type = "saveImage";
+  n3.config["filePath"] = out.string();
+  graph.add_node(n3);
+
+  EdgeDef e1;
+  e1.source = "src";
+  e1.source_handle = "tensor_data";
+  e1.target = "viz";
+  e1.target_handle = "input_data";
+  graph.add_edge(e1);
+
+  EdgeDef e2;
+  e2.source = "viz";
+  e2.source_handle = "image_data";
+  e2.target = "sink";
+  e2.target_handle = "image_data";
+  graph.add_edge(e2);
+
+  // Capture per-node terminal statuses so the test surfaces a useful
+  // error if any node failed instead of just complaining about a missing PNG.
+  std::unordered_set<std::string> done_ids;
+  std::string failure_msg;
+  executor.set_status_callback([&](const std::string& node_id, const json& status) {
+    if (status.value("status", "") == "done") done_ids.insert(node_id);
+    if (status.value("status", "") == "error") {
+      failure_msg += node_id + ":" + status.value("error", "") + ";";
+    }
+  });
+
+  executor.execute(graph);
+
+  EXPECT_TRUE(failure_msg.empty()) << failure_msg;
+  EXPECT_EQ(done_ids.size(), 3u);
+  expect_valid_png(out);
+
+  // Cleanup
+  std::error_code ec;
+  fs::remove_all(scratch, ec);
+}
+
+TEST(ExecutorTest, TensorToImageGrayscaleAlsoWorks) {
+  auto scratch = make_scratch_dir("t2i_gray");
+  auto out = scratch / "gray.png";
+
+  auto engine = std::make_shared<MockEngine>();
+  Executor executor(engine);
+
+  WorkflowGraph graph;
+
+  NodeDef n1;
+  n1.id = "src";
+  n1.type = "inputTensor";
+  n1.config["fillMode"] = "text";
+  n1.config["tensorText"] = "0.2 0.5 0.9";
+  graph.add_node(n1);
+
+  NodeDef n2;
+  n2.id = "viz";
+  n2.type = "tensorToImage";
+  n2.config["colormap"] = "gray";
+  n2.config["normalize"] = "none";  // raw 0..1 clamp
+  graph.add_node(n2);
+
+  NodeDef n3;
+  n3.id = "sink";
+  n3.type = "saveImage";
+  n3.config["filePath"] = out.string();
+  graph.add_node(n3);
+
+  graph.add_edge(EdgeDef{"src", "tensor_data", "viz", "input_data"});
+  graph.add_edge(EdgeDef{"viz", "image_data", "sink", "image_data"});
+
+  std::string failure_msg;
+  executor.set_status_callback([&](const std::string& node_id, const json& status) {
+    if (status.value("status", "") == "error") {
+      failure_msg += node_id + ":" + status.value("error", "") + ";";
+    }
+  });
+
+  executor.execute(graph);
+  EXPECT_TRUE(failure_msg.empty()) << failure_msg;
+  expect_valid_png(out);
+
+  std::error_code ec;
+  fs::remove_all(scratch, ec);
+}
+
+TEST(ExecutorTest, AnnotateImageOverlaysTopKWithLabels) {
+  auto scratch = make_scratch_dir("annotate");
+  auto labels_path = scratch / "labels.txt";
+  auto out_path = scratch / "annotated.png";
+
+  // A tiny 3-class label file. Index 2 will win the synthetic top-K.
+  {
+    std::ofstream f(labels_path);
+    f << "alpha\n";
+    f << "beta\n";
+    f << "gamma\n";
+  }
+
+  // Synthesize a 16x16 RGBA image directly via tensorToImage so we don't need
+  // a fixture PNG. We then route it into annotateImage along with a top-K
+  // tensor, and finally saveImage. This is the same wiring shape the demo
+  // workflow uses (postprocess→annotateImage), minus an inference engine.
+  auto engine = std::make_shared<MockEngine>();
+  Executor executor(engine);
+
+  WorkflowGraph graph;
+
+  // Synthetic image source.
+  NodeDef img_src;
+  img_src.id = "img_src";
+  img_src.type = "inputTensor";
+  img_src.config["fillMode"] = "auto";
+  img_src.config["shape"] = "256";
+  img_src.config["fillValue"] = "0.5";
+  graph.add_node(img_src);
+
+  NodeDef to_img;
+  to_img.id = "to_img";
+  to_img.type = "tensorToImage";
+  to_img.config["width"] = "128";
+  to_img.config["height"] = "64";
+  to_img.config["colormap"] = "gray";
+  graph.add_node(to_img);
+
+  // Top-K tensor source — pretend postprocess already ran. Index 2 ("gamma")
+  // beats the others.
+  NodeDef topk_src;
+  topk_src.id = "topk_src";
+  topk_src.type = "inputTensor";
+  topk_src.config["fillMode"] = "text";
+  topk_src.config["tensorText"] = "2 0.91  0 0.05  1 0.04";
+  graph.add_node(topk_src);
+
+  NodeDef ann;
+  ann.id = "ann";
+  ann.type = "annotateImage";
+  ann.config["labelsPath"] = labels_path.string();
+  ann.config["maxLines"] = "3";
+  ann.config["fontScale"] = "1";
+  graph.add_node(ann);
+
+  NodeDef sink;
+  sink.id = "sink";
+  sink.type = "saveImage";
+  sink.config["filePath"] = out_path.string();
+  graph.add_node(sink);
+
+  graph.add_edge(EdgeDef{"img_src", "tensor_data", "to_img", "input_data"});
+  graph.add_edge(EdgeDef{"to_img", "image_data", "ann", "image_data"});
+  graph.add_edge(EdgeDef{"topk_src", "tensor_data", "ann", "topk_data"});
+  graph.add_edge(EdgeDef{"ann", "output_data", "sink", "image_data"});
+
+  std::string failure_msg;
+  std::unordered_set<std::string> done_ids;
+  executor.set_status_callback([&](const std::string& node_id, const json& status) {
+    if (status.value("status", "") == "done") done_ids.insert(node_id);
+    if (status.value("status", "") == "error") {
+      failure_msg += node_id + ":" + status.value("error", "") + ";";
+    }
+  });
+
+  executor.execute(graph);
+
+  EXPECT_TRUE(failure_msg.empty()) << failure_msg;
+  EXPECT_EQ(done_ids.count("ann"), 1u);
+  EXPECT_EQ(done_ids.count("sink"), 1u);
+  expect_valid_png(out_path);
+
+  // Sanity-check the annotated PNG dimensions match the input by re-decoding
+  // and comparing widths. Cheap, but proves annotateImage didn't accidentally
+  // resize or corrupt the buffer geometry.
+  std::ifstream f(out_path, std::ios::binary);
+  ASSERT_TRUE(f.good());
+  // PNG IHDR width/height are at byte offsets 16..23 (big-endian uint32 each).
+  unsigned char header[24] = {0};
+  f.read(reinterpret_cast<char*>(header), 24);
+  uint32_t w = (uint32_t(header[16]) << 24) | (uint32_t(header[17]) << 16) |
+               (uint32_t(header[18]) << 8) | uint32_t(header[19]);
+  uint32_t h = (uint32_t(header[20]) << 24) | (uint32_t(header[21]) << 16) |
+               (uint32_t(header[22]) << 8) | uint32_t(header[23]);
+  EXPECT_EQ(w, 128u);
+  EXPECT_EQ(h, 64u);
+
+  std::error_code ec;
+  fs::remove_all(scratch, ec);
+}
+
+TEST(ExecutorTest, AnnotateImageWithoutLabelsFallsBackToIndex) {
+  auto scratch = make_scratch_dir("annotate_nolabels");
+  auto out_path = scratch / "annotated_idx.png";
+
+  auto engine = std::make_shared<MockEngine>();
+  Executor executor(engine);
+
+  WorkflowGraph graph;
+
+  NodeDef img_src;
+  img_src.id = "img_src";
+  img_src.type = "inputTensor";
+  img_src.config["fillMode"] = "auto";
+  img_src.config["shape"] = "16";
+  graph.add_node(img_src);
+
+  NodeDef to_img;
+  to_img.id = "to_img";
+  to_img.type = "tensorToImage";
+  to_img.config["width"] = "64";
+  to_img.config["height"] = "32";
+  graph.add_node(to_img);
+
+  NodeDef topk_src;
+  topk_src.id = "topk_src";
+  topk_src.type = "inputTensor";
+  topk_src.config["fillMode"] = "text";
+  topk_src.config["tensorText"] = "207 0.79";
+  graph.add_node(topk_src);
+
+  NodeDef ann;
+  ann.id = "ann";
+  ann.type = "annotateImage";
+  // labelsPath intentionally unset.
+  graph.add_node(ann);
+
+  NodeDef sink;
+  sink.id = "sink";
+  sink.type = "saveImage";
+  sink.config["filePath"] = out_path.string();
+  graph.add_node(sink);
+
+  graph.add_edge(EdgeDef{"img_src", "tensor_data", "to_img", "input_data"});
+  graph.add_edge(EdgeDef{"to_img", "image_data", "ann", "image_data"});
+  graph.add_edge(EdgeDef{"topk_src", "tensor_data", "ann", "topk_data"});
+  graph.add_edge(EdgeDef{"ann", "output_data", "sink", "image_data"});
+
+  std::string failure_msg;
+  executor.set_status_callback([&](const std::string& node_id, const json& status) {
+    if (status.value("status", "") == "error") {
+      failure_msg += node_id + ":" + status.value("error", "") + ";";
+    }
+  });
+  executor.execute(graph);
+
+  EXPECT_TRUE(failure_msg.empty()) << failure_msg;
+  expect_valid_png(out_path);
+
+  std::error_code ec;
+  fs::remove_all(scratch, ec);
+}
+
+TEST(ExecutorTest, AnnotateImageMissingLabelsFileErrors) {
+  auto scratch = make_scratch_dir("annotate_badlabels");
+  auto bogus_labels = scratch / "does_not_exist.txt";
+  auto out_path = scratch / "annotated_err.png";
+
+  auto engine = std::make_shared<MockEngine>();
+  Executor executor(engine);
+
+  WorkflowGraph graph;
+
+  NodeDef img_src;
+  img_src.id = "img_src";
+  img_src.type = "inputTensor";
+  img_src.config["fillMode"] = "auto";
+  img_src.config["shape"] = "16";
+  graph.add_node(img_src);
+
+  NodeDef to_img;
+  to_img.id = "to_img";
+  to_img.type = "tensorToImage";
+  to_img.config["width"] = "32";
+  to_img.config["height"] = "16";
+  graph.add_node(to_img);
+
+  NodeDef topk_src;
+  topk_src.id = "topk_src";
+  topk_src.type = "inputTensor";
+  topk_src.config["fillMode"] = "text";
+  topk_src.config["tensorText"] = "0 0.5";
+  graph.add_node(topk_src);
+
+  NodeDef ann;
+  ann.id = "ann";
+  ann.type = "annotateImage";
+  ann.config["labelsPath"] = bogus_labels.string();
+  graph.add_node(ann);
+
+  NodeDef sink;
+  sink.id = "sink";
+  sink.type = "saveImage";
+  sink.config["filePath"] = out_path.string();
+  graph.add_node(sink);
+
+  graph.add_edge(EdgeDef{"img_src", "tensor_data", "to_img", "input_data"});
+  graph.add_edge(EdgeDef{"to_img", "image_data", "ann", "image_data"});
+  graph.add_edge(EdgeDef{"topk_src", "tensor_data", "ann", "topk_data"});
+  graph.add_edge(EdgeDef{"ann", "output_data", "sink", "image_data"});
+
+  std::string ann_error;
+  executor.set_status_callback([&](const std::string& node_id, const json& status) {
+    if (node_id == "ann" && status.value("status", "") == "error") {
+      ann_error = status.value("error", "");
+    }
+  });
+  executor.execute(graph);
+
+  EXPECT_FALSE(ann_error.empty());
+  EXPECT_NE(ann_error.find("labelsPath"), std::string::npos) << ann_error;
+  EXPECT_FALSE(fs::exists(out_path));
+
+  std::error_code ec;
+  fs::remove_all(scratch, ec);
 }
 
 // ---------------------------------------------------------------------------

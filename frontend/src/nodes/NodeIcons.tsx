@@ -141,3 +141,26 @@ export function InspectIcon(): ReactNode {
     </svg>
   );
 }
+
+/** Tensor to Image — gradient/heatmap bar */
+export function HeatmapIcon(): ReactNode {
+  return (
+    <svg {...svgProps}>
+      <rect x="3" y="5" width="18" height="3" rx="1" />
+      <rect x="3" y="10" width="18" height="3" rx="1" opacity="0.6" />
+      <rect x="3" y="15" width="18" height="3" rx="1" opacity="0.3" />
+    </svg>
+  );
+}
+
+/** Annotate Image — image with text lines */
+export function TagIcon(): ReactNode {
+  return (
+    <svg {...svgProps}>
+      <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+      <path d="M7 8h6" />
+      <path d="M7 12h10" />
+      <path d="M7 16h4" />
+    </svg>
+  );
+}

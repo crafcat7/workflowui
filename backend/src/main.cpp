@@ -5,6 +5,8 @@
 #include "server/rpc_handler.h"
 #include "server/security_config.h"
 #include "server/ws_server.h"
+#include "stb_image.h"
+#include "stb_image_write.h"
 #include "vendor/inference_engine.h"
 #include "vendor/ncnn/ncnn_inspector.h"
 #include "workflow/executor.h"
@@ -51,6 +53,43 @@ void install_crash_handlers() {
   for (int s : {SIGSEGV, SIGABRT, SIGBUS, SIGFPE, SIGILL}) {
     std::signal(s, crash_handler);
   }
+}
+
+// Base64 encoder for image preview data URLs. Single-shot encoder over a
+// contiguous byte buffer; not streaming. Uses standard table with `+/` and
+// `=` padding so the output is directly usable in `data:image/png;base64,…`
+// URLs without further escaping.
+static const char kBase64Table[] =
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+
+std::string base64_encode(const uint8_t* data, size_t len) {
+  std::string out;
+  out.reserve(((len + 2) / 3) * 4);
+  for (size_t i = 0; i < len; i += 3) {
+    uint32_t n = static_cast<uint32_t>(data[i]) << 16;
+    if (i + 1 < len)
+      n |= static_cast<uint32_t>(data[i + 1]) << 8;
+    if (i + 2 < len)
+      n |= static_cast<uint32_t>(data[i + 2]);
+    out.push_back(kBase64Table[(n >> 18) & 0x3F]);
+    out.push_back(kBase64Table[(n >> 12) & 0x3F]);
+    out.push_back((i + 1 < len) ? kBase64Table[(n >> 6) & 0x3F] : '=');
+    out.push_back((i + 2 < len) ? kBase64Table[n & 0x3F] : '=');
+  }
+  return out;
+}
+
+// Sink for stbi_write_png_to_func: appends each chunk into a contiguous
+// std::vector so the encoded PNG can then be base64-wrapped without
+// touching the filesystem.
+struct PngBuffer {
+  std::vector<uint8_t> data;
+};
+
+void png_write_callback(void* context, void* data, int size) {
+  auto* buf = static_cast<PngBuffer*>(context);
+  auto* src = static_cast<uint8_t*>(data);
+  buf->data.insert(buf->data.end(), src, src + size);
 }
 }  // namespace
 
@@ -387,6 +426,52 @@ int main(int argc, char* argv[]) {
       return to_json(inspector.inspect(req));
     }
     throw InvalidParams("params.vendor '" + vendor + "' is not a known inspector");
+  });
+
+  // image.preview: read an image file off disk and return it as a base64
+  // PNG data URL the frontend can drop straight into an <img> element.
+  //
+  // Wire shape:
+  //   params: { path: "<file path>" }
+  //   result: { dataUrl: "data:image/png;base64,…" }
+  //
+  // Decoding goes RGBA8 → in-memory PNG → base64. The PNG re-encode normalizes
+  // arbitrary input formats (JPEG, PNG with palette, PNG with grayscale) into
+  // a single browser-friendly format and gives us a single content-type to
+  // declare in the data URL. Re-encoding cost is negligible for the small
+  // preview thumbs the frontend renders (≤120×80).
+  //
+  // Path policy: routed through SecurityConfig::resolve_shared_path so that a
+  // sandboxed deployment cannot read arbitrary files via the preview RPC.
+  rpc.register_method("image.preview", [&](const json& params) -> json {
+    if (!params.is_object() || !params.contains("path") || !params["path"].is_string() ||
+        params["path"].get<std::string>().empty()) {
+      throw InvalidParams("params.path must be a non-empty string");
+    }
+    std::string path = params["path"].get<std::string>();
+    auto resolved = SecurityConfig::instance().resolve_shared_path(path);
+
+    int w = 0, h = 0, src_channels = 0;
+    unsigned char* decoded =
+        stbi_load(resolved.string().c_str(), &w, &h, &src_channels, /*desired*/ 4);
+    if (!decoded) {
+      const char* reason = stbi_failure_reason();
+      throw InvalidParams(std::string("Cannot decode image: ") + path +
+                          (reason ? std::string(" (") + reason + ")" : ""));
+    }
+
+    PngBuffer png_buf;
+    const int stride = w * 4;
+    int rc = stbi_write_png_to_func(png_write_callback, &png_buf, w, h, 4, decoded, stride);
+    stbi_image_free(decoded);
+    if (!rc) {
+      throw InvalidParams("Failed to encode image to PNG");
+    }
+
+    std::string b64 = base64_encode(png_buf.data.data(), png_buf.data.size());
+    json result;
+    result["dataUrl"] = "data:image/png;base64," + b64;
+    return result;
   });
 
   // ── WebSocket Server ──

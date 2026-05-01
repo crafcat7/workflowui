@@ -304,7 +304,7 @@ workflowUI/
 │   ├── e2e/                     # Playwright specs + mock-backend.mjs
 │   ├── src-tauri/               # Tauri v2 desktop shell (Rust)
 │   └── playwright.config.ts
-└── demo/                        # Example workflows (bundled NCNN demo)
+└── demo/                        # Example workflows (NCNN ShuffleNet, MobileNetV2 image classification)
 ```
 
 ## Tech Stack

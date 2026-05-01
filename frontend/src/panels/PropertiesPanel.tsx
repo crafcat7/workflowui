@@ -18,6 +18,8 @@ import { useWorkflowStore, type WorkflowNodeData } from '../store/workflowStore'
 import { useDebugStore } from '../store/debugStore';
 import { wsClient } from '../transport/WsClient';
 import { ModelInspectorDrawer } from '../components/ModelInspectorDrawer';
+import { ImagePreviewView } from '../components/ImagePreview';
+import { useImagePreview } from '../components/useImagePreview';
 import type { ModelInspectRequest } from '../types/modelInspector';
 import {
   NODE_SCHEMAS,
@@ -271,6 +273,14 @@ function PropertiesContent({
         <GenericConfigEditor config={config} onChange={handleConfigChange} />
       )}
 
+      {(node.type === 'inputImage' || node.type === 'saveImage') && (
+        <PropertiesImagePreview
+          nodeType={node.type}
+          filePath={typeof config.filePath === 'string' ? config.filePath : ''}
+          status={data.status}
+        />
+      )}
+
       {inspectRequest && (
         <div className="config-section">
           <button
@@ -351,6 +361,60 @@ function DebugInputsPanel({ nodeId }: { nodeId: string }) {
         )}
       </ConfigSection>
     </>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Image preview block (PropertiesPanel side)
+// ---------------------------------------------------------------------------
+
+/**
+ * Shows the same thumbnail rendered on the canvas, but inside the right
+ * rail. Two policies:
+ *
+ *   - `inputImage`: preview tracks live edits of `filePath`, debounced.
+ *     Mirrors the canvas-node behaviour exactly.
+ *   - `saveImage`: only enable the preview hook once the node has reached
+ *     `done` — before that, the file on disk is either absent or stale
+ *     from a previous run, and showing it would be misleading. The hook
+ *     itself is still mounted (so unmounting on selection switch cancels
+ *     in-flight requests) but `enabled:false` short-circuits the fetch.
+ */
+function PropertiesImagePreview({
+  nodeType,
+  filePath,
+  status,
+}: {
+  nodeType: 'inputImage' | 'saveImage';
+  filePath: string;
+  status: WorkflowNodeData['status'];
+}) {
+  const enabled = nodeType === 'inputImage' ? true : status === 'done';
+  const previewState = useImagePreview(filePath, { enabled });
+  // Hide the section entirely when the saveImage node has nothing to show
+  // yet — an empty bordered box adds noise.
+  if (
+    nodeType === 'saveImage' &&
+    !previewState.preview &&
+    !previewState.loading &&
+    !previewState.error
+  ) {
+    return null;
+  }
+  // Same for inputImage with no path entered.
+  if (nodeType === 'inputImage' && !filePath.trim() && !previewState.preview) {
+    return null;
+  }
+  return (
+    <ConfigSection title="PREVIEW">
+      <div data-testid="properties-image-preview">
+        <ImagePreviewView
+          state={previewState}
+          alt={nodeType === 'inputImage' ? 'Input preview' : 'Saved output preview'}
+          testIdPrefix="props-preview"
+        />
+      </div>
+    </ConfigSection>
   );
 }
 

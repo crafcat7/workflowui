@@ -33,6 +33,8 @@ import {
   BranchIcon,
   OutputIcon,
   InspectIcon,
+  HeatmapIcon,
+  TagIcon,
 } from './NodeIcons';
 
 export type NodeCategoryKey = 'input' | 'inference' | 'output' | 'control' | 'debug';
@@ -280,6 +282,102 @@ export const NODE_MANIFEST: NodeManifestEntry[] = [
             label: 'File Path',
             kind: 'filepath',
             placeholder: 'output.png',
+          },
+        ],
+      },
+    ],
+  },
+  {
+    type: 'tensorToImage',
+    label: 'Tensor To Image',
+    icon: <HeatmapIcon />,
+    category: 'output',
+    ports: [
+      { id: 'input_data', direction: 'target', dataType: 'tensor' },
+      { id: 'image_data', direction: 'source', dataType: 'image' },
+    ],
+    configSections: [
+      {
+        title: 'RENDER SETTINGS',
+        fields: [
+          {
+            key: 'width',
+            label: 'Width',
+            kind: 'number',
+            placeholder: '256',
+            step: 1,
+            min: 1,
+          },
+          {
+            key: 'height',
+            label: 'Height',
+            kind: 'number',
+            placeholder: '64',
+            step: 1,
+            min: 1,
+          },
+          {
+            key: 'colormap',
+            label: 'Colormap',
+            kind: 'select',
+            defaultValue: 'viridis',
+            options: [
+              { value: 'viridis', label: 'Viridis' },
+              { value: 'gray', label: 'Grayscale' },
+            ],
+          },
+          {
+            key: 'normalize',
+            label: 'Normalize',
+            kind: 'select',
+            defaultValue: 'auto',
+            options: [
+              { value: 'auto', label: 'Auto (min/max rescale)' },
+              { value: 'none', label: 'None (clamp 0–1)' },
+            ],
+          },
+        ],
+      },
+    ],
+  },
+  {
+    type: 'annotateImage',
+    label: 'Annotate Image',
+    icon: <TagIcon />,
+    category: 'output',
+    ports: [
+      { id: 'image_data', direction: 'target', dataType: 'image' },
+      { id: 'topk_data', direction: 'target', dataType: 'tensor' },
+      { id: 'output_data', direction: 'source', dataType: 'image' },
+    ],
+    configSections: [
+      {
+        title: 'ANNOTATION',
+        fields: [
+          {
+            key: 'labelsPath',
+            label: 'Labels File',
+            kind: 'filepath',
+            placeholder: 'labels.txt',
+            help: 'Path to a text file with one class label per line. When empty, indices are shown instead.',
+          },
+          {
+            key: 'maxLines',
+            label: 'Max Lines',
+            kind: 'number',
+            placeholder: '5',
+            step: 1,
+            min: 1,
+            help: 'Maximum number of top-K lines to render.',
+          },
+          {
+            key: 'fontScale',
+            label: 'Font Scale',
+            kind: 'number',
+            placeholder: '2',
+            step: 1,
+            min: 1,
+            help: 'Multiplier for the 5×7 bitmap font. 1 = smallest, 2 = default.',
           },
         ],
       },

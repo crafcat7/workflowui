@@ -13,6 +13,8 @@ import { ConditionNode } from './ConditionNode';
 import { PostprocessNode } from './PostprocessNode';
 import { OutputNode } from './OutputNode';
 import { DebugNode } from './DebugNode';
+import { TensorToImageNode } from './TensorToImageNode';
+import { AnnotateImageNode } from './AnnotateImageNode';
 import { NODE_MANIFEST, type NodeCategoryKey } from './manifest';
 
 export const nodeTypes: NodeTypes = {
@@ -27,6 +29,8 @@ export const nodeTypes: NodeTypes = {
   postprocess: PostprocessNode,
   output: OutputNode,
   debug: DebugNode,
+  tensorToImage: TensorToImageNode,
+  annotateImage: AnnotateImageNode,
 };
 
 export interface NodeTypeInfo {
