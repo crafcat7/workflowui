@@ -4,7 +4,10 @@
     {
       "id": "img_in",
       "type": "inputImage",
-      "position": { "x": -800, "y": 100 },
+      "position": {
+        "x": -800,
+        "y": 100
+      },
       "data": {
         "label": "Input Image (preview thumbnail)",
         "config": {
@@ -16,7 +19,10 @@
     {
       "id": "img_save",
       "type": "saveImage",
-      "position": { "x": -480, "y": 100 },
+      "position": {
+        "x": -480,
+        "y": 100
+      },
       "data": {
         "label": "Save Image (preview after run)",
         "config": {
@@ -28,7 +34,10 @@
     {
       "id": "net",
       "type": "createNet",
-      "position": { "x": -800, "y": 380 },
+      "position": {
+        "x": -800,
+        "y": 380
+      },
       "data": {
         "label": "MobileNetV2 (NCNN)",
         "config": {
@@ -48,7 +57,10 @@
     {
       "id": "infer",
       "type": "inference",
-      "position": { "x": -440, "y": 250 },
+      "position": {
+        "x": -440,
+        "y": 250
+      },
       "data": {
         "label": "Inference (image -> tensor coercion)",
         "config": {},
@@ -58,7 +70,10 @@
     {
       "id": "post",
       "type": "postprocess",
-      "position": { "x": -120, "y": 250 },
+      "position": {
+        "x": -120,
+        "y": 250
+      },
       "data": {
         "label": "Top-K (k=5)",
         "config": {
@@ -71,7 +86,10 @@
     {
       "id": "cond",
       "type": "condition",
-      "position": { "x": 200, "y": 250 },
+      "position": {
+        "x": 200,
+        "y": 250
+      },
       "data": {
         "label": "max > 0.1 ?",
         "config": {
@@ -83,7 +101,10 @@
     {
       "id": "inspect",
       "type": "debug",
-      "position": { "x": 540, "y": 110 },
+      "position": {
+        "x": 540,
+        "y": 110
+      },
       "data": {
         "label": "Inspect Top-K",
         "config": {},
@@ -93,7 +114,10 @@
     {
       "id": "out_main",
       "type": "output",
-      "position": { "x": 870, "y": 110 },
+      "position": {
+        "x": 870,
+        "y": 110
+      },
       "data": {
         "label": "Classification Output",
         "config": {},
@@ -103,7 +127,10 @@
     {
       "id": "save_text",
       "type": "saveText",
-      "position": { "x": 540, "y": 390 },
+      "position": {
+        "x": 540,
+        "y": 390
+      },
       "data": {
         "label": "Low Confidence Log (false branch)",
         "config": {
@@ -115,26 +142,46 @@
     {
       "id": "heatmap",
       "type": "tensorToImage",
-      "position": { "x": -120, "y": 500 },
+      "position": {
+        "x": -120,
+        "y": 500
+      },
       "data": {
-        "label": "Softmax Heatmap",
+        "label": "Heatmap Overlay (softmax on image)",
         "config": {
-          "width": "256",
-          "height": "32",
           "colormap": "viridis",
-          "normalize": "auto"
+          "normalize": "auto",
+          "overlayOpacity": "0.5"
         },
         "status": "idle"
       }
     },
     {
-      "id": "save_heatmap",
-      "type": "saveImage",
-      "position": { "x": 200, "y": 500 },
+      "id": "comp",
+      "type": "composite",
+      "position": {
+        "x": 200,
+        "y": 500
+      },
       "data": {
-        "label": "Save Softmax Heatmap",
+        "label": "Composite (overlay + original)",
         "config": {
-          "filePath": "demo/NCNN_demo/softmax_heatmap.png"
+          "opacity": "0.4"
+        },
+        "status": "idle"
+      }
+    },
+    {
+      "id": "save_comp",
+      "type": "saveImage",
+      "position": {
+        "x": 500,
+        "y": 500
+      },
+      "data": {
+        "label": "Save Composited Result",
+        "config": {
+          "filePath": "demo/NCNN_demo/composite.png"
         },
         "status": "idle"
       }
@@ -142,7 +189,10 @@
     {
       "id": "annotate",
       "type": "annotateImage",
-      "position": { "x": -120, "y": 660 },
+      "position": {
+        "x": -120,
+        "y": 660
+      },
       "data": {
         "label": "Annotate (top-5)",
         "config": {
@@ -156,7 +206,10 @@
     {
       "id": "save_annotated",
       "type": "saveImage",
-      "position": { "x": 200, "y": 660 },
+      "position": {
+        "x": 200,
+        "y": 660
+      },
       "data": {
         "label": "Save Annotated Image",
         "config": {
@@ -164,21 +217,181 @@
         },
         "status": "idle"
       }
+    },
+    {
+      "id": "seg_src",
+      "type": "inputTensor",
+      "position": {
+        "x": -120,
+        "y": 820
+      },
+      "data": {
+        "label": "Synthetic Segmentation Logits (5x5, 3 classes)",
+        "config": {
+          "fillMode": "text",
+          "tensorText": "0.8 0.1 0.1 0.8 0.1 0.1 0.8 0.1 0.1 0.8 0.1 0.1 0.8 0.1 0.1 0.8 0.1 0.1 0.8 0.1 0.1 0.8 0.1 0.1 0.8 0.1 0.1 0.8 0.1 0.1 0.1 0.1 0.8 0.1 0.1 0.8 0.1 0.1 0.8 0.1 0.1 0.8 0.1 0.1 0.8 0.1 0.8 0.1 0.1 0.8 0.1 0.1 0.8 0.1 0.1 0.8 0.1 0.1 0.8 0.1 0.1 0.8 0.1 0.1 0.8 0.1 0.1 0.8 0.1 0.1 0.8 0.1 0.1 0.8 0.1"
+        },
+        "status": "idle"
+      }
+    },
+    {
+      "id": "seg",
+      "type": "segmentationMask",
+      "position": {
+        "x": 200,
+        "y": 820
+      },
+      "data": {
+        "label": "Segmentation Mask (argmax \u2192 viridis)",
+        "config": {
+          "width": "5",
+          "height": "5"
+        },
+        "status": "idle"
+      }
+    },
+    {
+      "id": "save_seg",
+      "type": "saveImage",
+      "position": {
+        "x": 500,
+        "y": 820
+      },
+      "data": {
+        "label": "Save Segmentation Mask",
+        "config": {
+          "filePath": "demo/NCNN_demo/segmask.png"
+        },
+        "status": "idle"
+      }
     }
   ],
   "edges": [
-    { "id": "e_img_save",   "source": "img_in",  "sourceHandle": "image_data",   "target": "img_save",  "targetHandle": "image_data" },
-    { "id": "e_net_infer",  "source": "net",     "sourceHandle": "net_handle",   "target": "infer",     "targetHandle": "net_handle" },
-    { "id": "e_img_infer",  "source": "img_in",  "sourceHandle": "image_data",   "target": "infer",     "targetHandle": "input_data" },
-    { "id": "e_infer_post", "source": "infer",   "sourceHandle": "output_data",  "target": "post",      "targetHandle": "input_data" },
-    { "id": "e_post_cond",  "source": "post",    "sourceHandle": "output_data",  "target": "cond",      "targetHandle": "input_data" },
-    { "id": "e_true",       "source": "cond",    "sourceHandle": "true_branch",  "target": "inspect",   "targetHandle": "data_in" },
-    { "id": "e_inspect",    "source": "inspect", "sourceHandle": "data_out",     "target": "out_main",  "targetHandle": "data" },
-    { "id": "e_false",      "source": "cond",    "sourceHandle": "false_branch", "target": "save_text", "targetHandle": "data" },
-    { "id": "e_post_heat",  "source": "post",    "sourceHandle": "output_data",  "target": "heatmap",   "targetHandle": "input_data" },
-    { "id": "e_heat_save",  "source": "heatmap", "sourceHandle": "image_data",   "target": "save_heatmap", "targetHandle": "image_data" },
-    { "id": "e_img_ann",    "source": "img_in",  "sourceHandle": "image_data",   "target": "annotate",  "targetHandle": "image_data" },
-    { "id": "e_post_ann",   "source": "post",    "sourceHandle": "output_data",  "target": "annotate",  "targetHandle": "topk_data" },
-    { "id": "e_ann_save",   "source": "annotate","sourceHandle": "output_data",  "target": "save_annotated", "targetHandle": "image_data" }
+    {
+      "id": "e_img_save",
+      "source": "img_in",
+      "sourceHandle": "image_data",
+      "target": "img_save",
+      "targetHandle": "image_data"
+    },
+    {
+      "id": "e_net_infer",
+      "source": "net",
+      "sourceHandle": "net_handle",
+      "target": "infer",
+      "targetHandle": "net_handle"
+    },
+    {
+      "id": "e_img_infer",
+      "source": "img_in",
+      "sourceHandle": "image_data",
+      "target": "infer",
+      "targetHandle": "input_data"
+    },
+    {
+      "id": "e_infer_post",
+      "source": "infer",
+      "sourceHandle": "output_data",
+      "target": "post",
+      "targetHandle": "input_data"
+    },
+    {
+      "id": "e_post_cond",
+      "source": "post",
+      "sourceHandle": "output_data",
+      "target": "cond",
+      "targetHandle": "input_data"
+    },
+    {
+      "id": "e_true",
+      "source": "cond",
+      "sourceHandle": "true_branch",
+      "target": "inspect",
+      "targetHandle": "data_in"
+    },
+    {
+      "id": "e_inspect",
+      "source": "inspect",
+      "sourceHandle": "data_out",
+      "target": "out_main",
+      "targetHandle": "data"
+    },
+    {
+      "id": "e_false",
+      "source": "cond",
+      "sourceHandle": "false_branch",
+      "target": "save_text",
+      "targetHandle": "data"
+    },
+    {
+      "id": "e_img_heat",
+      "source": "img_in",
+      "sourceHandle": "image_data",
+      "target": "heatmap",
+      "targetHandle": "original_image"
+    },
+    {
+      "id": "e_post_heat",
+      "source": "post",
+      "sourceHandle": "output_data",
+      "target": "heatmap",
+      "targetHandle": "input_data"
+    },
+    {
+      "id": "e_heat_comp",
+      "source": "heatmap",
+      "sourceHandle": "image_data",
+      "target": "comp",
+      "targetHandle": "foreground"
+    },
+    {
+      "id": "e_img_comp",
+      "source": "img_in",
+      "sourceHandle": "image_data",
+      "target": "comp",
+      "targetHandle": "background"
+    },
+    {
+      "id": "e_comp_save",
+      "source": "comp",
+      "sourceHandle": "output_data",
+      "target": "save_comp",
+      "targetHandle": "image_data"
+    },
+    {
+      "id": "e_img_ann",
+      "source": "img_in",
+      "sourceHandle": "image_data",
+      "target": "annotate",
+      "targetHandle": "image_data"
+    },
+    {
+      "id": "e_post_ann",
+      "source": "post",
+      "sourceHandle": "output_data",
+      "target": "annotate",
+      "targetHandle": "topk_data"
+    },
+    {
+      "id": "e_ann_save",
+      "source": "annotate",
+      "sourceHandle": "output_data",
+      "target": "save_annotated",
+      "targetHandle": "image_data"
+    },
+    {
+      "id": "e_seg_src",
+      "source": "seg_src",
+      "sourceHandle": "tensor_data",
+      "target": "seg",
+      "targetHandle": "input_data"
+    },
+    {
+      "id": "e_seg_save",
+      "source": "seg",
+      "sourceHandle": "mask_data",
+      "target": "save_seg",
+      "targetHandle": "image_data"
+    }
   ]
 }

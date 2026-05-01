@@ -10,7 +10,7 @@ Loads ShuffleNet's `.param` only, runs inference on a synthetic tensor, and exer
 
 ## 2. `image_classification.json` — MobileNetV2 end-to-end image classification
 
-Real image → image-to-tensor coercion → MobileNetV2 inference → top-5 → conditional inspect/log → softmax heatmap → annotated image. Exercises the full image processing pipeline (PNG preview thumbnails on `inputImage` / `saveImage`, runtime `image → tensor` coercion, NCNN backend, postprocess + condition routing, `tensorToImage` heatmaps, `annotateImage` label overlay).
+Real image → image-to-tensor coercion → MobileNetV2 inference → top-5 → conditional inspect/log → softmax heatmap → annotated image → composited overlay → segmentation mask. Exercises the full image processing pipeline, including every post-inference image handler (`tensorToImage` with overlay, `annotateImage`, `composite`, `segmentationMask`).
 
 ```
 inputImage ─► saveImage  (round-trip preview)
@@ -18,10 +18,14 @@ inputImage ─► saveImage  (round-trip preview)
        └─► inference (image→tensor, NCNN MobileNetV2) ─► topk(5) ─► condition ─┬─► inspect → output
        │                                                                      └─► saveText (low-confidence log)
        │
-       ├─► tensorToImage (softmax heatmap) ─► saveImage (softmax_heatmap.png)
+       ├─► tensorToImage (softmax heatmap, overlay on image) ─► composite (+ original) ─► saveImage (composite.png)
        │
-       └─► annotateImage (top-5 labels) ─► saveImage (classified.png)
+       ├─► annotateImage (top-5 labels) ─► saveImage (classified.png)
+       │
+       └─► inputTensor (synthetic 5x5x3 logits) ─► segmentationMask ─► saveImage (segmask.png)
 ```
+
+The `composite` branch demonstrates `tensorToImage`'s overlay mode (heatmap drawn directly onto the input image) combined with the `composite` handler (second pass at reduced opacity). The `segmentationMask` branch uses a synthetic 3-class 5×5 logits tensor to showcase argmax → per-pixel viridis coloring without requiring a real segmentation model.
 
 ### Files
 
@@ -49,8 +53,9 @@ inputImage ─► saveImage  (round-trip preview)
 4. Click **Run**. Expect:
    - Image preview thumbnail in `Input Image` and (after run) in `Save Image`.
    - Top-5 logits in the `Inspect Top-K` debug view → `Classification Output`. With the bundled dog photo, the top class is **Samoyed** at ~0.79.
-   - `softmax_heatmap.png` — viridis heatmap of the full 1000-class softmax distribution.
+   - `composite.png` — softmax heatmap overlay composited onto the original image via `tensorToImage` overlay mode + `composite` handler.
    - `classified.png` — input image with top-5 predictions overlaid (class name + confidence).
+   - `segmask.png` — 5×5 viridis-colored segmentation mask from synthetic 3-class logits (demonstrates `segmentationMask` handler).
    - `low_confidence.txt` is **not** written (max > 0.1 takes the true branch); `save_text` shows `skipped`.
 
 ### Headless verification

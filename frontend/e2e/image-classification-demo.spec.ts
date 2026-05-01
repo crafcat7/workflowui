@@ -40,8 +40,9 @@ const MODEL_BIN = path.join(REPO_ROOT, 'demo', 'NCNN_demo', 'mobilenetv2.bin');
 const SAMPLE_IMAGE = path.join(REPO_ROOT, 'demo', 'NCNN_demo', 'sample_224.png');
 const ROUNDTRIP_PATH = path.join(REPO_ROOT, 'demo', 'NCNN_demo', 'roundtrip.png');
 const LOW_CONF_PATH = path.join(REPO_ROOT, 'demo', 'NCNN_demo', 'low_confidence.txt');
-const HEATMAP_PATH = path.join(REPO_ROOT, 'demo', 'NCNN_demo', 'softmax_heatmap.png');
+const COMPOSITE_PATH = path.join(REPO_ROOT, 'demo', 'NCNN_demo', 'composite.png');
 const ANNOTATED_PATH = path.join(REPO_ROOT, 'demo', 'NCNN_demo', 'classified.png');
+const SEGMASK_PATH = path.join(REPO_ROOT, 'demo', 'NCNN_demo', 'segmask.png');
 
 // Isolated from the mock backend (9099), prod (9090), and the
 // shufflenet ncnn-demo test (9098).
@@ -61,7 +62,7 @@ test.beforeAll(async () => {
 
   // Clean any stale outputs from a prior run so existence assertions are
   // not satisfied by leftovers.
-  for (const p of [ROUNDTRIP_PATH, LOW_CONF_PATH, HEATMAP_PATH, ANNOTATED_PATH]) {
+  for (const p of [ROUNDTRIP_PATH, LOW_CONF_PATH, COMPOSITE_PATH, ANNOTATED_PATH, SEGMASK_PATH]) {
     if (fs.existsSync(p)) fs.rmSync(p);
   }
 
@@ -92,7 +93,7 @@ test.afterAll(async () => {
     if (!backendProc.killed) backendProc.kill('SIGKILL');
   }
   // Sweep generated artifacts so the working tree stays clean.
-  for (const p of [ROUNDTRIP_PATH, LOW_CONF_PATH, HEATMAP_PATH, ANNOTATED_PATH]) {
+  for (const p of [ROUNDTRIP_PATH, LOW_CONF_PATH, COMPOSITE_PATH, ANNOTATED_PATH, SEGMASK_PATH]) {
     if (fs.existsSync(p)) {
       try {
         fs.rmSync(p);
@@ -215,13 +216,13 @@ test.describe('Image classification demo (MobileNetV2)', () => {
       `roundtrip.png is not a PNG (head=${head.toString('hex')})`,
     ).toBe(true);
 
-    // tensorToImage → saveImage: softmax heatmap of the full 1000-class
-    // distribution, rendered as a viridis strip.
-    expect(fs.existsSync(HEATMAP_PATH), `softmax_heatmap.png missing`).toBe(true);
-    const heatHead = fs.readFileSync(HEATMAP_PATH).subarray(0, 8);
+    // tensorToImage overlay + composite: softmax heatmap drawn onto the
+    // original image via overlay mode, then composited at reduced opacity.
+    expect(fs.existsSync(COMPOSITE_PATH), `composite.png missing`).toBe(true);
+    const compHead = fs.readFileSync(COMPOSITE_PATH).subarray(0, 8);
     expect(
-      heatHead.equals(PNG_MAGIC),
-      `softmax_heatmap.png is not a PNG (head=${heatHead.toString('hex')})`,
+      compHead.equals(PNG_MAGIC),
+      `composite.png is not a PNG (head=${compHead.toString('hex')})`,
     ).toBe(true);
 
     // annotateImage → saveImage: input image with top-5 predictions overlaid.
@@ -230,6 +231,15 @@ test.describe('Image classification demo (MobileNetV2)', () => {
     expect(
       annHead.equals(PNG_MAGIC),
       `classified.png is not a PNG (head=${annHead.toString('hex')})`,
+    ).toBe(true);
+
+    // segmentationMask → saveImage: synthetic 5x5 argmax mask rendered as
+    // viridis-colored PNG.
+    expect(fs.existsSync(SEGMASK_PATH), `segmask.png missing`).toBe(true);
+    const segHead = fs.readFileSync(SEGMASK_PATH).subarray(0, 8);
+    expect(
+      segHead.equals(PNG_MAGIC),
+      `segmask.png is not a PNG (head=${segHead.toString('hex')})`,
     ).toBe(true);
 
     // The false branch saveText writes a low_confidence.txt only on

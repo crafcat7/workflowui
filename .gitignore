@@ -41,10 +41,14 @@ demo/image_processing/roundtrip.png
 demo/image_processing/low_confidence.txt
 demo/image_processing/softmax_heatmap.png
 demo/image_processing/classified.png
+demo/image_processing/composite.png
+demo/image_processing/segmask.png
 demo/NCNN_demo/roundtrip.png
 demo/NCNN_demo/low_confidence.txt
 demo/NCNN_demo/softmax_heatmap.png
 demo/NCNN_demo/classified.png
+demo/NCNN_demo/composite.png
+demo/NCNN_demo/segmask.png
 
 # Tauri
 frontend/src-tauri/target/

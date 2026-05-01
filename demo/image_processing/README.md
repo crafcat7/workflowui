@@ -2,7 +2,7 @@
 <!-- SPDX-FileCopyrightText: 2026 WorkflowUI contributors -->
 # Image Processing Demo (MobileNetV2)
 
-End-to-end image classification pipeline:
+End-to-end image classification pipeline with post-inference image visualization:
 
 ```
 InputImage  ─►  Inference (image→tensor coercion)  ─►  Postprocess (Top-5)
@@ -15,9 +15,11 @@ InputImage  ─►  Inference (image→tensor coercion)  ─►  Postprocess (To
                                               Inspect → Output       SaveText
                                               (true: max>0.1)        (false branch)
                                                   │
-                                                  ├─► TensorToImage (softmax heatmap) ─► SaveImage
+                                                  ├─► TensorToImage (overlay) ─► Composite ─► SaveImage (composite.png)
                                                   │
-                                                  └─► AnnotateImage (top-5 labels)   ─► SaveImage
+                                                  ├─► AnnotateImage (top-5 labels) ─► SaveImage (classified.png)
+                                                  │
+                                                  └─► InputTensor (synthetic logits) ─► SegmentationMask ─► SaveImage (segmask.png)
 ```
 
 ## Files
@@ -56,7 +58,7 @@ the model with a different converter and the names differ, edit the
 
 2. Start the backend and frontend, load `demo/image_processing/workflow.json`, click Run.
 
-3. Expect: image preview thumbnail in `Input Image` and `Save Image`, top-5 ImageNet logits surfaced through `inspect → output`, `softmax_heatmap.png` viridis heatmap of the full softmax distribution, `classified.png` with top-5 predictions overlaid (class name + confidence), `low_confidence.txt` only written when the max probability is ≤ 0.1.
+3. Expect: image preview thumbnail in `Input Image` and `Save Image`, top-5 ImageNet logits surfaced through `inspect → output`, `composite.png` (softmax heatmap overlay + original image composited), `classified.png` with top-5 predictions overlaid, `segmask.png` synthetic 5×5 segmentation mask, `low_confidence.txt` only written when the max probability is ≤ 0.1.
 
 ## Verifying without the UI
 
