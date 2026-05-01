@@ -544,6 +544,409 @@ TEST(ExecutorTest, AnnotateImageMissingLabelsFileErrors) {
 }
 
 // ---------------------------------------------------------------------------
+// DrawBoxes handler
+// ---------------------------------------------------------------------------
+
+TEST(ExecutorTest, DrawBoxesRendersBoxes) {
+  auto scratch = make_scratch_dir("drawboxes");
+  auto out_path = scratch / "boxes.png";
+
+  auto engine = std::make_shared<MockEngine>();
+  Executor executor(engine);
+  WorkflowGraph graph;
+
+  // 32x16 gray image source via tensorToImage.
+  NodeDef src;
+  src.id = "src";
+  src.type = "inputTensor";
+  src.config["fillMode"] = "auto";
+  src.config["shape"] = "512";  // 32*16
+  src.config["fillValue"] = "0.3";
+  graph.add_node(src);
+
+  NodeDef to_img;
+  to_img.id = "to_img";
+  to_img.type = "tensorToImage";
+  to_img.config["width"] = "32";
+  to_img.config["height"] = "16";
+  to_img.config["colormap"] = "gray";
+  graph.add_node(to_img);
+
+  // Two boxes: [5,3,15,12,0.9] and [18,4,28,11,0.7].
+  NodeDef boxes_src;
+  boxes_src.id = "boxes";
+  boxes_src.type = "inputTensor";
+  boxes_src.config["fillMode"] = "text";
+  boxes_src.config["tensorText"] = "5 3 15 12 0.9  18 4 28 11 0.7";
+  graph.add_node(boxes_src);
+
+  NodeDef draw;
+  draw.id = "draw";
+  draw.type = "drawBoxes";
+  draw.config["lineWidth"] = "1";
+  draw.config["fontScale"] = "1";
+  graph.add_node(draw);
+
+  NodeDef sink;
+  sink.id = "sink";
+  sink.type = "saveImage";
+  sink.config["filePath"] = out_path.string();
+  graph.add_node(sink);
+
+  graph.add_edge(EdgeDef{"src", "tensor_data", "to_img", "input_data"});
+  graph.add_edge(EdgeDef{"to_img", "image_data", "draw", "image_data"});
+  graph.add_edge(EdgeDef{"boxes", "tensor_data", "draw", "boxes_data"});
+  graph.add_edge(EdgeDef{"draw", "output_data", "sink", "image_data"});
+
+  std::string failure_msg;
+  json draw_extra;
+  executor.set_status_callback([&](const std::string& node_id, const json& status) {
+    if (status.value("status", "") == "error")
+      failure_msg += node_id + ":" + status.value("error", "") + ";";
+    if (node_id == "draw" && status.value("status", "") == "done") draw_extra = status;
+  });
+  executor.execute(graph);
+
+  EXPECT_TRUE(failure_msg.empty()) << failure_msg;
+  expect_valid_png(out_path);
+  // boxes_drawn extra field should report 2 (both above default 0.25 threshold).
+  ASSERT_TRUE(draw_extra.contains("boxes_drawn"));
+  EXPECT_EQ(draw_extra["boxes_drawn"].get<int>(), 2);
+
+  std::error_code ec;
+  fs::remove_all(scratch, ec);
+}
+
+TEST(ExecutorTest, DrawBoxesFiltersLowConfidence) {
+  auto scratch = make_scratch_dir("drawboxes_filter");
+  auto out_path = scratch / "boxes_filter.png";
+
+  auto engine = std::make_shared<MockEngine>();
+  Executor executor(engine);
+  WorkflowGraph graph;
+
+  NodeDef src;
+  src.id = "src";
+  src.type = "inputTensor";
+  src.config["fillMode"] = "auto";
+  src.config["shape"] = "32";
+  graph.add_node(src);
+
+  NodeDef to_img;
+  to_img.id = "to_img";
+  to_img.type = "tensorToImage";
+  to_img.config["width"] = "16";
+  to_img.config["height"] = "16";
+  graph.add_node(to_img);
+
+  // Two boxes: one at 0.9, one at 0.1 (below default threshold).
+  NodeDef boxes_src;
+  boxes_src.id = "boxes";
+  boxes_src.type = "inputTensor";
+  boxes_src.config["fillMode"] = "text";
+  boxes_src.config["tensorText"] = "1 1 10 10 0.9  1 1 10 10 0.1";
+  graph.add_node(boxes_src);
+
+  NodeDef draw;
+  draw.id = "draw";
+  draw.type = "drawBoxes";
+  draw.config["confidenceThreshold"] = "0.5";
+  graph.add_node(draw);
+
+  NodeDef sink;
+  sink.id = "sink";
+  sink.type = "saveImage";
+  sink.config["filePath"] = out_path.string();
+  graph.add_node(sink);
+
+  graph.add_edge(EdgeDef{"src", "tensor_data", "to_img", "input_data"});
+  graph.add_edge(EdgeDef{"to_img", "image_data", "draw", "image_data"});
+  graph.add_edge(EdgeDef{"boxes", "tensor_data", "draw", "boxes_data"});
+  graph.add_edge(EdgeDef{"draw", "output_data", "sink", "image_data"});
+
+  json draw_extra;
+  executor.set_status_callback([&](const std::string& node_id, const json& status) {
+    if (node_id == "draw" && status.value("status", "") == "done") draw_extra = status;
+  });
+  executor.execute(graph);
+
+  ASSERT_TRUE(draw_extra.contains("boxes_drawn"));
+  EXPECT_EQ(draw_extra["boxes_drawn"].get<int>(), 1);
+
+  std::error_code ec;
+  fs::remove_all(scratch, ec);
+}
+
+// ---------------------------------------------------------------------------
+// SegmentationMask handler
+// ---------------------------------------------------------------------------
+
+TEST(ExecutorTest, SegmentationMaskProducesValidPng) {
+  auto scratch = make_scratch_dir("segmask");
+  auto out_path = scratch / "mask.png";
+
+  auto engine = std::make_shared<MockEngine>();
+  Executor executor(engine);
+  WorkflowGraph graph;
+
+  // 4x2 spatial, 3 classes. Tensor shape = 4*2*3 = 24.
+  // Fill: class 0 gets value 0.1 everywhere, class 1 gets 0.9 everywhere,
+  // class 2 gets 0.2. Expected: every pixel's argmax is class 1.
+  std::string tensor_text;
+  for (int c = 0; c < 3; ++c) {
+    float v = (c == 1) ? 0.9f : (c == 0 ? 0.1f : 0.2f);
+    for (int i = 0; i < 8; ++i) {
+      if (!tensor_text.empty()) tensor_text += ' ';
+      tensor_text += std::to_string(v);
+    }
+  }
+
+  NodeDef src;
+  src.id = "src";
+  src.type = "inputTensor";
+  src.config["fillMode"] = "text";
+  src.config["tensorText"] = tensor_text;
+  graph.add_node(src);
+
+  NodeDef seg;
+  seg.id = "seg";
+  seg.type = "segmentationMask";
+  seg.config["width"] = "4";
+  seg.config["height"] = "2";
+  graph.add_node(seg);
+
+  NodeDef sink;
+  sink.id = "sink";
+  sink.type = "saveImage";
+  sink.config["filePath"] = out_path.string();
+  graph.add_node(sink);
+
+  graph.add_edge(EdgeDef{"src", "tensor_data", "seg", "input_data"});
+  graph.add_edge(EdgeDef{"seg", "mask_data", "sink", "image_data"});
+
+  std::string failure_msg;
+  json seg_extra;
+  executor.set_status_callback([&](const std::string& node_id, const json& status) {
+    if (status.value("status", "") == "error")
+      failure_msg += node_id + ":" + status.value("error", "") + ";";
+    if (node_id == "seg" && status.value("status", "") == "done") seg_extra = status;
+  });
+  executor.execute(graph);
+
+  EXPECT_TRUE(failure_msg.empty()) << failure_msg;
+  ASSERT_TRUE(seg_extra.contains("num_classes"));
+  EXPECT_EQ(seg_extra["num_classes"].get<int>(), 3);
+  expect_valid_png(out_path);
+
+  std::error_code ec;
+  fs::remove_all(scratch, ec);
+}
+
+TEST(ExecutorTest, SegmentationMaskRejectsInvalidShape) {
+  auto engine = std::make_shared<MockEngine>();
+  Executor executor(engine);
+  WorkflowGraph graph;
+
+  // Tensor size 10 can't be divided into 4*2=8.
+  NodeDef src;
+  src.id = "src";
+  src.type = "inputTensor";
+  src.config["fillMode"] = "text";
+  src.config["tensorText"] = "1 2 3 4 5 6 7 8 9 10";
+  graph.add_node(src);
+
+  NodeDef seg;
+  seg.id = "seg";
+  seg.type = "segmentationMask";
+  seg.config["width"] = "4";
+  seg.config["height"] = "2";
+  graph.add_node(seg);
+
+  graph.add_edge(EdgeDef{"src", "tensor_data", "seg", "input_data"});
+
+  std::string error_msg;
+  executor.set_status_callback([&](const std::string& node_id, const json& status) {
+    if (node_id == "seg" && status.value("status", "") == "error")
+      error_msg = status.value("error", "");
+  });
+  executor.execute(graph);
+
+  EXPECT_FALSE(error_msg.empty());
+  EXPECT_NE(error_msg.find("not a multiple"), std::string::npos) << error_msg;
+}
+
+// ---------------------------------------------------------------------------
+// Composite handler
+// ---------------------------------------------------------------------------
+
+TEST(ExecutorTest, CompositeBlendsImages) {
+  auto scratch = make_scratch_dir("composite");
+  auto out_path = scratch / "composite.png";
+
+  auto engine = std::make_shared<MockEngine>();
+  Executor executor(engine);
+  WorkflowGraph graph;
+
+  // Foreground: 16x16 red-ish tensor.
+  NodeDef fg_src;
+  fg_src.id = "fg_src";
+  fg_src.type = "inputTensor";
+  fg_src.config["fillMode"] = "auto";
+  fg_src.config["shape"] = "256";
+  fg_src.config["fillValue"] = "0.8";
+  graph.add_node(fg_src);
+
+  NodeDef fg_img;
+  fg_img.id = "fg_img";
+  fg_img.type = "tensorToImage";
+  fg_img.config["width"] = "16";
+  fg_img.config["height"] = "16";
+  fg_img.config["colormap"] = "gray";
+  graph.add_node(fg_img);
+
+  // Background: 32x32 dark tensor.
+  NodeDef bg_src;
+  bg_src.id = "bg_src";
+  bg_src.type = "inputTensor";
+  bg_src.config["fillMode"] = "auto";
+  bg_src.config["shape"] = "1024";
+  bg_src.config["fillValue"] = "0.2";
+  graph.add_node(bg_src);
+
+  NodeDef bg_img;
+  bg_img.id = "bg_img";
+  bg_img.type = "tensorToImage";
+  bg_img.config["width"] = "32";
+  bg_img.config["height"] = "32";
+  bg_img.config["colormap"] = "gray";
+  graph.add_node(bg_img);
+
+  NodeDef comp;
+  comp.id = "comp";
+  comp.type = "composite";
+  comp.config["opacity"] = "0.5";
+  graph.add_node(comp);
+
+  NodeDef sink;
+  sink.id = "sink";
+  sink.type = "saveImage";
+  sink.config["filePath"] = out_path.string();
+  graph.add_node(sink);
+
+  graph.add_edge(EdgeDef{"fg_src", "tensor_data", "fg_img", "input_data"});
+  graph.add_edge(EdgeDef{"bg_src", "tensor_data", "bg_img", "input_data"});
+  graph.add_edge(EdgeDef{"fg_img", "image_data", "comp", "foreground"});
+  graph.add_edge(EdgeDef{"bg_img", "image_data", "comp", "background"});
+  graph.add_edge(EdgeDef{"comp", "output_data", "sink", "image_data"});
+
+  std::string failure_msg;
+  executor.set_status_callback([&](const std::string& node_id, const json& status) {
+    if (status.value("status", "") == "error")
+      failure_msg += node_id + ":" + status.value("error", "") + ";";
+  });
+  executor.execute(graph);
+
+  EXPECT_TRUE(failure_msg.empty()) << failure_msg;
+  expect_valid_png(out_path);
+
+  // Verify output dimensions match the background (32x32).
+  std::ifstream f(out_path, std::ios::binary);
+  unsigned char header[24] = {0};
+  f.read(reinterpret_cast<char*>(header), 24);
+  uint32_t png_w = (uint32_t(header[16]) << 24) | (uint32_t(header[17]) << 16) |
+                   (uint32_t(header[18]) << 8) | uint32_t(header[19]);
+  uint32_t png_h = (uint32_t(header[20]) << 24) | (uint32_t(header[21]) << 16) |
+                   (uint32_t(header[22]) << 8) | uint32_t(header[23]);
+  EXPECT_EQ(png_w, 32u);
+  EXPECT_EQ(png_h, 32u);
+
+  std::error_code ec;
+  fs::remove_all(scratch, ec);
+}
+
+// ---------------------------------------------------------------------------
+// TensorToImage overlay mode
+// ---------------------------------------------------------------------------
+
+TEST(ExecutorTest, TensorToImageOverlayCompositesOntoOriginal) {
+  auto scratch = make_scratch_dir("t2i_overlay");
+  auto out_path = scratch / "overlay.png";
+
+  auto engine = std::make_shared<MockEngine>();
+  Executor executor(engine);
+  WorkflowGraph graph;
+
+  // Original image: 32x32 gray at 0.2.
+  NodeDef orig_src;
+  orig_src.id = "orig_src";
+  orig_src.type = "inputTensor";
+  orig_src.config["fillMode"] = "auto";
+  orig_src.config["shape"] = "1024";
+  orig_src.config["fillValue"] = "0.2";
+  graph.add_node(orig_src);
+
+  NodeDef orig_img;
+  orig_img.id = "orig_img";
+  orig_img.type = "tensorToImage";
+  orig_img.config["width"] = "32";
+  orig_img.config["height"] = "32";
+  orig_img.config["colormap"] = "gray";
+  graph.add_node(orig_img);
+
+  // Heatmap source: 8 values.
+  NodeDef heat_src;
+  heat_src.id = "heat_src";
+  heat_src.type = "inputTensor";
+  heat_src.config["fillMode"] = "text";
+  heat_src.config["tensorText"] = "0.0 0.1 0.2 0.5 0.8 1.0 0.4 0.3";
+  graph.add_node(heat_src);
+
+  NodeDef heat;
+  heat.id = "heat";
+  heat.type = "tensorToImage";
+  // overlayOpacity = 0.6, original_image from orig_img.
+  heat.config["overlayOpacity"] = "0.6";
+  heat.config["colormap"] = "viridis";
+  graph.add_node(heat);
+
+  NodeDef sink;
+  sink.id = "sink";
+  sink.type = "saveImage";
+  sink.config["filePath"] = out_path.string();
+  graph.add_node(sink);
+
+  graph.add_edge(EdgeDef{"orig_src", "tensor_data", "orig_img", "input_data"});
+  graph.add_edge(EdgeDef{"orig_img", "image_data", "heat", "original_image"});
+  graph.add_edge(EdgeDef{"heat_src", "tensor_data", "heat", "input_data"});
+  graph.add_edge(EdgeDef{"heat", "image_data", "sink", "image_data"});
+
+  std::string failure_msg;
+  executor.set_status_callback([&](const std::string& node_id, const json& status) {
+    if (status.value("status", "") == "error")
+      failure_msg += node_id + ":" + status.value("error", "") + ";";
+  });
+  executor.execute(graph);
+
+  EXPECT_TRUE(failure_msg.empty()) << failure_msg;
+  expect_valid_png(out_path);
+
+  // Output dimensions should match the original image (32x32), not the
+  // default heatmap strip size (256x64).
+  std::ifstream f(out_path, std::ios::binary);
+  unsigned char header[24] = {0};
+  f.read(reinterpret_cast<char*>(header), 24);
+  uint32_t png_w = (uint32_t(header[16]) << 24) | (uint32_t(header[17]) << 16) |
+                   (uint32_t(header[18]) << 8) | uint32_t(header[19]);
+  uint32_t png_h = (uint32_t(header[20]) << 24) | (uint32_t(header[21]) << 16) |
+                   (uint32_t(header[22]) << 8) | uint32_t(header[23]);
+  EXPECT_EQ(png_w, 32u);
+  EXPECT_EQ(png_h, 32u);
+
+  std::error_code ec;
+  fs::remove_all(scratch, ec);
+}
+
+// ---------------------------------------------------------------------------
 // Breakpoint tests (Phase 2)
 // ---------------------------------------------------------------------------
 

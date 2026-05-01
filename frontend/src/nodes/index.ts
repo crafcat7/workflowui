@@ -15,6 +15,9 @@ import { OutputNode } from './OutputNode';
 import { DebugNode } from './DebugNode';
 import { TensorToImageNode } from './TensorToImageNode';
 import { AnnotateImageNode } from './AnnotateImageNode';
+import { DrawBoxesNode } from './DrawBoxesNode';
+import { SegmentationMaskNode } from './SegmentationMaskNode';
+import { CompositeNode } from './CompositeNode';
 import { NODE_MANIFEST, type NodeCategoryKey } from './manifest';
 
 export const nodeTypes: NodeTypes = {
@@ -31,6 +34,9 @@ export const nodeTypes: NodeTypes = {
   debug: DebugNode,
   tensorToImage: TensorToImageNode,
   annotateImage: AnnotateImageNode,
+  drawBoxes: DrawBoxesNode,
+  segmentationMask: SegmentationMaskNode,
+  composite: CompositeNode,
 };
 
 export interface NodeTypeInfo {

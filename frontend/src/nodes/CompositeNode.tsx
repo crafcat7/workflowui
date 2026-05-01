@@ -3,27 +3,21 @@
 import { Position, type Node, type NodeProps } from '@xyflow/react';
 import { LabeledHandle } from '../components/LabeledHandle';
 import type { WorkflowNodeData } from '../store/workflowStore';
-import { HeatmapIcon } from './NodeIcons';
+import { LayersIcon } from './NodeIcons';
 
-export function TensorToImageNode({ data: d }: NodeProps<Node<WorkflowNodeData>>) {
-  const colormap = (d.config?.colormap as string) || 'viridis';
-  const w = d.config?.width || '256';
-  const h = d.config?.height || '64';
-  const overlayOpacity = d.config?.overlayOpacity;
+export function CompositeNode({ data: d }: NodeProps<Node<WorkflowNodeData>>) {
+  const opacity = d.config?.opacity ?? '0.5';
 
   return (
     <div className="workflow-node node-output">
       <div className="node-header">
         <span className="icon">
-          <HeatmapIcon />
+          <LayersIcon />
         </span>{' '}
-        Tensor To Image
+        Composite
       </div>
       <div className="node-body">
-        <div style={{ fontSize: '0.85em', color: '#aaa' }}>
-          {colormap} · {w}×{h}
-          {overlayOpacity ? ` · overlay ${overlayOpacity}` : ''}
-        </div>
+        <div style={{ fontSize: '0.85em', color: '#aaa' }}>opacity {opacity}</div>
       </div>
       <div className="node-footer">
         <span className={`node-status ${d.status}`}>{d.status}</span>
@@ -31,21 +25,21 @@ export function TensorToImageNode({ data: d }: NodeProps<Node<WorkflowNodeData>>
       <LabeledHandle
         type="target"
         position={Position.Left}
-        id="input_data"
-        label="tensor"
-        dataType="tensor"
+        id="foreground"
+        label="foreground"
+        dataType="image"
       />
       <LabeledHandle
         type="target"
         position={Position.Left}
-        id="original_image"
-        label="original"
+        id="background"
+        label="background"
         dataType="image"
       />
       <LabeledHandle
         type="source"
         position={Position.Right}
-        id="image_data"
+        id="output_data"
         label="image"
         dataType="image"
       />

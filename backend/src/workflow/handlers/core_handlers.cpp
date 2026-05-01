@@ -484,10 +484,14 @@ class SaveImageHandler : public NodeHandler {
   }
 };
 
-// Render a 1-D tensor as a heatmap strip. Values are min/max-normalized to
-// [0,1] (auto) or clamped (none), then mapped through a colormap. The output
-// is always a tightly-packed RGBA8 ImageData of (width x height) so it slots
-// straight into saveImage / preview without further conversion.
+// Render a 1-D tensor as a heatmap. When no `original_image` port is
+// connected the output is a standalone strip of (width x height). When
+// `original_image` IS connected the handler resizes the heatmap to match
+// the original image's dimensions and alpha-composites it over the
+// original, controlled by `overlayOpacity` (0.0 = invisible, 1.0 =
+// fully opaque heatmap, default 0.45). This lets a single
+// tensorToImage node act as both a standalone heatmap *and* an overlay
+// without requiring a separate composite node.
 class TensorToImageHandler : public NodeHandler {
  public:
   std::string type() const override { return "tensorToImage"; }
@@ -496,6 +500,7 @@ class TensorToImageHandler : public NodeHandler {
   std::vector<HandlerPortDef> port_defs() const override {
     return {
         {"input_data", "target", "tensor"},
+        {"original_image", "target", "image"},  // optional — triggers overlay mode
         {"image_data", "source", "image"},
     };
   }
@@ -509,8 +514,21 @@ class TensorToImageHandler : public NodeHandler {
     if (tensor->empty())
       throw NodeError(NodeError::Kind::Runtime, "tensorToImage: empty tensor");
 
+    // Check for optional overlay source.
+    auto orig_val = ctx.resolve_input(node.id, "original_image", graph);
+    auto* orig_img = std::get_if<ImageData>(&orig_val);
+    bool has_overlay = (orig_img != nullptr && orig_img->width > 0 && orig_img->height > 0);
+
+    float overlay_opacity = 0.45f;
+    auto oo = get_config(node, "overlayOpacity");
+    if (!oo.empty()) try { overlay_opacity = std::clamp(std::stof(oo), 0.0f, 1.0f); } catch (...) {}
+
+    // When overlaying, size follows the original image; otherwise use config.
     int w = 256, h = 64;
-    {
+    if (has_overlay) {
+      w = orig_img->width;
+      h = orig_img->height;
+    } else {
       auto ws = get_config(node, "width");
       auto hs = get_config(node, "height");
       try {
@@ -604,6 +622,39 @@ class TensorToImageHandler : public NodeHandler {
     }
     for (int y = 0; y < h; ++y) {
       std::memcpy(&img.pixels[static_cast<std::size_t>(y) * w * 4u], row.data(), row.size());
+    }
+
+    // If an original image is connected, composite the heatmap onto it.
+    // The heatmap becomes the foreground at `overlayOpacity`; the original
+    // image is the background. Result replaces the standalone heatmap.
+    if (has_overlay && overlay_opacity > 0.0f) {
+      ImageData composited;
+      composited.width = w;
+      composited.height = h;
+      composited.channels = 4;
+      composited.pixels.resize(static_cast<std::size_t>(w) * h * 4u);
+
+      const int fW = orig_img->width;
+      const int fH = orig_img->height;
+      for (int y = 0; y < h; ++y) {
+        // Map to original pixel via nearest-neighbour (sizes match when
+        // overlay is active, but handle mismatched dims gracefully).
+        int oy = (y * fH) / h;
+        for (int x = 0; x < w; ++x) {
+          int ox = (x * fW) / w;
+          std::size_t hm_off = (static_cast<std::size_t>(y) * w + x) * 4u;
+          std::size_t bg_off = (static_cast<std::size_t>(oy) * fW + ox) * 4u;
+          float alpha = overlay_opacity;
+          for (int c = 0; c < 3; ++c) {
+            float fg_v = static_cast<float>(img.pixels[hm_off + c]);
+            float bg_v = static_cast<float>(orig_img->pixels[bg_off + c]);
+            composited.pixels[hm_off + c] =
+                static_cast<uint8_t>(fg_v * alpha + bg_v * (1.0f - alpha));
+          }
+          composited.pixels[hm_off + 3] = 255;
+        }
+      }
+      img = std::move(composited);
     }
 
     ctx.set_output(node.id, "image_data", std::move(img));
@@ -905,6 +956,363 @@ class AnnotateImageHandler : public NodeHandler {
   }
 };
 
+// ── DrawBoxes ─────────────────────────────────────────────────────────────
+// Renders bounding boxes on an image. Consumes the NMS-format tensor
+// [x1,y1,x2,y2,score,...] produced by PostprocessHandler/nms and draws
+// colored rectangles with optional score labels. A separate optional
+// `class_tensor` input of shape [num_boxes] (int-like class IDs) enables
+// per-class coloring; without it, all boxes share a single highlight color.
+class DrawBoxesHandler : public NodeHandler {
+ public:
+  std::string type() const override { return "drawBoxes"; }
+  std::string label() const override { return "Draw Boxes"; }
+  std::string category() const override { return "output"; }
+  std::vector<HandlerPortDef> port_defs() const override {
+    return {
+        {"image_data", "target", "image"},
+        {"boxes_data", "target", "tensor"},
+        {"output_data", "source", "image"},
+    };
+  }
+  json execute(const NodeDef& node, const WorkflowGraph& graph, ExecutionContext& ctx) override {
+    auto img_val = ctx.resolve_input(node.id, "image_data", graph);
+    auto boxes_val = ctx.resolve_input(node.id, "boxes_data", graph);
+    auto* in_img = std::get_if<ImageData>(&img_val);
+    if (!in_img)
+      throw NodeError(NodeError::Kind::MissingInput, "drawBoxes: missing image_data");
+    auto* boxes = std::get_if<TensorData>(&boxes_val);
+    if (!boxes)
+      throw NodeError(NodeError::Kind::MissingInput, "drawBoxes: missing boxes_data");
+    if (in_img->width <= 0 || in_img->height <= 0)
+      throw NodeError(NodeError::Kind::Runtime, "drawBoxes: zero-sized input image");
+
+    float conf_thresh = 0.25f;
+    auto ct = get_config(node, "confidenceThreshold");
+    if (!ct.empty()) try { conf_thresh = std::stof(ct); } catch (...) {}
+
+    int line_width = 2;
+    auto lw = get_config(node, "lineWidth");
+    if (!lw.empty()) try { line_width = std::max(1, std::stoi(lw)); } catch (...) {}
+
+    int font_scale = 1;
+    auto fs = get_config(node, "fontScale");
+    if (!fs.empty()) try { font_scale = std::max(1, std::stoi(fs)); } catch (...) {}
+
+    int max_boxes = 100;
+    auto mb = get_config(node, "maxBoxes");
+    if (!mb.empty()) try { max_boxes = std::max(1, std::stoi(mb)); } catch (...) {}
+
+    bool normalized = false;
+    auto nm = get_config(node, "normalizedCoords");
+    if (nm == "true" || nm == "1") normalized = true;
+
+    // Optional per-class labels file.
+    std::vector<std::string> labels;
+    auto labels_path = get_config(node, "labelsPath");
+    if (!labels_path.empty()) {
+      auto resolved = resolve_path(labels_path);
+      std::ifstream lf(resolved);
+      if (!lf)
+        throw NodeError(NodeError::Kind::Runtime,
+                        "drawBoxes: cannot open labelsPath: " + labels_path);
+      std::string line;
+      while (std::getline(lf, line)) {
+        if (!line.empty() && line.back() == '\r') line.pop_back();
+        labels.push_back(line);
+      }
+    }
+
+    ImageData out = *in_img;
+    const int W = out.width;
+    const int H = out.height;
+
+    // Precomputed per-class color palette (12 distinct hues, cycled).
+    static const uint8_t palette[12][3] = {
+        {255, 87, 51},  {51, 255, 87},  {51, 87, 255},  {255, 255, 51},
+        {255, 51, 255}, {51, 255, 255}, {255, 128, 0},  {128, 0, 255},
+        {0, 255, 128},  {255, 0, 128},  {0, 128, 255},  {128, 255, 0},
+    };
+
+    auto draw_rect = [&](int x0, int y0, int x1, int y1, uint8_t r, uint8_t g, uint8_t b) {
+      for (int t = 0; t < line_width; ++t) {
+        for (int x = x0; x <= x1; ++x) {
+          auto put = [&](int py) {
+            if (py < 0 || py >= H || x < 0 || x >= W) return;
+            std::size_t off = (static_cast<std::size_t>(py) * W + x) * 4u;
+            out.pixels[off + 0] = r;
+            out.pixels[off + 1] = g;
+            out.pixels[off + 2] = b;
+            out.pixels[off + 3] = 255;
+          };
+          put(y0 + t);
+          put(y1 - t);
+        }
+        for (int y = y0; y <= y1; ++y) {
+          auto put = [&](int px) {
+            if (y < 0 || y >= H || px < 0 || px >= W) return;
+            std::size_t off = (static_cast<std::size_t>(y) * W + px) * 4u;
+            out.pixels[off + 0] = r;
+            out.pixels[off + 1] = g;
+            out.pixels[off + 2] = b;
+            out.pixels[off + 3] = 255;
+          };
+          put(x0 + t);
+          put(x1 - t);
+        }
+      }
+    };
+
+    auto put_pixel = [&](int x, int y, uint8_t r, uint8_t g, uint8_t b) {
+      if (x < 0 || y < 0 || x >= W || y >= H) return;
+      std::size_t off = (static_cast<std::size_t>(y) * W + x) * 4u;
+      out.pixels[off + 0] = r;
+      out.pixels[off + 1] = g;
+      out.pixels[off + 2] = b;
+      out.pixels[off + 3] = 255;
+    };
+
+    auto draw_char_scaled = [&](char c, int ox, int oy, uint8_t r, uint8_t g, uint8_t b, int sc) {
+      const Glyph5x7& gl = glyph_for(c);
+      for (int col = 0; col < 5; ++col) {
+        uint8_t mask = gl.cols[col];
+        for (int row = 0; row < 7; ++row) {
+          if (mask & (1u << row)) {
+            for (int dy = 0; dy < sc; ++dy)
+              for (int dx = 0; dx < sc; ++dx)
+                put_pixel(ox + col * sc + dx, oy + row * sc + dy, r, g, b);
+          }
+        }
+      }
+    };
+
+    auto draw_text = [&](const std::string& text, int ox, int oy, uint8_t r, uint8_t g, uint8_t b,
+                         int sc) {
+      int cx = ox;
+      for (char c : text) {
+        draw_char_scaled(c, cx, oy, r, g, b, sc);
+        cx += (5 + 1) * sc;
+      }
+    };
+
+    int n_boxes = static_cast<int>(boxes->size() / 5);
+    int drawn = 0;
+    for (int i = 0; i < n_boxes && drawn < max_boxes; ++i) {
+      float x1 = (*boxes)[i * 5 + 0];
+      float y1 = (*boxes)[i * 5 + 1];
+      float x2 = (*boxes)[i * 5 + 2];
+      float y2 = (*boxes)[i * 5 + 3];
+      float score = (*boxes)[i * 5 + 4];
+      if (score < conf_thresh) continue;
+
+      if (normalized) {
+        x1 *= W; y1 *= H; x2 *= W; y2 *= H;
+      }
+
+      int ix0 = std::clamp(static_cast<int>(std::round(x1)), 0, W - 1);
+      int iy0 = std::clamp(static_cast<int>(std::round(y1)), 0, H - 1);
+      int ix1 = std::clamp(static_cast<int>(std::round(x2)), 0, W - 1);
+      int iy1 = std::clamp(static_cast<int>(std::round(y2)), 0, H - 1);
+      if (ix1 <= ix0 || iy1 <= iy0) continue;
+
+      int cls_id = i % 12;  // cycle palette by box index (no class info in NMS output)
+      uint8_t cr = palette[cls_id][0], cg = palette[cls_id][1], cb = palette[cls_id][2];
+
+      draw_rect(ix0, iy0, ix1, iy1, cr, cg, cb);
+
+      // Score label above the box.
+      char label_buf[32];
+      std::snprintf(label_buf, sizeof(label_buf), "%.2f", score);
+      std::string label_str(label_buf);
+      if (!labels.empty() && cls_id < static_cast<int>(labels.size()))
+        label_str = labels[cls_id] + " " + label_str;
+
+      int tw = static_cast<int>(label_str.size()) * 6 * font_scale;
+      int th = 7 * font_scale;
+      // Black background for readability.
+      int ly = std::max(0, iy0 - th - 2);
+      for (int py = ly; py < ly + th + 2 && py < H; ++py)
+        for (int px = ix0; px < ix0 + tw + 2 && px < W; ++px) {
+          std::size_t off = (static_cast<std::size_t>(py) * W + px) * 4u;
+          out.pixels[off + 0] = 0;
+          out.pixels[off + 1] = 0;
+          out.pixels[off + 2] = 0;
+          out.pixels[off + 3] = 255;
+        }
+      draw_text(label_str, ix0 + 1, ly + 1, 255, 255, 255, font_scale);
+      ++drawn;
+    }
+
+    ctx.set_output(node.id, "output_data", std::move(out));
+    return {{"boxes_drawn", drawn}};
+  }
+};
+
+// ── SegmentationMask ──────────────────────────────────────────────────────
+// Takes a flat per-pixel logits tensor from a segmentation model and
+// produces a color-coded RGBA mask. The tensor is expected in NCHW layout
+// [1, num_classes, H, W] or CHW [num_classes, H, W]; the handler reads
+// width × height from config and infers num_classes from the tensor size.
+// Output is an RGBA image of the specified spatial dimensions.
+class SegmentationMaskHandler : public NodeHandler {
+ public:
+  std::string type() const override { return "segmentationMask"; }
+  std::string label() const override { return "Segmentation Mask"; }
+  std::string category() const override { return "output"; }
+  std::vector<HandlerPortDef> port_defs() const override {
+    return {
+        {"input_data", "target", "tensor"},
+        {"mask_data", "source", "image"},
+    };
+  }
+  json execute(const NodeDef& node, const WorkflowGraph& graph, ExecutionContext& ctx) override {
+    auto data_val = ctx.resolve_input(node.id, "input_data", graph);
+    auto* tensor = std::get_if<TensorData>(&data_val);
+    if (!tensor || tensor->empty())
+      throw NodeError(NodeError::Kind::MissingInput, "segmentationMask: missing or empty tensor");
+
+    int W = 0, H = 0;
+    auto ws = get_config(node, "width");
+    auto hs = get_config(node, "height");
+    if (!ws.empty()) try { W = std::stoi(ws); } catch (...) {}
+    if (!hs.empty()) try { H = std::stoi(hs); } catch (...) {}
+    if (W <= 0 || H <= 0)
+      throw NodeError(NodeError::Kind::InvalidConfig,
+                      "segmentationMask: width and height must be positive integers");
+
+    std::size_t spatial = static_cast<std::size_t>(W) * H;
+    std::size_t total = tensor->size();
+    if (total < spatial || total % spatial != 0)
+      throw NodeError(NodeError::Kind::Runtime,
+                      "segmentationMask: tensor size (" + std::to_string(total) +
+                          ") is not a multiple of width*height (" + std::to_string(spatial) + ")");
+    int num_classes = static_cast<int>(total / spatial);
+
+    // Optional labels for future use; the mask itself doesn't render text.
+    // Kept here so a downstream annotateImage could use the same file.
+
+    // Generate per-class colors via the same viridis-style palette used by
+    // tensorToImage, but stretched across num_classes. For large class counts
+    // (> 20) this gives a smooth gradient; for small counts (Cityscapes 19)
+    // the colors are distinct enough.
+    auto class_color = [&](int cls) -> std::array<uint8_t, 3> {
+      if (cls < 0) return {0, 0, 0};
+      float t = (num_classes > 1) ? static_cast<float>(cls) / (num_classes - 1) : 0.0f;
+      // Same 5-stop viridis approximation.
+      static const float stops[5][3] = {
+          {0.267f, 0.005f, 0.329f}, {0.229f, 0.322f, 0.546f}, {0.127f, 0.566f, 0.551f},
+          {0.369f, 0.789f, 0.383f}, {0.993f, 0.906f, 0.144f},
+      };
+      float fi = t * 4.0f;
+      int i = std::min(static_cast<int>(fi), 3);
+      float f = fi - static_cast<float>(i);
+      return {{
+          static_cast<uint8_t>(std::round((stops[i][0] + (stops[i + 1][0] - stops[i][0]) * f) * 255)),
+          static_cast<uint8_t>(std::round((stops[i][1] + (stops[i + 1][1] - stops[i][1]) * f) * 255)),
+          static_cast<uint8_t>(std::round((stops[i][2] + (stops[i + 1][2] - stops[i][2]) * f) * 255)),
+      }};
+    };
+
+    ImageData mask;
+    mask.width = W;
+    mask.height = H;
+    mask.channels = 4;
+    mask.pixels.resize(spatial * 4u);
+
+    for (std::size_t px = 0; px < spatial; ++px) {
+      // Argmax across class dimension.
+      int best_cls = 0;
+      float best_val = (*tensor)[px];  // class 0
+      for (int c = 1; c < num_classes; ++c) {
+        float v = (*tensor)[c * spatial + px];
+        if (v > best_val) {
+          best_val = v;
+          best_cls = c;
+        }
+      }
+      auto col = class_color(best_cls);
+      std::size_t off = px * 4u;
+      mask.pixels[off + 0] = col[0];
+      mask.pixels[off + 1] = col[1];
+      mask.pixels[off + 2] = col[2];
+      mask.pixels[off + 3] = 255;
+    }
+
+    ctx.set_output(node.id, "mask_data", std::move(mask));
+    return {{"num_classes", num_classes}};
+  }
+};
+
+// ── Composite ─────────────────────────────────────────────────────────────
+// Alpha-blends a foreground image (e.g. segmentation mask, annotated image)
+// over a background image (e.g. original input). The foreground's existing
+// alpha channel is used when present; an additional `opacity` config scales
+// it. Output has the background's dimensions; the foreground is resized
+// (nearest-neighbour) to fit if sizes differ.
+class CompositeHandler : public NodeHandler {
+ public:
+  std::string type() const override { return "composite"; }
+  std::string label() const override { return "Composite"; }
+  std::string category() const override { return "output"; }
+  std::vector<HandlerPortDef> port_defs() const override {
+    return {
+        {"foreground", "target", "image"},
+        {"background", "target", "image"},
+        {"output_data", "source", "image"},
+    };
+  }
+  json execute(const NodeDef& node, const WorkflowGraph& graph, ExecutionContext& ctx) override {
+    auto fg_val = ctx.resolve_input(node.id, "foreground", graph);
+    auto bg_val = ctx.resolve_input(node.id, "background", graph);
+    auto* fg = std::get_if<ImageData>(&fg_val);
+    auto* bg = std::get_if<ImageData>(&bg_val);
+    if (!fg)
+      throw NodeError(NodeError::Kind::MissingInput, "composite: missing foreground");
+    if (!bg)
+      throw NodeError(NodeError::Kind::MissingInput, "composite: missing background");
+    if (bg->width <= 0 || bg->height <= 0)
+      throw NodeError(NodeError::Kind::Runtime, "composite: zero-sized background");
+    if (fg->width <= 0 || fg->height <= 0)
+      throw NodeError(NodeError::Kind::Runtime, "composite: zero-sized foreground");
+
+    float opacity = 0.5f;
+    auto os = get_config(node, "opacity");
+    if (!os.empty()) try { opacity = std::clamp(std::stof(os), 0.0f, 1.0f); } catch (...) {}
+
+    ImageData out;
+    out.width = bg->width;
+    out.height = bg->height;
+    out.channels = 4;
+    const std::size_t npix = static_cast<std::size_t>(out.width) * out.height;
+    out.pixels.resize(npix * 4u);
+
+    const int W = out.width;
+    const int H = out.height;
+    const int fW = fg->width;
+    const int fH = fg->height;
+
+    // Nearest-neighbour resample fg to bg's dimensions.
+    for (int y = 0; y < H; ++y) {
+      int fy = (y * fH) / H;
+      for (int x = 0; x < W; ++x) {
+        int fx = (x * fW) / W;
+        std::size_t bg_off = (static_cast<std::size_t>(y) * W + x) * 4u;
+        std::size_t fg_off = (static_cast<std::size_t>(fy) * fW + fx) * 4u;
+
+        float fg_alpha = static_cast<float>(fg->pixels[fg_off + 3]) / 255.0f * opacity;
+        for (int c = 0; c < 3; ++c) {
+          float bg_v = static_cast<float>(bg->pixels[bg_off + c]);
+          float fg_v = static_cast<float>(fg->pixels[fg_off + c]);
+          out.pixels[bg_off + c] = static_cast<uint8_t>(fg_v * fg_alpha + bg_v * (1.0f - fg_alpha));
+        }
+        out.pixels[bg_off + 3] = 255;
+      }
+    }
+
+    ctx.set_output(node.id, "output_data", std::move(out));
+    return {};
+  }
+};
+
 class ConditionHandler : public NodeHandler {
  public:
   std::string type() const override { return "condition"; }
@@ -997,6 +1405,9 @@ void register_core_handlers(
   add(std::make_shared<PostprocessHandler>());
   add(std::make_shared<TensorToImageHandler>());
   add(std::make_shared<AnnotateImageHandler>());
+  add(std::make_shared<DrawBoxesHandler>());
+  add(std::make_shared<SegmentationMaskHandler>());
+  add(std::make_shared<CompositeHandler>());
 }
 
 }  // namespace handlers

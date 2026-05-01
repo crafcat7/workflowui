@@ -164,3 +164,41 @@ export function TagIcon(): ReactNode {
     </svg>
   );
 }
+
+/** Draw Boxes — bounding box outline */
+export function BoxIcon(): ReactNode {
+  return (
+    <svg {...svgProps}>
+      <rect x="4" y="4" width="16" height="16" rx="1" />
+      <path d="M4 4l4-2" />
+      <path d="M20 4l-4-2" />
+      <path d="M4 20l4 2" />
+      <path d="M20 20l-4 2" />
+    </svg>
+  );
+}
+
+/** Segmentation Mask — pixel grid / mosaic */
+export function MosaicIcon(): ReactNode {
+  return (
+    <svg {...svgProps}>
+      <rect x="3" y="3" width="7" height="7" rx="1" />
+      <rect x="14" y="3" width="7" height="7" rx="1" />
+      <rect x="3" y="14" width="7" height="7" rx="1" />
+      <rect x="14" y="14" width="7" height="7" rx="1" />
+      <rect x="8" y="8" width="8" height="8" rx="1" opacity="0.4" />
+    </svg>
+  );
+}
+
+/** Composite — two overlapping layers */
+export function LayersIcon(): ReactNode {
+  return (
+    <svg {...svgProps}>
+      <rect x="6" y="6" width="14" height="14" rx="2" />
+      <rect x="3" y="3" width="14" height="14" rx="2" />
+      <path d="M3 17h14" />
+      <path d="M6 14h14" />
+    </svg>
+  );
+}

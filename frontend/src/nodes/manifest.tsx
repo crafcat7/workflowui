@@ -35,6 +35,9 @@ import {
   InspectIcon,
   HeatmapIcon,
   TagIcon,
+  BoxIcon,
+  MosaicIcon,
+  LayersIcon,
 } from './NodeIcons';
 
 export type NodeCategoryKey = 'input' | 'inference' | 'output' | 'control' | 'debug';
@@ -294,6 +297,7 @@ export const NODE_MANIFEST: NodeManifestEntry[] = [
     category: 'output',
     ports: [
       { id: 'input_data', direction: 'target', dataType: 'tensor' },
+      { id: 'original_image', direction: 'target', dataType: 'image' },
       { id: 'image_data', direction: 'source', dataType: 'image' },
     ],
     configSections: [
@@ -307,6 +311,7 @@ export const NODE_MANIFEST: NodeManifestEntry[] = [
             placeholder: '256',
             step: 1,
             min: 1,
+            showIf: (c) => !c.original_image,
           },
           {
             key: 'height',
@@ -315,6 +320,7 @@ export const NODE_MANIFEST: NodeManifestEntry[] = [
             placeholder: '64',
             step: 1,
             min: 1,
+            showIf: (c) => !c.original_image,
           },
           {
             key: 'colormap',
@@ -335,6 +341,16 @@ export const NODE_MANIFEST: NodeManifestEntry[] = [
               { value: 'auto', label: 'Auto (min/max rescale)' },
               { value: 'none', label: 'None (clamp 0–1)' },
             ],
+          },
+          {
+            key: 'overlayOpacity',
+            label: 'Overlay Opacity',
+            kind: 'number',
+            placeholder: '0.45',
+            step: 0.05,
+            min: 0,
+            max: 1,
+            help: 'When an original image is connected, heatmap is composited over it at this opacity (0 = invisible, 1 = opaque). Ignored when no image connected.',
           },
         ],
       },
@@ -378,6 +394,138 @@ export const NODE_MANIFEST: NodeManifestEntry[] = [
             step: 1,
             min: 1,
             help: 'Multiplier for the 5×7 bitmap font. 1 = smallest, 2 = default.',
+          },
+        ],
+      },
+    ],
+  },
+  {
+    type: 'drawBoxes',
+    label: 'Draw Boxes',
+    icon: <BoxIcon />,
+    category: 'output',
+    ports: [
+      { id: 'image_data', direction: 'target', dataType: 'image' },
+      { id: 'boxes_data', direction: 'target', dataType: 'tensor' },
+      { id: 'output_data', direction: 'source', dataType: 'image' },
+    ],
+    configSections: [
+      {
+        title: 'BOX RENDERING',
+        fields: [
+          {
+            key: 'confidenceThreshold',
+            label: 'Confidence Threshold',
+            kind: 'number',
+            placeholder: '0.25',
+            step: 0.05,
+            min: 0,
+            max: 1,
+          },
+          {
+            key: 'lineWidth',
+            label: 'Line Width',
+            kind: 'number',
+            placeholder: '2',
+            step: 1,
+            min: 1,
+          },
+          {
+            key: 'fontScale',
+            label: 'Font Scale',
+            kind: 'number',
+            placeholder: '1',
+            step: 1,
+            min: 1,
+          },
+          {
+            key: 'maxBoxes',
+            label: 'Max Boxes',
+            kind: 'number',
+            placeholder: '100',
+            step: 1,
+            min: 1,
+          },
+          {
+            key: 'normalizedCoords',
+            label: 'Normalized Coords',
+            kind: 'select',
+            defaultValue: 'false',
+            options: [
+              { value: 'false', label: 'Pixel coordinates' },
+              { value: 'true', label: 'Normalized (0–1)' },
+            ],
+            help: 'Enable when box coordinates are in [0,1] rather than pixels.',
+          },
+          {
+            key: 'labelsPath',
+            label: 'Labels File',
+            kind: 'filepath',
+            placeholder: 'labels.txt',
+            help: 'Optional class labels file (one per line) for per-box class names.',
+          },
+        ],
+      },
+    ],
+  },
+  {
+    type: 'segmentationMask',
+    label: 'Segmentation Mask',
+    icon: <MosaicIcon />,
+    category: 'output',
+    ports: [
+      { id: 'input_data', direction: 'target', dataType: 'tensor' },
+      { id: 'mask_data', direction: 'source', dataType: 'image' },
+    ],
+    configSections: [
+      {
+        title: 'SEGMENTATION',
+        fields: [
+          {
+            key: 'width',
+            label: 'Width',
+            kind: 'number',
+            placeholder: '224',
+            step: 1,
+            min: 1,
+            help: 'Spatial width of the per-pixel logits tensor.',
+          },
+          {
+            key: 'height',
+            label: 'Height',
+            kind: 'number',
+            placeholder: '224',
+            step: 1,
+            min: 1,
+            help: 'Spatial height of the per-pixel logits tensor.',
+          },
+        ],
+      },
+    ],
+  },
+  {
+    type: 'composite',
+    label: 'Composite',
+    icon: <LayersIcon />,
+    category: 'output',
+    ports: [
+      { id: 'foreground', direction: 'target', dataType: 'image' },
+      { id: 'background', direction: 'target', dataType: 'image' },
+      { id: 'output_data', direction: 'source', dataType: 'image' },
+    ],
+    configSections: [
+      {
+        title: 'BLEND',
+        fields: [
+          {
+            key: 'opacity',
+            label: 'Opacity',
+            kind: 'number',
+            placeholder: '0.5',
+            step: 0.05,
+            min: 0,
+            max: 1,
+            help: 'Foreground opacity (0 = only background, 1 = only foreground).',
           },
         ],
       },
