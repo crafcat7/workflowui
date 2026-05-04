@@ -2,7 +2,7 @@
 <!-- SPDX-FileCopyrightText: 2026 WorkflowUI contributors -->
 # Image Processing Demo (MobileNetV2)
 
-End-to-end image classification pipeline with post-inference image visualization:
+End-to-end image classification pipeline with benchmarking and post-inference image visualization:
 
 ```
 InputImage  ─►  Inference (image→tensor coercion)  ─►  Postprocess (Top-5)
@@ -14,6 +14,8 @@ InputImage  ─►  Inference (image→tensor coercion)  ─►  Postprocess (To
                                                   ▼                       ▼
                                               Inspect → Output       SaveText
                                               (true: max>0.1)        (false branch)
+                                                  │
+                                                  ├─► Benchmark (1s sample) ─► Output
                                                   │
                                                   ├─► TensorToImage (overlay) ─► Composite ─► SaveImage (composite.png)
                                                   │
@@ -66,7 +68,7 @@ the model with a different converter and the names differ, edit the
 
 3. Load `demo/image_processing/workflow.json`, click Run.
 
-4. Expect: image preview thumbnail in `Input Image` and `Save Image`, top-5 ImageNet logits surfaced through `inspect → output`, `composite.png` (softmax heatmap overlay + original image composited), `classified.png` with top-5 predictions overlaid, `segmask.png` synthetic 5×5 segmentation mask, `boxes.png` synthetic detection boxes rendered after NMS, `low_confidence.txt` only written when the max probability is ≤ 0.1.
+4. Expect: image preview thumbnail in `Input Image` and `Save Image`, top-5 ImageNet logits surfaced through `inspect → output`, benchmark metrics surfaced through `Benchmark Output`, `composite.png` (softmax heatmap overlay + original image composited), `classified.png` with top-5 predictions overlaid, `segmask.png` synthetic 5×5 segmentation mask, `boxes.png` synthetic detection boxes rendered after NMS, `low_confidence.txt` only written when the max probability is ≤ 0.1.
 
 ## Verifying without the UI
 
