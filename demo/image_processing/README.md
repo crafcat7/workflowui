@@ -56,9 +56,15 @@ the model with a different converter and the names differ, edit the
    cmake -DENABLE_NCNN=ON -S backend -B backend/build && cmake --build backend/build
    ```
 
-2. Start the backend and frontend, load `demo/image_processing/workflow.json`, click Run.
+2. Start the backend and frontend, then verify the running backend supports every node/port used by this demo (catches stale binaries):
 
-3. Expect: image preview thumbnail in `Input Image` and `Save Image`, top-5 ImageNet logits surfaced through `inspect → output`, `composite.png` (softmax heatmap overlay + original image composited), `classified.png` with top-5 predictions overlaid, `segmask.png` synthetic 5×5 segmentation mask, `low_confidence.txt` only written when the max probability is ≤ 0.1.
+   ```bash
+   node scripts/check_backend_capabilities.mjs demo/image_processing/workflow.json
+   ```
+
+3. Load `demo/image_processing/workflow.json`, click Run.
+
+4. Expect: image preview thumbnail in `Input Image` and `Save Image`, top-5 ImageNet logits surfaced through `inspect → output`, `composite.png` (softmax heatmap overlay + original image composited), `classified.png` with top-5 predictions overlaid, `segmask.png` synthetic 5×5 segmentation mask, `low_confidence.txt` only written when the max probability is ≤ 0.1.
 
 ## Verifying without the UI
 

@@ -7,8 +7,8 @@ import { HeatmapIcon } from './NodeIcons';
 
 export function TensorToImageNode({ data: d }: NodeProps<Node<WorkflowNodeData>>) {
   const colormap = (d.config?.colormap as string) || 'viridis';
-  const w = d.config?.width || '256';
-  const h = d.config?.height || '64';
+  const w = String(d.config?.width || '256');
+  const h = String(d.config?.height || '64');
   const overlayOpacity = d.config?.overlayOpacity;
 
   return (

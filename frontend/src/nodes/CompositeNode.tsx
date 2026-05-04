@@ -6,7 +6,7 @@ import type { WorkflowNodeData } from '../store/workflowStore';
 import { LayersIcon } from './NodeIcons';
 
 export function CompositeNode({ data: d }: NodeProps<Node<WorkflowNodeData>>) {
-  const opacity = d.config?.opacity ?? '0.5';
+  const opacity = String(d.config?.opacity ?? '0.5');
 
   return (
     <div className="workflow-node node-output">

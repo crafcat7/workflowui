@@ -7,7 +7,7 @@ import { TagIcon } from './NodeIcons';
 
 export function AnnotateImageNode({ data: d }: NodeProps<Node<WorkflowNodeData>>) {
   const hasLabels = Boolean(d.config?.labelsPath);
-  const maxLines = d.config?.maxLines || '5';
+  const maxLines = String(d.config?.maxLines || '5');
 
   return (
     <div className="workflow-node node-output">

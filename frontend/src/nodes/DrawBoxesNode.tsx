@@ -6,7 +6,7 @@ import type { WorkflowNodeData } from '../store/workflowStore';
 import { BoxIcon } from './NodeIcons';
 
 export function DrawBoxesNode({ data: d }: NodeProps<Node<WorkflowNodeData>>) {
-  const thresh = d.config?.confidenceThreshold || '0.25';
+  const thresh = String(d.config?.confidenceThreshold || '0.25');
 
   return (
     <div className="workflow-node node-output">

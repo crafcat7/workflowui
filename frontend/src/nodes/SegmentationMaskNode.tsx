@@ -6,8 +6,8 @@ import type { WorkflowNodeData } from '../store/workflowStore';
 import { MosaicIcon } from './NodeIcons';
 
 export function SegmentationMaskNode({ data: d }: NodeProps<Node<WorkflowNodeData>>) {
-  const w = d.config?.width || '224';
-  const h = d.config?.height || '224';
+  const w = String(d.config?.width || '224');
+  const h = String(d.config?.height || '224');
 
   return (
     <div className="workflow-node node-output">

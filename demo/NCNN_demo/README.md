@@ -49,8 +49,12 @@ The `composite` branch demonstrates `tensorToImage`'s overlay mode (heatmap draw
    ```bash
    backend/build/workflow_backend --port 9090
    ```
-3. In the UI, click the toolbar **Load** button (or `Cmd+O`) and select `demo/NCNN_demo/image_classification.json`.
-4. Click **Run**. Expect:
+3. Optional but recommended: verify the running backend supports every node/port used by this demo (catches stale binaries):
+   ```bash
+   node scripts/check_backend_capabilities.mjs demo/NCNN_demo/image_classification.json
+   ```
+4. In the UI, click the toolbar **Load** button (or `Cmd+O`) and select `demo/NCNN_demo/image_classification.json`.
+5. Click **Run**. Expect:
    - Image preview thumbnail in `Input Image` and (after run) in `Save Image`.
    - Top-5 logits in the `Inspect Top-K` debug view → `Classification Output`. With the bundled dog photo, the top class is **Samoyed** at ~0.79.
    - `composite.png` — softmax heatmap overlay composited onto the original image via `tensorToImage` overlay mode + `composite` handler.
