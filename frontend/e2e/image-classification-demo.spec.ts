@@ -43,6 +43,7 @@ const LOW_CONF_PATH = path.join(REPO_ROOT, 'demo', 'NCNN_demo', 'low_confidence.
 const COMPOSITE_PATH = path.join(REPO_ROOT, 'demo', 'NCNN_demo', 'composite.png');
 const ANNOTATED_PATH = path.join(REPO_ROOT, 'demo', 'NCNN_demo', 'classified.png');
 const SEGMASK_PATH = path.join(REPO_ROOT, 'demo', 'NCNN_demo', 'segmask.png');
+const BOXES_PATH = path.join(REPO_ROOT, 'demo', 'NCNN_demo', 'boxes.png');
 
 // Isolated from the mock backend (9099), prod (9090), and the
 // shufflenet ncnn-demo test (9098).
@@ -62,7 +63,14 @@ test.beforeAll(async () => {
 
   // Clean any stale outputs from a prior run so existence assertions are
   // not satisfied by leftovers.
-  for (const p of [ROUNDTRIP_PATH, LOW_CONF_PATH, COMPOSITE_PATH, ANNOTATED_PATH, SEGMASK_PATH]) {
+  for (const p of [
+    ROUNDTRIP_PATH,
+    LOW_CONF_PATH,
+    COMPOSITE_PATH,
+    ANNOTATED_PATH,
+    SEGMASK_PATH,
+    BOXES_PATH,
+  ]) {
     if (fs.existsSync(p)) fs.rmSync(p);
   }
 
@@ -93,7 +101,14 @@ test.afterAll(async () => {
     if (!backendProc.killed) backendProc.kill('SIGKILL');
   }
   // Sweep generated artifacts so the working tree stays clean.
-  for (const p of [ROUNDTRIP_PATH, LOW_CONF_PATH, COMPOSITE_PATH, ANNOTATED_PATH, SEGMASK_PATH]) {
+  for (const p of [
+    ROUNDTRIP_PATH,
+    LOW_CONF_PATH,
+    COMPOSITE_PATH,
+    ANNOTATED_PATH,
+    SEGMASK_PATH,
+    BOXES_PATH,
+  ]) {
     if (fs.existsSync(p)) {
       try {
         fs.rmSync(p);
@@ -240,6 +255,15 @@ test.describe('Image classification demo (MobileNetV2)', () => {
     expect(
       segHead.equals(PNG_MAGIC),
       `segmask.png is not a PNG (head=${segHead.toString('hex')})`,
+    ).toBe(true);
+
+    // drawBoxes → saveImage: synthetic boxes are filtered through NMS and
+    // rendered over the input image.
+    expect(fs.existsSync(BOXES_PATH), `boxes.png missing`).toBe(true);
+    const boxesHead = fs.readFileSync(BOXES_PATH).subarray(0, 8);
+    expect(
+      boxesHead.equals(PNG_MAGIC),
+      `boxes.png is not a PNG (head=${boxesHead.toString('hex')})`,
     ).toBe(true);
 
     // The false branch saveText writes a low_confidence.txt only on

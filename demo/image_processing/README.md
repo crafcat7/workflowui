@@ -19,7 +19,9 @@ InputImage  ─►  Inference (image→tensor coercion)  ─►  Postprocess (To
                                                   │
                                                   ├─► AnnotateImage (top-5 labels) ─► SaveImage (classified.png)
                                                   │
-                                                  └─► InputTensor (synthetic logits) ─► SegmentationMask ─► SaveImage (segmask.png)
+                                                  ├─► InputTensor (synthetic logits) ─► SegmentationMask ─► SaveImage (segmask.png)
+                                                  │
+                                                  └─► InputTensor (synthetic boxes) ─► Postprocess(NMS) ─► DrawBoxes ─► SaveImage (boxes.png)
 ```
 
 ## Files
@@ -64,7 +66,7 @@ the model with a different converter and the names differ, edit the
 
 3. Load `demo/image_processing/workflow.json`, click Run.
 
-4. Expect: image preview thumbnail in `Input Image` and `Save Image`, top-5 ImageNet logits surfaced through `inspect → output`, `composite.png` (softmax heatmap overlay + original image composited), `classified.png` with top-5 predictions overlaid, `segmask.png` synthetic 5×5 segmentation mask, `low_confidence.txt` only written when the max probability is ≤ 0.1.
+4. Expect: image preview thumbnail in `Input Image` and `Save Image`, top-5 ImageNet logits surfaced through `inspect → output`, `composite.png` (softmax heatmap overlay + original image composited), `classified.png` with top-5 predictions overlaid, `segmask.png` synthetic 5×5 segmentation mask, `boxes.png` synthetic detection boxes rendered after NMS, `low_confidence.txt` only written when the max probability is ≤ 0.1.
 
 ## Verifying without the UI
 

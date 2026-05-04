@@ -10,7 +10,7 @@ Loads ShuffleNet's `.param` only, runs inference on a synthetic tensor, and exer
 
 ## 2. `image_classification.json` — MobileNetV2 end-to-end image classification
 
-Real image → image-to-tensor coercion → MobileNetV2 inference → top-5 → conditional inspect/log → softmax heatmap → annotated image → composited overlay → segmentation mask. Exercises the full image processing pipeline, including every post-inference image handler (`tensorToImage` with overlay, `annotateImage`, `composite`, `segmentationMask`).
+Real image → image-to-tensor coercion → MobileNetV2 inference → top-5 → conditional inspect/log → softmax heatmap → annotated image → composited overlay → segmentation mask → detection box overlay. Exercises the full image processing pipeline, including every post-inference image handler (`tensorToImage` with overlay, `annotateImage`, `composite`, `segmentationMask`, `drawBoxes`).
 
 ```
 inputImage ─► saveImage  (round-trip preview)
@@ -22,10 +22,12 @@ inputImage ─► saveImage  (round-trip preview)
        │
        ├─► annotateImage (top-5 labels) ─► saveImage (classified.png)
        │
-       └─► inputTensor (synthetic 5x5x3 logits) ─► segmentationMask ─► saveImage (segmask.png)
+       ├─► inputTensor (synthetic 5x5x3 logits) ─► segmentationMask ─► saveImage (segmask.png)
+       │
+       └─► inputTensor (synthetic boxes) ─► postprocess(NMS) ─► drawBoxes ─► saveImage (boxes.png)
 ```
 
-The `composite` branch demonstrates `tensorToImage`'s overlay mode (heatmap drawn directly onto the input image) combined with the `composite` handler (second pass at reduced opacity). The `segmentationMask` branch uses a synthetic 3-class 5×5 logits tensor to showcase argmax → per-pixel viridis coloring without requiring a real segmentation model.
+The `composite` branch demonstrates `tensorToImage`'s overlay mode (heatmap drawn directly onto the input image) combined with the `composite` handler (second pass at reduced opacity). The `segmentationMask` branch uses a synthetic 3-class 5×5 logits tensor to showcase argmax → per-pixel viridis coloring without requiring a real segmentation model. The `drawBoxes` branch uses synthetic detection boxes, applies NMS, then renders the surviving boxes on the original image.
 
 ### Files
 
@@ -60,6 +62,7 @@ The `composite` branch demonstrates `tensorToImage`'s overlay mode (heatmap draw
    - `composite.png` — softmax heatmap overlay composited onto the original image via `tensorToImage` overlay mode + `composite` handler.
    - `classified.png` — input image with top-5 predictions overlaid (class name + confidence).
    - `segmask.png` — 5×5 viridis-colored segmentation mask from synthetic 3-class logits (demonstrates `segmentationMask` handler).
+   - `boxes.png` — synthetic object boxes rendered on the input image after NMS (demonstrates `drawBoxes`).
    - `low_confidence.txt` is **not** written (max > 0.1 takes the true branch); `save_text` shows `skipped`.
 
 ### Headless verification

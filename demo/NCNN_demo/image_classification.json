@@ -264,6 +264,72 @@
         },
         "status": "idle"
       }
+    },
+    {
+      "id": "boxes_src",
+      "type": "inputTensor",
+      "position": {
+        "x": -120,
+        "y": 980
+      },
+      "data": {
+        "label": "Synthetic Detection Boxes",
+        "config": {
+          "fillMode": "text",
+          "tensorText": "40 35 185 215 0.98 45 42 188 218 0.76 78 22 160 95 0.71 20 125 90 210 0.45"
+        },
+        "status": "idle"
+      }
+    },
+    {
+      "id": "nms_boxes",
+      "type": "postprocess",
+      "position": {
+        "x": 200,
+        "y": 980
+      },
+      "data": {
+        "label": "NMS (synthetic boxes)",
+        "config": {
+          "op": "nms",
+          "iouThreshold": "0.45"
+        },
+        "status": "idle"
+      }
+    },
+    {
+      "id": "draw_boxes",
+      "type": "drawBoxes",
+      "position": {
+        "x": 500,
+        "y": 980
+      },
+      "data": {
+        "label": "Draw Boxes",
+        "config": {
+          "confidenceThreshold": "0.3",
+          "lineWidth": "3",
+          "fontScale": "2",
+          "maxBoxes": "20",
+          "normalizedCoords": "false"
+        },
+        "status": "idle"
+      }
+    },
+    {
+      "id": "save_boxes",
+      "type": "saveImage",
+      "position": {
+        "x": 820,
+        "y": 980
+      },
+      "data": {
+        "label": "Save Box Overlay",
+        "config": {
+          "filePath": "demo/NCNN_demo/boxes.png"
+        },
+        "status": "idle"
+      }
     }
   ],
   "edges": [
@@ -391,6 +457,34 @@
       "source": "seg",
       "sourceHandle": "mask_data",
       "target": "save_seg",
+      "targetHandle": "image_data"
+    },
+    {
+      "id": "e_boxes_nms",
+      "source": "boxes_src",
+      "sourceHandle": "tensor_data",
+      "target": "nms_boxes",
+      "targetHandle": "input_data"
+    },
+    {
+      "id": "e_img_boxes",
+      "source": "img_in",
+      "sourceHandle": "image_data",
+      "target": "draw_boxes",
+      "targetHandle": "image_data"
+    },
+    {
+      "id": "e_nms_draw",
+      "source": "nms_boxes",
+      "sourceHandle": "output_data",
+      "target": "draw_boxes",
+      "targetHandle": "boxes_data"
+    },
+    {
+      "id": "e_boxes_save",
+      "source": "draw_boxes",
+      "sourceHandle": "output_data",
+      "target": "save_boxes",
       "targetHandle": "image_data"
     }
   ]
