@@ -2,28 +2,25 @@
 <!-- SPDX-FileCopyrightText: 2026 WorkflowUI contributors -->
 # Image Processing Demo (MobileNetV2)
 
-End-to-end image classification pipeline with benchmarking and post-inference image visualization:
+End-to-end image classification pipeline with benchmarking and post-inference image visualization. Nodes are arranged in a clean vertical three-column layout with orthogonal (non-diagonal) connections.
 
 ```
-InputImage  ─►  Inference (image→tensor coercion)  ─►  Postprocess (Top-5)
-                       ▲                                       │
-                       │                                       ▼
-                CreateNet (NCNN)                          Condition
-                MobileNetV2                                   │
-                                                  ┌───────────┴───────────┐
-                                                  ▼                       ▼
-                                              Inspect → Output       SaveText
-                                              (true: max>0.1)        (false branch)
-                                                  │
-                                                  ├─► Benchmark (1s sample) ─► Output
-                                                  │
-                                                  ├─► TensorToImage (overlay) ─► Composite ─► SaveImage (composite.png)
-                                                  │
-                                                  ├─► AnnotateImage (top-5 labels) ─► SaveImage (classified.png)
-                                                  │
-                                                  ├─► InputTensor (synthetic logits) ─► SegmentationMask ─► SaveImage (segmask.png)
-                                                  │
-                                                  └─► InputTensor (synthetic boxes) ─► Postprocess(NMS) ─► DrawBoxes ─► SaveImage (boxes.png)
+img_in
+  ├─► img_save ─► roundtrip.png
+  └─► img_pass (composite passthrough)
+        ├─► infer ← net
+        │     └─► post ─► cond ─┬─► inspect → output
+        │                       └─► saveText (low-confidence log, skipped)
+        │
+        ├─► benchmark ← net ─► output
+        │
+        ├─► post ─► heatmap ─► save_comp (composite.png)
+        │
+        ├─► post ─► annotate (topk + image) ─► save_annotated (classified.png)
+        │
+        ├─► post ─► seg ← seg_src ─► save_seg (segmask.png)
+        │
+        └─► post ─► nms ← boxes_src ─► draw_boxes ─► save_boxes (boxes.png)
 ```
 
 ## Files

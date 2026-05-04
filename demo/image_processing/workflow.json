@@ -5,8 +5,8 @@
       "id": "img_in",
       "type": "inputImage",
       "position": {
-        "x": -1080,
-        "y": 160
+        "x": 200,
+        "y": 100
       },
       "data": {
         "label": "Input Image (preview thumbnail)",
@@ -20,13 +20,54 @@
       "id": "img_save",
       "type": "saveImage",
       "position": {
-        "x": -760,
-        "y": 40
+        "x": 200,
+        "y": 220
       },
       "data": {
-        "label": "Save Image (preview after run)",
+        "label": "Save Image (preview)",
         "config": {
           "filePath": "demo/image_processing/roundtrip.png"
+        },
+        "status": "idle"
+      }
+    },
+    {
+      "id": "inspect",
+      "type": "debug",
+      "position": {
+        "x": 200,
+        "y": 280
+      },
+      "data": {
+        "label": "Inspect Top-K",
+        "config": {},
+        "status": "idle"
+      }
+    },
+    {
+      "id": "out_main",
+      "type": "output",
+      "position": {
+        "x": 500,
+        "y": 280
+      },
+      "data": {
+        "label": "Classification Output",
+        "config": {},
+        "status": "idle"
+      }
+    },
+    {
+      "id": "img_pass",
+      "type": "composite",
+      "position": {
+        "x": 200,
+        "y": 420
+      },
+      "data": {
+        "label": "Image Passthrough",
+        "config": {
+          "opacity": "1.0"
         },
         "status": "idle"
       }
@@ -35,8 +76,8 @@
       "id": "net",
       "type": "createNet",
       "position": {
-        "x": -1080,
-        "y": 360
+        "x": 200,
+        "y": 560
       },
       "data": {
         "label": "MobileNetV2 (NCNN)",
@@ -58,8 +99,8 @@
       "id": "infer",
       "type": "inference",
       "position": {
-        "x": -760,
-        "y": 260
+        "x": 200,
+        "y": 700
       },
       "data": {
         "label": "Inference (image -> tensor coercion)",
@@ -68,11 +109,39 @@
       }
     },
     {
+      "id": "bench",
+      "type": "benchmark",
+      "position": {
+        "x": 200,
+        "y": 840
+      },
+      "data": {
+        "label": "Benchmark (1s sample)",
+        "config": {
+          "duration": "1"
+        },
+        "status": "idle"
+      }
+    },
+    {
+      "id": "out_bench",
+      "type": "output",
+      "position": {
+        "x": 500,
+        "y": 840
+      },
+      "data": {
+        "label": "Benchmark Output",
+        "config": {},
+        "status": "idle"
+      }
+    },
+    {
       "id": "post",
       "type": "postprocess",
       "position": {
-        "x": -440,
-        "y": 260
+        "x": 200,
+        "y": 1000
       },
       "data": {
         "label": "Top-K (k=5)",
@@ -87,8 +156,8 @@
       "id": "cond",
       "type": "condition",
       "position": {
-        "x": -120,
-        "y": 260
+        "x": 200,
+        "y": 1160
       },
       "data": {
         "label": "max > 0.1 ?",
@@ -99,37 +168,11 @@
       }
     },
     {
-      "id": "inspect",
-      "type": "debug",
-      "position": {
-        "x": 220,
-        "y": 120
-      },
-      "data": {
-        "label": "Inspect Top-K",
-        "config": {},
-        "status": "idle"
-      }
-    },
-    {
-      "id": "out_main",
-      "type": "output",
-      "position": {
-        "x": 540,
-        "y": 120
-      },
-      "data": {
-        "label": "Classification Output",
-        "config": {},
-        "status": "idle"
-      }
-    },
-    {
       "id": "save_text",
       "type": "saveText",
       "position": {
-        "x": 220,
-        "y": 340
+        "x": 200,
+        "y": 1320
       },
       "data": {
         "label": "Low Confidence Log (false branch)",
@@ -140,39 +183,11 @@
       }
     },
     {
-      "id": "bench",
-      "type": "benchmark",
-      "position": {
-        "x": -760,
-        "y": 500
-      },
-      "data": {
-        "label": "Benchmark (1s sample)",
-        "config": {
-          "duration": "1"
-        },
-        "status": "idle"
-      }
-    },
-    {
-      "id": "out_bench",
-      "type": "output",
-      "position": {
-        "x": -440,
-        "y": 500
-      },
-      "data": {
-        "label": "Benchmark Output",
-        "config": {},
-        "status": "idle"
-      }
-    },
-    {
       "id": "heatmap",
       "type": "tensorToImage",
       "position": {
-        "x": -440,
-        "y": 640
+        "x": 200,
+        "y": 1480
       },
       "data": {
         "label": "Heatmap Overlay (softmax on image)",
@@ -185,26 +200,11 @@
       }
     },
     {
-      "id": "comp",
-      "type": "composite",
-      "position": {
-        "x": -120,
-        "y": 640
-      },
-      "data": {
-        "label": "Composite (overlay + original)",
-        "config": {
-          "opacity": "0.4"
-        },
-        "status": "idle"
-      }
-    },
-    {
       "id": "save_comp",
       "type": "saveImage",
       "position": {
-        "x": 220,
-        "y": 640
+        "x": 500,
+        "y": 1480
       },
       "data": {
         "label": "Save Composited Result",
@@ -218,8 +218,8 @@
       "id": "annotate",
       "type": "annotateImage",
       "position": {
-        "x": -440,
-        "y": 780
+        "x": 200,
+        "y": 1660
       },
       "data": {
         "label": "Annotate (top-5)",
@@ -235,8 +235,8 @@
       "id": "save_annotated",
       "type": "saveImage",
       "position": {
-        "x": -120,
-        "y": 780
+        "x": 500,
+        "y": 1660
       },
       "data": {
         "label": "Save Annotated Image",
@@ -250,8 +250,8 @@
       "id": "seg_src",
       "type": "inputTensor",
       "position": {
-        "x": -1080,
-        "y": 920
+        "x": -700,
+        "y": 1840
       },
       "data": {
         "label": "Synthetic Segmentation Logits (5x5, 3 classes)",
@@ -266,8 +266,8 @@
       "id": "seg",
       "type": "segmentationMask",
       "position": {
-        "x": -760,
-        "y": 920
+        "x": 200,
+        "y": 1840
       },
       "data": {
         "label": "Segmentation Mask (argmax -> viridis)",
@@ -282,8 +282,8 @@
       "id": "save_seg",
       "type": "saveImage",
       "position": {
-        "x": -440,
-        "y": 920
+        "x": 500,
+        "y": 1840
       },
       "data": {
         "label": "Save Segmentation Mask",
@@ -297,8 +297,8 @@
       "id": "boxes_src",
       "type": "inputTensor",
       "position": {
-        "x": -1080,
-        "y": 1100
+        "x": -700,
+        "y": 2040
       },
       "data": {
         "label": "Synthetic Detection Boxes",
@@ -313,8 +313,8 @@
       "id": "nms_boxes",
       "type": "postprocess",
       "position": {
-        "x": -760,
-        "y": 1100
+        "x": 200,
+        "y": 2040
       },
       "data": {
         "label": "NMS (synthetic boxes)",
@@ -329,8 +329,8 @@
       "id": "draw_boxes",
       "type": "drawBoxes",
       "position": {
-        "x": -440,
-        "y": 1100
+        "x": 200,
+        "y": 2220
       },
       "data": {
         "label": "Draw Boxes",
@@ -348,8 +348,8 @@
       "id": "save_boxes",
       "type": "saveImage",
       "position": {
-        "x": -120,
-        "y": 1100
+        "x": 500,
+        "y": 2220
       },
       "data": {
         "label": "Save Box Overlay",
@@ -369,6 +369,41 @@
       "targetHandle": "image_data"
     },
     {
+      "id": "e_img_inspect",
+      "source": "img_in",
+      "sourceHandle": "image_data",
+      "target": "inspect",
+      "targetHandle": "data_in"
+    },
+    {
+      "id": "e_inspect_out",
+      "source": "inspect",
+      "sourceHandle": "data_out",
+      "target": "out_main",
+      "targetHandle": "data"
+    },
+    {
+      "id": "e_img_pass_fg",
+      "source": "img_in",
+      "sourceHandle": "image_data",
+      "target": "img_pass",
+      "targetHandle": "foreground"
+    },
+    {
+      "id": "e_img_pass_bg",
+      "source": "img_in",
+      "sourceHandle": "image_data",
+      "target": "img_pass",
+      "targetHandle": "background"
+    },
+    {
+      "id": "e_pass_infer",
+      "source": "img_pass",
+      "sourceHandle": "output_data",
+      "target": "infer",
+      "targetHandle": "input_data"
+    },
+    {
       "id": "e_net_infer",
       "source": "net",
       "sourceHandle": "net_handle",
@@ -376,10 +411,10 @@
       "targetHandle": "net_handle"
     },
     {
-      "id": "e_img_infer",
-      "source": "img_in",
-      "sourceHandle": "image_data",
-      "target": "infer",
+      "id": "e_pass_bench",
+      "source": "img_pass",
+      "sourceHandle": "output_data",
+      "target": "bench",
       "targetHandle": "input_data"
     },
     {
@@ -388,20 +423,6 @@
       "sourceHandle": "net_handle",
       "target": "bench",
       "targetHandle": "net_handle"
-    },
-    {
-      "id": "e_img_bench",
-      "source": "img_in",
-      "sourceHandle": "image_data",
-      "target": "bench",
-      "targetHandle": "input_data"
-    },
-    {
-      "id": "e_bench_out",
-      "source": "bench",
-      "sourceHandle": "benchmark_result",
-      "target": "out_bench",
-      "targetHandle": "data"
     },
     {
       "id": "e_infer_post",
@@ -418,32 +439,25 @@
       "targetHandle": "input_data"
     },
     {
-      "id": "e_true",
+      "id": "e_cond_true",
       "source": "cond",
       "sourceHandle": "true_branch",
       "target": "inspect",
       "targetHandle": "data_in"
     },
     {
-      "id": "e_inspect",
-      "source": "inspect",
-      "sourceHandle": "data_out",
-      "target": "out_main",
-      "targetHandle": "data"
-    },
-    {
-      "id": "e_false",
+      "id": "e_cond_false",
       "source": "cond",
       "sourceHandle": "false_branch",
       "target": "save_text",
       "targetHandle": "data"
     },
     {
-      "id": "e_img_heat",
-      "source": "img_in",
-      "sourceHandle": "image_data",
-      "target": "heatmap",
-      "targetHandle": "original_image"
+      "id": "e_bench_out",
+      "source": "bench",
+      "sourceHandle": "benchmark_result",
+      "target": "out_bench",
+      "targetHandle": "data"
     },
     {
       "id": "e_post_heat",
@@ -453,31 +467,10 @@
       "targetHandle": "input_data"
     },
     {
-      "id": "e_heat_comp",
+      "id": "e_heat_save",
       "source": "heatmap",
       "sourceHandle": "image_data",
-      "target": "comp",
-      "targetHandle": "foreground"
-    },
-    {
-      "id": "e_img_comp",
-      "source": "img_in",
-      "sourceHandle": "image_data",
-      "target": "comp",
-      "targetHandle": "background"
-    },
-    {
-      "id": "e_comp_save",
-      "source": "comp",
-      "sourceHandle": "output_data",
       "target": "save_comp",
-      "targetHandle": "image_data"
-    },
-    {
-      "id": "e_img_ann",
-      "source": "img_in",
-      "sourceHandle": "image_data",
-      "target": "annotate",
       "targetHandle": "image_data"
     },
     {
@@ -486,6 +479,13 @@
       "sourceHandle": "output_data",
       "target": "annotate",
       "targetHandle": "topk_data"
+    },
+    {
+      "id": "e_pass_ann",
+      "source": "img_pass",
+      "sourceHandle": "output_data",
+      "target": "annotate",
+      "targetHandle": "image_data"
     },
     {
       "id": "e_ann_save",
@@ -516,9 +516,9 @@
       "targetHandle": "input_data"
     },
     {
-      "id": "e_img_boxes",
-      "source": "img_in",
-      "sourceHandle": "image_data",
+      "id": "e_pass_boxes",
+      "source": "img_pass",
+      "sourceHandle": "output_data",
       "target": "draw_boxes",
       "targetHandle": "image_data"
     },

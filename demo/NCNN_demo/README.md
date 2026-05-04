@@ -10,23 +10,25 @@ Loads ShuffleNet's `.param` only, runs inference on a synthetic tensor, and exer
 
 ## 2. `image_classification.json` — MobileNetV2 end-to-end image classification
 
-Real image → image-to-tensor coercion → MobileNetV2 inference → benchmark → top-5 → conditional inspect/log → softmax heatmap → annotated image → composited overlay → segmentation mask → detection box overlay. Exercises the full image processing pipeline, including every inference/output image handler (`benchmark`, `tensorToImage` with overlay, `annotateImage`, `composite`, `segmentationMask`, `drawBoxes`).
+Full visual pipeline with every post-inference handler exercised. Nodes are arranged in a vertical three-column layout for clean, orthogonal edge connections.
 
 ```
-inputImage ─► saveImage  (round-trip preview)
-       │
-       └─► inference (image→tensor, NCNN MobileNetV2) ─► topk(5) ─► condition ─┬─► inspect → output
-       │                                                                      └─► saveText (low-confidence log)
-       │
-       ├─► benchmark (1s sample) ─► output
-       │
-       ├─► tensorToImage (softmax heatmap, overlay on image) ─► composite (+ original) ─► saveImage (composite.png)
-       │
-       ├─► annotateImage (top-5 labels) ─► saveImage (classified.png)
-       │
-       ├─► inputTensor (synthetic 5x5x3 logits) ─► segmentationMask ─► saveImage (segmask.png)
-       │
-       └─► inputTensor (synthetic boxes) ─► postprocess(NMS) ─► drawBoxes ─► saveImage (boxes.png)
+img_in
+  ├─► img_save ─► roundtrip.png
+  └─► img_pass (composite passthrough)
+        ├─► infer ← net
+        │     └─► post ─► cond ─┬─► inspect → output
+        │                       └─► saveText (low-confidence log, skipped)
+        │
+        ├─► benchmark ← net ─► output
+        │
+        ├─► post ─► heatmap ─► save_comp (composite.png)
+        │
+        ├─► post ─► annotate (topk + image) ─► save_annotated (classified.png)
+        │
+        ├─► post ─► seg ← seg_src ─► save_seg (segmask.png)
+        │
+        └─► post ─► nms ← boxes_src ─► draw_boxes ─► save_boxes (boxes.png)
 ```
 
 The `benchmark` branch measures one second of MobileNetV2 inference and emits a sample tensor to `output`. The `composite` branch demonstrates `tensorToImage`'s overlay mode (heatmap drawn directly onto the input image) combined with the `composite` handler (second pass at reduced opacity). The `segmentationMask` branch uses a synthetic 3-class 5×5 logits tensor to showcase argmax → per-pixel viridis coloring without requiring a real segmentation model. The `drawBoxes` branch uses synthetic detection boxes, applies NMS, then renders the surviving boxes on the original image.
