@@ -10,25 +10,23 @@ Loads ShuffleNet's `.param` only, runs inference on a synthetic tensor, and exer
 
 ## 2. `image_classification.json` — MobileNetV2 end-to-end image classification
 
-Full visual pipeline with every post-inference handler exercised. Nodes are arranged in a vertical three-column layout for clean, orthogonal edge connections.
+Real image → image-to-tensor coercion → MobileNetV2 inference → benchmark → top-5 → conditional inspect/log → softmax heatmap → annotated image → composited overlay → segmentation mask → detection box overlay. Exercises the full image processing pipeline, including every inference/output image handler (`benchmark`, `tensorToImage` with overlay, `annotateImage`, `composite`, `segmentationMask`, `drawBoxes`).
 
 ```
-img_in
-  ├─► img_save ─► roundtrip.png
-  └─► img_pass (composite passthrough)
-        ├─► infer ← net
-        │     └─► post ─► cond ─┬─► inspect → output
-        │                       └─► saveText (low-confidence log, skipped)
-        │
-        ├─► benchmark ← net ─► output
-        │
-        ├─► post ─► heatmap ─► save_comp (composite.png)
-        │
-        ├─► post ─► annotate (topk + image) ─► save_annotated (classified.png)
-        │
-        ├─► post ─► seg ← seg_src ─► save_seg (segmask.png)
-        │
-        └─► post ─► nms ← boxes_src ─► draw_boxes ─► save_boxes (boxes.png)
+inputImage ─► saveImage  (round-trip preview)
+       │
+       └─► inference (image→tensor, NCNN MobileNetV2) ─► topk(5) ─► condition ─┬─► inspect → output
+       │                                                                      └─► saveText (low-confidence log)
+       │
+       ├─► benchmark (1s sample) ─► output
+       │
+       ├─► tensorToImage (softmax heatmap, overlay on image) ─► composite (+ original) ─► saveImage (composite.png)
+       │
+       ├─► annotateImage (top-5 labels) ─► saveImage (classified.png)
+       │
+       ├─► inputTensor (synthetic 5x5x3 logits) ─► segmentationMask ─► saveImage (segmask.png)
+       │
+       └─► inputTensor (synthetic boxes) ─► postprocess(NMS) ─► drawBoxes ─► saveImage (boxes.png)
 ```
 
 The `benchmark` branch measures one second of MobileNetV2 inference and emits a sample tensor to `output`. The `composite` branch demonstrates `tensorToImage`'s overlay mode (heatmap drawn directly onto the input image) combined with the `composite` handler (second pass at reduced opacity). The `segmentationMask` branch uses a synthetic 3-class 5×5 logits tensor to showcase argmax → per-pixel viridis coloring without requiring a real segmentation model. The `drawBoxes` branch uses synthetic detection boxes, applies NMS, then renders the surviving boxes on the original image.
@@ -44,6 +42,36 @@ The `benchmark` branch measures one second of MobileNetV2 inference and emits a 
 | `imagenet_classes.txt` | 1000 ImageNet class labels (one per line), used by `annotateImage` to render human-readable class names. Generated via `torchvision.models.MobileNet_V2_Weights.IMAGENET1K_V1.meta['categories']`. |
 | `shufflenet.param` | ShuffleNet topology (no weights, runs with `emptyWeights:true`). |
 | `mobilenetv2.param` / `mobilenetv2.bin` | MobileNetV2 NCNN files. **Generated** — see [`scripts/convert_mobilenet_ncnn.py`](../../scripts/convert_mobilenet_ncnn.py). |
+
+### Node Reference
+
+Every node in `image_classification.json` — 23 nodes, 25 edges. Pins (source → target) describe how data flows.
+
+| Node | Type | Purpose | Key Config |
+|---|---|---|---|
+| `img_in` | Input Image | Load the 224×224 Samoyed photo. Shows a live preview thumbnail. | `filePath: demo/NCNN_demo/sample_224.png` |
+| `img_save` | Save Image | Re-encode and save the decoded image for round-trip verification. | `filePath: demo/NCNN_demo/roundtrip.png` |
+| `net` | Create Net | Load MobileNetV2 NCNN model. *View Model* button parses `.param`. | `vendor: ncnn`, `paramPath`, `modelPath`, `inputName: in0`, `outputName: out0`, `inputW/H/C: 224/224/3` |
+| `infer` | Inference | Single forward pass. Accepts image input (auto coercion to CHW float). | — |
+| `bench` | Benchmark | Run MobileNetV2 repeatedly for 1 second and report avg latency. | `duration: 1` |
+| `out_bench` | Output | Display benchmark results (runs, avg-ms). | — |
+| `post` | Postprocess | Select top-5 classes by score from the 1000-class output vector. | `op: topk`, `k: 5` |
+| `cond` | Condition | Route to the true branch when max score > 0.1. | `expression: max > 0.1` |
+| `inspect` | Debug | Pass-through inspection point for the true-branch tensor. | — |
+| `out_main` | Output | Display top-5 classification results inline. | — |
+| `save_text` | Save Text | Save low-confidence log (only written when condition takes false branch). | `filePath: demo/NCNN_demo/low_confidence.txt` |
+| `heatmap` | Tensor To Image | Render the softmax heatmap overlaid on the input image. | `colormap: viridis`, `normalize: auto`, `overlayOpacity: 0.5` |
+| `comp` | Composite | Blend the heatmap overlay onto the original image at reduced opacity. | `opacity: 0.4` |
+| `save_comp` | Save Image | Save the composited heatmap result. | `filePath: demo/NCNN_demo/composite.png` |
+| `annotate` | Annotate Image | Overlay top-5 class names and confidence scores on the image. | `labelsPath: demo/NCNN_demo/imagenet_classes.txt`, `maxLines: 5`, `fontScale: 2` |
+| `save_annotated` | Save Image | Save the annotated classification image. | `filePath: demo/NCNN_demo/classified.png` |
+| `seg_src` | Input Tensor | Synthetic 5×5×3 logits (3-class spatial grid). | `fillMode: text`, `tensorText: 75 floats` |
+| `seg` | Segmentation Mask | Argmax per-pixel logits → viridis-colored mask. | `width: 5`, `height: 5` |
+| `save_seg` | Save Image | Save the 5×5 segmentation mask. | `filePath: demo/NCNN_demo/segmask.png` |
+| `boxes_src` | Input Tensor | Synthetic NMS-format detection boxes `[x1,y1,x2,y2,score,…]`. | `fillMode: text`, `tensorText: 4 boxes` |
+| `nms_boxes` | Postprocess | Non-max suppression on synthetic boxes. | `op: nms`, `iouThreshold: 0.45` |
+| `draw_boxes` | Draw Boxes | Render surviving boxes on the input image with scores. | `confidenceThreshold: 0.3`, `lineWidth: 3`, `fontScale: 2` |
+| `save_boxes` | Save Image | Save the box overlay image. | `filePath: demo/NCNN_demo/boxes.png` |
 
 ### Importing the workflow
 

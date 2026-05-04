@@ -120,6 +120,20 @@ FRONTEND_PORT=5174 ./setup.sh       # custom frontend dev-server port
 ./setup.sh --help
 ```
 
+### Check backend capabilities
+
+After starting the backend, verify it supports a given workflow's node types and ports (catches stale binaries):
+
+```bash
+node scripts/check_backend_capabilities.mjs demo/NCNN_demo/image_classification.json
+```
+
+Headless workflow verification:
+
+```bash
+node scripts/verify_image_workflow.mjs demo/NCNN_demo/image_classification.json
+```
+
 ## Manual build
 
 ### Backend
@@ -208,21 +222,57 @@ Tauri v2.10 config lives in `frontend/src-tauri/`. The window is `1280×800`, id
 
 ## Node Types
 
-The frontend palette (`frontend/src/nodes/index.ts`) exposes 11 node components:
+The palette exposes 17 node types across five categories. Every type is
+registered in both the backend handler catalog (`nodes.list` RPC) and the
+frontend manifest (`frontend/src/nodes/manifest.tsx`).
 
-| Node | Category | Description |
-|---|---|---|
-| Input Image | input | Load an image file from disk |
-| Input Tensor | input | Manually provide tensor data |
-| Create Net | inference | Load a model (`.param` + `.bin`) |
-| Inference | inference | Run a forward pass |
-| Benchmark | inference | Micro-benchmark a loaded net |
-| Postprocess | inference | Built-in post-processing (e.g. softmax / top-k) |
-| Save Text | output | Persist textual results |
-| Save Image | output | Persist image results |
-| Output | output | Display output data in the UI |
-| Condition | control | Branching logic |
-| Debug | debug | Breakpoint / data inspection |
+### Input
+
+| Node | Icon | Description | Config |
+|---|---|---|---|
+| **Input Image** | image | Load an image file from disk. Shows a live preview thumbnail in the Properties panel via the `image.preview` RPC. | `filePath` — absolute or sandbox-relative path to a PNG/JPEG |
+| **Input Tensor** | grid | Provide tensor data manually for testing. Two modes: fill a fixed shape with a constant value, or type raw float values as text. | `fillMode` (`manual` / `auto`), `tensorText`, `shape`, `fillValue` |
+
+### Inference
+
+| Node | Icon | Description | Config |
+|---|---|---|---|
+| **Create Net** | brain | Load an inference model. Opens a *View Model* button that parses the vendor `.param` file into a read-only drawer (layers, ports, shapes). | `vendor`, `paramPath`, `modelPath`, `inputName`, `outputName`, `inputW`, `inputH`, `inputC`, `numThreads`, `emptyWeights` |
+| **Inference** | zap | Run a single forward pass. Accepts a tensor *or* an image (automatic RGBA→CHW float coercion at runtime). | *none* — all model params come from CreateNet |
+| **Benchmark** | trending-up | Micro-benchmark a loaded model. Runs inference repeatedly for the configured duration, then emits average-ms, total runs, and a sample output tensor. | `duration` — seconds (default 10) |
+| **Postprocess** | wrench | Built-in post-processing. **NMS** (non-max suppression for detection boxes) or **Top-K** (select highest-scoring classes). | `op` (`nms` / `topk`), `iouThreshold` (NMS), `k` (Top-K) |
+
+### Output — data
+
+| Node | Icon | Description | Config |
+|---|---|---|---|
+| **Save Text** | file-down | Persist a tensor or string to a text file on disk. | `filePath` |
+| **Save Image** | image + download | Persist an RGBA image to disk as PNG (or JPEG by extension). Shows a preview thumbnail in the Properties panel after the node completes. | `filePath` |
+| **Output** | upload | Display output data inline in the canvas (number summary, tensor stats). | *none* |
+
+### Output — image processing
+
+| Node | Icon | Description | Config |
+|---|---|---|---|
+| **Tensor To Image** | heatmap | Render a 1-D tensor as a heatmap strip (viridis or grayscale). With an *original_image* input, resizes to match and composites the heatmap over it (overlay mode). | `width`, `height`, `colormap` (`viridis` / `gray`), `normalize` (`auto` / `none`), `overlayOpacity` |
+| **Annotate Image** | tag | Overlay top-K class labels on an image. Reads a `[idx, score, …]` tensor and an optional labels file; renders a translucent panel with class names and scores. | `labelsPath`, `maxLines`, `fontScale` |
+| **Draw Boxes** | box | Render bounding boxes on an image. Reads an NMS-format `[x1,y1,x2,y2,score,…]` tensor and draws colored rectangles with score labels. Per-class coloring cycles through 12 distinct hues. | `confidenceThreshold`, `lineWidth`, `fontScale`, `maxBoxes`, `normalizedCoords`, `labelsPath` |
+| **Segmentation Mask** | mosaic | Convert per-pixel logits into a color-coded RGBA mask. Performs argmax across classes and maps each class to a viridis-derived color. | `width`, `height` — spatial dimensions of the logits tensor |
+| **Composite** | layers | Alpha-blend a foreground image over a background image at a configurable opacity. Nearest-neighbour resizes the foreground if dimensions differ. | `opacity` (0–1) |
+
+### Control
+
+| Node | Icon | Description | Config |
+|---|---|---|---|
+| **Condition** | branch | Branching logic. Evaluates an expression against the input tensor; only the taken branch's downstream nodes execute; the other branch is *skipped*. | `expression` — `<selector> <op> <number>` (selectors: `max`, `min`, `mean`, `sum`, `first`, `[i]`; ops: `>`, `<`, `>=`, `<=`, `==`, `!=`) |
+
+### Debug
+
+| Node | Icon | Description | Config |
+|---|---|---|---|
+| **Inspect** | search | Unconditional inspection point. Passes input through to output so you can view it in the Properties panel and debug drawer. | *none* |
+
+Breakpoints can also be toggled on **any** node with **B** — you don't need an Inspect node to pause.
 
 ## Debugging
 
@@ -295,7 +345,7 @@ workflowUI/
 ├── frontend/
 │   ├── src/
 │   │   ├── App.tsx              # React Flow canvas
-│   │   ├── nodes/               # 11 custom node components (+ tests)
+│   │   ├── nodes/               # 17 custom node components (+ tests)
 │   │   ├── panels/              # NodePalette, PropertiesPanel, ConsolePanel
 │   │   ├── transport/           # WsClient (JSON-RPC 2.0 + auto-reconnect)
 │   │   ├── engine/              # WorkflowRunner (frontend execution coordinator)
