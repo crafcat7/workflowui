@@ -59,8 +59,8 @@ NcnnEngine::~NcnnEngine() {
 
 std::vector<ConfigFieldSchema> NcnnEngine::config_schema() const {
   return {
-      {"paramPath", "Param File", "string", "MODEL", ".param path", "", {}},
-      {"modelPath", "Model File", "string", "MODEL", ".bin path", "", {}},
+      {"paramPath", "Param File (.param)", "filepath", "MODEL", "model.param", "", {}},
+      {"modelPath", "Model File (.bin)", "filepath", "MODEL", "model.bin", "", {}},
       {"inputName", "Input Blob", "string", "MODEL", "data", "data", {}},
       {"outputName", "Output Blob", "string", "MODEL", "output", "output", {}},
       {"numThreads", "Threads", "int", "RUNTIME", "1", "1", {}},

@@ -26,6 +26,7 @@ import {
   type ConfigField,
   type ConfigSection as ConfigSectionDef,
 } from '../nodes/configSchemas';
+import { pickFile } from '../utils/filePicker';
 
 // ---------------------------------------------------------------------------
 // Vendor schema (backend-provided fields for createNet)
@@ -34,7 +35,7 @@ import {
 interface VendorFieldDef {
   key: string;
   label: string;
-  type: 'string' | 'int' | 'float' | 'bool' | 'select';
+  type: 'string' | 'int' | 'float' | 'bool' | 'select' | 'filepath';
   group: string;
   placeholder?: string;
   default?: string;
@@ -565,10 +566,35 @@ function FieldRenderer({
       );
 
     case 'filepath':
+      return (
+        <div className="config-field">
+          <label>{field.label}</label>
+          <div className="filepath-input-row">
+            <input
+              type="text"
+              value={value}
+              placeholder={field.placeholder}
+              onChange={(e) => onChange(field.key, e.target.value)}
+            />
+            <button
+              type="button"
+              className="filepath-browse-btn"
+              onClick={async () => {
+                const path = await pickFile({
+                  title: `Select ${field.label}`,
+                });
+                if (path) onChange(field.key, path);
+              }}
+            >
+              Browse
+            </button>
+          </div>
+          {help}
+        </div>
+      );
+
     case 'text':
     default:
-      // `filepath` is rendered as plain text today; future: add a "browse"
-      // button when the desktop shell (Tauri) exposes a file dialog.
       return (
         <div className="config-field">
           <label>{field.label}</label>
@@ -765,6 +791,39 @@ function VendorField({
     );
   }
 
+  if (field.type === 'filepath') {
+    return (
+      <div className="config-field">
+        <label>{field.label}</label>
+        <div className="filepath-input-row">
+          <input
+            type="text"
+            value={(value as string) || ''}
+            placeholder={field.placeholder}
+            onChange={(e) => onChange(field.key, e.target.value)}
+          />
+          <button
+            type="button"
+            className="filepath-browse-btn"
+            onClick={async () => {
+              const path = await pickFile({
+                title: `Select ${field.label}`,
+                filters: field.placeholder?.includes('.param')
+                  ? [{ name: 'Param', extensions: ['param'] }]
+                  : field.placeholder?.includes('.bin')
+                    ? [{ name: 'Model', extensions: ['bin'] }]
+                    : undefined,
+              });
+              if (path) onChange(field.key, path);
+            }}
+          >
+            Browse
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="config-field">
       <label>{field.label}</label>
@@ -789,20 +848,54 @@ function FallbackNcnnConfig({
   return (
     <>
       <ConfigSection title="MODEL">
-        <PlainField
-          label="Param Path (.param)"
-          cfgKey="paramPath"
-          config={config}
-          onChange={onChange}
-          placeholder="model.param"
-        />
-        <PlainField
-          label="Model Path (.bin)"
-          cfgKey="modelPath"
-          config={config}
-          onChange={onChange}
-          placeholder="model.bin"
-        />
+        <div className="config-field">
+          <label>Param File (.param)</label>
+          <div className="filepath-input-row">
+            <input
+              type="text"
+              value={(config.paramPath as string) || ''}
+              placeholder="model.param"
+              onChange={(e) => onChange('paramPath', e.target.value)}
+            />
+            <button
+              type="button"
+              className="filepath-browse-btn"
+              onClick={async () => {
+                const path = await pickFile({
+                  title: 'Select Param File',
+                  filters: [{ name: 'Param', extensions: ['param'] }],
+                });
+                if (path) onChange('paramPath', path);
+              }}
+            >
+              Browse
+            </button>
+          </div>
+        </div>
+        <div className="config-field">
+          <label>Model File (.bin)</label>
+          <div className="filepath-input-row">
+            <input
+              type="text"
+              value={(config.modelPath as string) || ''}
+              placeholder="model.bin"
+              onChange={(e) => onChange('modelPath', e.target.value)}
+            />
+            <button
+              type="button"
+              className="filepath-browse-btn"
+              onClick={async () => {
+                const path = await pickFile({
+                  title: 'Select Model File',
+                  filters: [{ name: 'Model', extensions: ['bin'] }],
+                });
+                if (path) onChange('modelPath', path);
+              }}
+            >
+              Browse
+            </button>
+          </div>
+        </div>
         <div className="config-field">
           <label className="config-checkbox">
             <input

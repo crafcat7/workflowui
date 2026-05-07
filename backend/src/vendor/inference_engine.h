@@ -49,7 +49,7 @@ struct BenchmarkResult {
 struct ConfigFieldSchema {
   std::string key;          // config key (matches NetConfig / get_config usage)
   std::string label;        // human-readable label
-  std::string type;         // "string" | "int" | "float" | "bool" | "select"
+  std::string type;         // "string" | "int" | "float" | "bool" | "select" | "filepath"
   std::string group;        // UI group header (e.g. "MODEL", "RUNTIME")
   std::string placeholder;  // placeholder text
   std::string default_value;
