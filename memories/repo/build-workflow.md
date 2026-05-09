@@ -43,18 +43,20 @@ removed from Extractor in recent versions), threading is driven via
 - Dev: `npm run tauri dev` from `frontend/`
 - Release: `npm run tauri build` from `frontend/`
 
-## Cross-compile (Phase 8)
-CI lives at `.github/workflows/ci.yml` and covers four targets:
+## CI backend targets
+CI lives at `.github/workflows/ci.yml` and follows the supported runtime
+environments: Linux and macOS. It covers three backend targets:
 - `x86_64-linux` — native on `ubuntu-latest`.
 - `aarch64-linux` — cross-compiled with `g++-aarch64-linux-gnu`, tests
   run via `qemu-user-static`. Toolchain file:
   `backend/cmake/toolchains/aarch64-linux.cmake`.
 - `aarch64-macos` — native on `macos-14`.
-- `x86_64-windows` — MinGW cross-compile via `mingw-w64`. Marked
-  `continue-on-error: true` because uSockets/uWS on MinGW is
-  unvalidated; the job still builds to catch regressions.
-  Toolchain file: `backend/cmake/toolchains/x86_64-windows-mingw.cmake`.
 
-CMake now gates `pthread`/`z` linkage on `NOT WIN32`; the MinGW branch
-links `ws2_32` and static-links the MinGW runtime. `ENABLE_NCNN` stays
-OFF across every matrix target.
+CMake uses `Threads::Threads` instead of direct `pthread` linker flags so
+macOS and Linux choose their platform-native thread linkage. uWebSockets is
+built with `UWS_NO_ZLIB` because server compression is disabled in code;
+this avoids requiring target-architecture zlib dev packages in cross builds.
+`ENABLE_NCNN` stays OFF across every matrix target.
+
+The Windows toolchain file remains in `backend/cmake/toolchains/` for local
+experiments, but Windows is not part of community CI.

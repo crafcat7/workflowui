@@ -83,7 +83,7 @@ Graph-level validation (unknown node types, dangling edges, port/type mismatches
 
 ```bash
 # Ubuntu / Debian
-sudo apt install cmake make g++ nodejs npm zlib1g-dev
+sudo apt install cmake make g++ nodejs npm
 
 # macOS
 brew install cmake node
@@ -168,12 +168,10 @@ reproduce each target locally:
 | `x86_64-linux` | gcc/clang | `cmake -S backend -B backend/build -DENABLE_NCNN=OFF` |
 | `aarch64-linux` | `gcc-aarch64-linux-gnu`, `qemu-user-static` (for tests) | `cmake -S backend -B backend/build-aarch64 -DCMAKE_TOOLCHAIN_FILE=backend/cmake/toolchains/aarch64-linux.cmake -DENABLE_NCNN=OFF` |
 | `aarch64-macos` | Xcode CLT on Apple silicon | same as x86_64-linux, but run on `macos-14` |
-| `x86_64-windows` (MinGW) | `mingw-w64` | `cmake -S backend -B backend/build-win -DCMAKE_TOOLCHAIN_FILE=backend/cmake/toolchains/x86_64-windows-mingw.cmake -DENABLE_NCNN=OFF` |
 
-The MinGW target is currently marked experimental in CI (uSockets on
-Windows is unvalidated in this tree). If you successfully run
-`workflow_test.exe` under wine or on a Windows host, flip
-`experimental: true` in the CI matrix.
+Community CI only covers the supported runtime environments: Linux and
+macOS. The Windows toolchain file remains available for local experiments,
+but Windows is not a supported CI target in this tree.
 
 ### Frontend
 

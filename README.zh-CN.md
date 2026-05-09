@@ -56,7 +56,7 @@ WebSocket 监听路径为 `/*`，消息格式为 JSON-RPC 2.0。
 
 ```bash
 # Ubuntu / Debian
-sudo apt install cmake make g++ nodejs npm zlib1g-dev
+sudo apt install cmake make g++ nodejs npm
 
 # macOS
 brew install cmake node

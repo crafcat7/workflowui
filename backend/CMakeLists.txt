@@ -9,6 +9,8 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 option(ENABLE_NCNN "Enable NCNN vendor backend" OFF)
 
 # ── Dependencies ─────────────────────────────────────
+find_package(Threads REQUIRED)
+
 # nlohmann/json (header-only)
 include(FetchContent)
 FetchContent_Declare(
@@ -46,7 +48,7 @@ endif()
 file(GLOB USOCKETS_SRC "${usockets_SOURCE_DIR}/src/*.c" "${usockets_SOURCE_DIR}/src/eventing/*.c" "${usockets_SOURCE_DIR}/src/crypto/*.c")
 add_library(uSockets STATIC ${USOCKETS_SRC})
 target_include_directories(uSockets PUBLIC "${usockets_SOURCE_DIR}/src")
-target_compile_definitions(uSockets PUBLIC LIBUS_NO_SSL)
+target_compile_definitions(uSockets PUBLIC LIBUS_NO_SSL UWS_NO_ZLIB)
 
 # ── Sources ──────────────────────────────────────────
 set(BACKEND_SOURCES
@@ -89,7 +91,7 @@ target_link_libraries(workflow_backend PRIVATE
   uSockets
 )
 if(NOT WIN32)
-  target_link_libraries(workflow_backend PRIVATE pthread z)
+  target_link_libraries(workflow_backend PRIVATE Threads::Threads)
 else()
   # MinGW/Windows: uSockets uses winsock and the C runtime provides threads.
   target_link_libraries(workflow_backend PRIVATE ws2_32)
@@ -108,6 +110,7 @@ enable_testing()
 FetchContent_Declare(
   googletest
   URL https://github.com/google/googletest/archive/03597a01ee50ed33e9dfd640b249b4be3799d395.zip
+  DOWNLOAD_EXTRACT_TIMESTAMP TRUE
 )
 set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(googletest)
@@ -143,7 +146,7 @@ target_link_libraries(workflow_test PRIVATE
   uSockets
 )
 if(NOT WIN32)
-  target_link_libraries(workflow_test PRIVATE pthread z)
+  target_link_libraries(workflow_test PRIVATE Threads::Threads)
 else()
   target_link_libraries(workflow_test PRIVATE ws2_32)
 endif()
