@@ -12,13 +12,21 @@
 #   cmake --build backend/build-aarch64-linux -j
 #
 # Running the resulting binary requires qemu-user or a real aarch64 host.
-# The CI workflow uses qemu-user-static to execute workflow_test.
+# The CI workflow uses qemu-user-static to execute workflow_test and to let
+# CMake's gtest_discover_tests() run the cross-built test binary during build.
 
 set(CMAKE_SYSTEM_NAME Linux)
 set(CMAKE_SYSTEM_PROCESSOR aarch64)
 
 set(CMAKE_C_COMPILER   aarch64-linux-gnu-gcc)
 set(CMAKE_CXX_COMPILER aarch64-linux-gnu-g++)
+
+find_program(QEMU_AARCH64_EXECUTABLE qemu-aarch64-static)
+if(QEMU_AARCH64_EXECUTABLE)
+  set(CMAKE_CROSSCOMPILING_EMULATOR
+      "${QEMU_AARCH64_EXECUTABLE}" "-L" "/usr/aarch64-linux-gnu"
+      CACHE STRING "Emulator for running aarch64 Linux binaries")
+endif()
 
 # Only find target libraries in the sysroot, but let cmake still look at the
 # host for programs (for FetchContent-built generators like protoc, etc.).

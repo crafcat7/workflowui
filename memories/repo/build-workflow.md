@@ -49,7 +49,10 @@ environments: Linux and macOS. It covers three backend targets:
 - `x86_64-linux` — native on `ubuntu-latest`.
 - `aarch64-linux` — cross-compiled with `g++-aarch64-linux-gnu`, tests
   run via `qemu-user-static`. Toolchain file:
-  `backend/cmake/toolchains/aarch64-linux.cmake`.
+  `backend/cmake/toolchains/aarch64-linux.cmake`. The toolchain file sets
+  `CMAKE_CROSSCOMPILING_EMULATOR` to `qemu-aarch64-static -L /usr/aarch64-linux-gnu`
+  when QEMU is installed so `gtest_discover_tests()` can run the cross-built
+  `workflow_test` during the CMake build.
 - `aarch64-macos` — native on `macos-14`.
 
 CMake uses `Threads::Threads` instead of direct `pthread` linker flags so
