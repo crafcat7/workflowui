@@ -24,81 +24,84 @@ void write_file(const std::string& path, const std::string& content) {
   out << content;
 }
 
-const char* shufflenet_path = "../demo/NCNN_demo/shufflenet.param";
+std::string mobilenetv2_path() {
+  for (const char* candidate : {
+           "demo/image_processing/mobilenetv2.param",
+           "../demo/image_processing/mobilenetv2.param",
+           "../../demo/image_processing/mobilenetv2.param",
+       }) {
+    std::ifstream in(candidate);
+    if (in)
+      return candidate;
+  }
+  return "demo/image_processing/mobilenetv2.param";
+}
 
 }  // namespace
 
-// Golden-file: parsing the demo shufflenet.param committed in this
+// Golden-file: parsing the demo mobilenetv2.param committed in this
 // repo must succeed and report the layer/blob counts declared on
-// line 2 of the file (120 layers, 136 blobs). This is the strongest
+// line 2 of the file (77 layers, 87 blobs). This is the strongest
 // regression net we have for the parser — it covers Convolution,
-// ConvolutionDepthWise, Split, Concat, ReLU, Pooling, Eltwise,
-// InnerProduct, Softmax, plus shape hints on every layer.
-TEST(NcnnInspectorTest, ParsesShufflenetGoldenFile) {
+// ConvolutionDepthWise, Split, Pooling, BinaryOp, Dropout, and
+// InnerProduct rows from the canonical image-processing demo model.
+TEST(NcnnInspectorTest, ParsesMobilenetV2GoldenFile) {
   workflow::NcnnInspector ins;
   workflow::ModelInspectRequest req;
-  req.param_path = shufflenet_path;
+  req.param_path = mobilenetv2_path();
   auto g = ins.inspect(req);
 
   EXPECT_EQ(g.vendor, "ncnn");
   EXPECT_EQ(g.format_version, "ncnn-7767517");
-  EXPECT_EQ(g.layers.size(), 120u);
-  EXPECT_EQ(g.blobs.size(), 136u);
+  EXPECT_EQ(g.layers.size(), 77u);
+  EXPECT_EQ(g.blobs.size(), 87u);
   EXPECT_FALSE(g.editable);
   EXPECT_GT(g.param_bytes, 0);
   // bin not provided → 0 (well-defined, not -1, not stat-error).
   EXPECT_EQ(g.bin_bytes, 0);
 
-  // First layer must be the Input on blob "data" with shape hint
-  // [3, 224, 224, 3] — confirms we both wired graph-input
-  // detection (Input layer type) and shape-hint extraction.
+  // First layer must be the Input on blob "in0" — confirms we wired
+  // graph-input detection from Input layer type.
   ASSERT_GE(g.layers.size(), 1u);
   EXPECT_EQ(g.layers[0].type, "Input");
-  EXPECT_EQ(g.layers[0].id, "data");
+  EXPECT_EQ(g.layers[0].id, "in0");
   ASSERT_EQ(g.layers[0].output_blobs.size(), 1u);
-  EXPECT_EQ(g.layers[0].output_blobs[0], "data");
+  EXPECT_EQ(g.layers[0].output_blobs[0], "in0");
 
   // input_blob_names is populated from Input layers.
   ASSERT_EQ(g.input_blob_names.size(), 1u);
-  EXPECT_EQ(g.input_blob_names[0], "data");
+  EXPECT_EQ(g.input_blob_names[0], "in0");
 
-  // The "data" blob has shape hint -23330=4,3,224,224,3 which the
-  // parser decodes as {count=4, dims=3, d0=224, d1=224, d2=3}.
-  // We surface only the `dims` shape values (224,224,3) and drop
-  // the leading dims count, matching how the frontend would
-  // display ncnn's CHW Mat extents.
-  bool found_data = false;
+  bool found_input = false;
   for (const auto& b : g.blobs) {
-    if (b.name == "data") {
-      found_data = true;
-      EXPECT_EQ(b.shape, (std::vector<int>{224, 224, 3}));
+    if (b.name == "in0") {
+      found_input = true;
       // Input layer is the producer.
-      EXPECT_EQ(b.producer, "data");
+      EXPECT_EQ(b.producer, "in0");
       EXPECT_FALSE(b.consumers.empty());
     }
   }
-  EXPECT_TRUE(found_data);
+  EXPECT_TRUE(found_input);
 
-  // Conv-style layer params survive the round-trip. shufflenet's
-  // "conv1" row is: Convolution conv1 1 1 data conv1_conv1_relu
-  //   -23330=4,3,112,112,24 0=24 1=3 3=2 4=1 5=1 6=648 9=1
-  // We verify a couple of canonical keys are int-typed.
-  bool found_conv1 = false;
+  // Conv-style layer params survive the round-trip. MobileNetV2's
+  // first convolution row exposes canonical int params plus a clamp array.
+  bool found_first_conv = false;
   for (const auto& l : g.layers) {
-    if (l.id == "conv1") {
-      found_conv1 = true;
+    if (l.id == "convclip_0") {
+      found_first_conv = true;
       EXPECT_EQ(l.type, "Convolution");
       ASSERT_TRUE(l.params.contains("0"));
-      EXPECT_EQ(l.params["0"].get<int>(), 24);  // num_output
+      ASSERT_TRUE(l.params.contains("-23310"));
+      EXPECT_EQ(l.params["0"].get<int>(), 32);  // num_output
       EXPECT_EQ(l.params["1"].get<int>(), 3);   // kernel_w
       EXPECT_EQ(l.params["3"].get<int>(), 2);   // stride
+      EXPECT_TRUE(l.params["-23310"].is_array());
     }
   }
-  EXPECT_TRUE(found_conv1);
+  EXPECT_TRUE(found_first_conv);
 
-  // Output blobs: at least one. shufflenet ends in fc1000 → softmax,
-  // and the final softmax output should appear here.
-  EXPECT_FALSE(g.output_blob_names.empty());
+  ASSERT_EQ(g.output_blob_names.size(), 1u);
+  EXPECT_EQ(g.output_blob_names[0], "out0");
 }
 
 TEST(NcnnInspectorTest, RejectsEmptyParamPath) {
